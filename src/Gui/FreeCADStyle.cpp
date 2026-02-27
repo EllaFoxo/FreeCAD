@@ -720,5 +720,13 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         }
     }
 
+    if (event->type() == QEvent::Polish) {
+        if (auto* groupBox = qobject_cast<QGroupBox*>(obj)) {
+            if (auto* layout = groupBox->layout()) {
+                layout->setContentsMargins(0, 0, 0, 0);
+            }
+        }
+    }
+
     return QObject::eventFilter(obj, event);
 }
