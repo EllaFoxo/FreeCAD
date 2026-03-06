@@ -295,11 +295,17 @@ private:
     void clearTokenCache();
 
     /**
-     * @brief Returns the resolved icon-to-text spacing in pixels.
+     * @brief Paints the label (icon + text) of a push button.
      *
-     * Falls back to Qt's built-in default of 4 px when no IconSpacing token is defined.
+     * Overrides CE_PushButtonLabel to apply the ButtonIconSpacing token as the
+     * icon-to-text gap (Qt Fusion hardcodes 4 px). Only active when both icon and
+     * text are present; icon-only or text-only buttons delegate to the parent.
      */
-    int resolveIconSpacing(const StyleContext& context) const;
+    void drawPushButtonLabel(
+        QPainter* painter,
+        const QStyleOptionButton* option,
+        const QWidget* widget
+    ) const;
 
     /**
      * @brief Paints the label (icon + text) of a tool button.
