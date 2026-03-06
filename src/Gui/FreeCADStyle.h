@@ -91,6 +91,46 @@ public:
         std::optional<InnerShadow> innerShadow;
     };
 
+    /**
+     * @brief Describes the spatial layout properties of a box-shaped widget.
+     *
+     * Resolved from Design System tokens (Padding, Height, MinWidth, IconSpacing).
+     * Used in both sizeFromContents (to compute the total widget size) and draw
+     * methods (to derive the content rect from the widget rect).
+     */
+    struct BoxGeometryDefinition
+    {
+        QMarginsF padding;
+        std::optional<int> height;
+        std::optional<int> minWidth;
+        int iconSpacing = 4;  // fallback to Qt's built-in default
+
+        /** @brief Total horizontal padding (left + right), in pixels. */
+        [[nodiscard]] int paddingH() const
+        {
+            return static_cast<int>(padding.left() + padding.right());
+        }
+
+        /** @brief Total vertical padding (top + bottom), in pixels. */
+        [[nodiscard]] int paddingV() const
+        {
+            return static_cast<int>(padding.top() + padding.bottom());
+        }
+
+        /** @brief Returns @p rect inset by this geometry's padding. */
+        [[nodiscard]] QRect contentRect(const QRect& rect) const
+        {
+            return rect.adjusted(
+                static_cast<int>(padding.left()),
+                static_cast<int>(padding.top()),
+                -static_cast<int>(padding.right()),
+                -static_cast<int>(padding.bottom())
+            );
+        }
+    };
+
+    void polish(QPalette& palette) override;
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,
