@@ -294,6 +294,7 @@ std::span<const std::string_view> componentChain(StyleComponent component)
         "FormControl",
     });
     static constexpr auto lineEdit = std::to_array<std::string_view>({"LineEdit", "FormControl"});
+    static constexpr auto select = std::to_array<std::string_view>({"Select", "Button", "FormControl"});
 
     switch (component) {
         case StyleComponent::PushButton:
@@ -302,6 +303,8 @@ std::span<const std::string_view> componentChain(StyleComponent component)
             return toolButton;
         case StyleComponent::LineEdit:
             return lineEdit;
+        case StyleComponent::Select:
+            return select;
         default:
             return {};
     }
@@ -676,10 +679,8 @@ QSize FreeCADStyle::sizeFromContents(
         return {width, height};
     }
 
-    if (type == CT_LineEdit || type == CT_SpinBox) {
-        const StyleContext context = contextOf(widget, option);
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-
+    if (type == CT_ComboBox || type == CT_LineEdit || type == CT_SpinBox) {
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
         QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
         if (geometry.height) {
             result.setHeight(*geometry.height);
@@ -743,6 +744,35 @@ QRect FreeCADStyle::subControlRect(
     const QWidget* widget
 ) const
 {
+    if (complexControl == CC_ComboBox) {
+        const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option);
+        if (comboOption) {
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
+            const QRect outerRect = option->rect;
+            const QRect contentRect = geometry.contentRect(outerRect);
+            const int arrowWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+
+            const int arrowLeft = contentRect.right() - arrowWidth + 1;
+            const int editRight = arrowLeft - 1;
+
+            switch (subControl) {
+                case SC_ComboBoxFrame:
+                    return outerRect;
+                case SC_ComboBoxEditField:
+                    return QRect(
+                        contentRect.left(),
+                        contentRect.top(),
+                        editRight - contentRect.left() + 1,
+                        contentRect.height()
+                    );
+                case SC_ComboBoxArrow:
+                    return QRect(arrowLeft, contentRect.top(), arrowWidth, contentRect.height());
+                default:
+                    break;
+            }
+        }
+    }
+
     if (complexControl == CC_SpinBox) {
         const auto* spinOption = qstyleoption_cast<const QStyleOptionSpinBox*>(option);
         if (spinOption) {
@@ -841,6 +871,25 @@ void FreeCADStyle::drawComplexControl(
 
                 drawSpinButton(SC_SpinBoxUp, PE_IndicatorArrowUp, PE_IndicatorSpinPlus);
                 drawSpinButton(SC_SpinBoxDown, PE_IndicatorArrowDown, PE_IndicatorSpinMinus);
+            }
+
+            return;
+        }
+    }
+
+    if (control == CC_ComboBox) {
+        if (const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
+            // Draw our styled background + border for the full frame.
+            drawComponent(painter, option->rect, widget, option);
+
+            // Draw the dropdown arrow indicator over the transparent button area.
+            // QComboBox::paintEvent draws CE_ComboBoxLabel separately; it uses our
+            // subControlRect(SC_ComboBoxEditField) for the text area.
+            if (comboOption->subControls & SC_ComboBoxArrow) {
+                QStyleOptionComboBox arrowOption = *comboOption;
+                arrowOption.rect
+                    = proxy()->subControlRect(CC_ComboBox, option, SC_ComboBoxArrow, widget);
+                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
             }
 
             return;
@@ -1141,6 +1190,9 @@ StyleContext FreeCADStyle::contextOf(const QWidget* widget, const QStyleOption* 
     else if (qobject_cast<const QLineEdit*>(widget) || qobject_cast<const QAbstractSpinBox*>(widget)) {
         context.component = StyleComponent::LineEdit;
     }
+    else if (qobject_cast<const QComboBox*>(widget)) {
+        context.component = StyleComponent::Select;
+    }
 
     // ButtonType — derived from style option features first, then widget properties.
     const auto* buttonOption = qstyleoption_cast<const QStyleOptionButton*>(option);
@@ -1175,7 +1227,8 @@ StyleContext FreeCADStyle::contextOf(const QWidget* widget, const QStyleOption* 
         // frame appearance" for input widgets (QLineEdit always sets it). Only map it
         // to Pressed for button components to avoid masking the Focused state on inputs.
         const bool isButton = context.component == StyleComponent::PushButton
-            || context.component == StyleComponent::ToolButton;
+            || context.component == StyleComponent::ToolButton
+            || context.component == StyleComponent::Select;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }
