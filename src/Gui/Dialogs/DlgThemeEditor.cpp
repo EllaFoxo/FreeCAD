@@ -394,6 +394,27 @@ public:
         painter->drawPixmap(drawRect, gradientPixmap, gradientPixmap.rect());
     }
 
+    void paintGradientPreview(
+        QPainter* painter,
+        const QStyleOptionViewItem& option,
+        const QModelIndex& index
+    ) const
+    {
+        // Draw background and selection highlight, suppressing text and icon.
+        QStyleOptionViewItem bgOnly(option);
+        bgOnly.text.clear();
+        bgOnly.icon = QIcon();
+        bgOnly.features.setFlag(QStyleOptionViewItem::HasDecoration, false);
+        bgOnly.features.setFlag(QStyleOptionViewItem::HasDisplay, false);
+        QStyledItemDelegate::paint(painter, bgOnly, index);
+
+        // Overlay the gradient bar stretched to the cell with a small margin.
+        constexpr int margin = 3;
+        const QRect drawRect = option.rect.adjusted(margin, margin, -margin, -margin);
+        const QPixmap gradientPixmap = index.data(Qt::UserRole).value<QPixmap>();
+        painter->drawPixmap(drawRect, gradientPixmap, gradientPixmap.rect());
+    }
+
     void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
     {
         auto model = dynamic_cast<const StyleParametersModel*>(index.model());
