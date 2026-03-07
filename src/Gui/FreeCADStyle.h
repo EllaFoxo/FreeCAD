@@ -35,7 +35,6 @@
 #include <QMarginsF>
 #include <QPainter>
 #include <QProxyStyle>
-#include <QEvent>
 #include <QComboBox>
 #include <QPushButton>
 #include <QToolButton>
@@ -131,9 +130,6 @@ public:
     };
 
     void polish(QPalette& palette) override;
-
-    /** @brief Clears the token resolution cache; call when the active theme changes. */
-    void clearTokenCache();
 
 protected:
     void drawPrimitive(
@@ -333,6 +329,34 @@ private:
         const QStyleOptionToolButton* option,
         const QWidget* widget
     ) const;
+
+    /**
+     * @brief Draws a component background using the token-based box model.
+     *
+     * Resolves BoxStyleDefinition from @p context and paints via drawBoxBackground().
+     * This is the primary entry point for painting any box-model component — both
+     * Qt-native widgets overridden here and custom components outside the Qt style system.
+     */
+    void drawComponent(QPainter* painter, const QRect& rect, const StyleContext& context) const;
+
+    /** @brief Convenience overload that builds the context from @p widget and @p option. */
+    void drawComponent(
+        QPainter* painter,
+        const QRect& rect,
+        const QWidget* widget,
+        const QStyleOption* option = nullptr
+    ) const;
+
+    /**
+     * @brief Draws a separator line (horizontal or vertical) using design tokens.
+     *
+     * Resolves SeparatorThickness and SeparatorColor tokens, then fills the
+     * appropriate sub-rect of @p rect.
+     */
+    void drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const;
+
+    /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
+    void clearTokenCache();
 
     // Cache for resolve(StyleContext, StyleProperty). Key is a bit-packed uint32_t;
     // value is the resolved result including nullopt for confirmed misses.
