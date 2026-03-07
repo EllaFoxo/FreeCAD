@@ -290,32 +290,7 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
 
 std::span<const std::string_view> componentChain(StyleComponent component)
 {
-    static constexpr auto pushButton = std::to_array<std::string_view>({"Button", "FormControl"});
-    static constexpr auto toolButton = std::to_array<std::string_view>({
-        "ToolButton",
-        "Button",
-        "FormControl",
-    });
-    static constexpr auto lineEdit = std::to_array<std::string_view>({"LineEdit", "FormControl"});
-    static constexpr auto textEdit = std::to_array<std::string_view>(
-        {"TextEdit", "LineEdit", "FormControl"}
-    );
-    static constexpr auto select = std::to_array<std::string_view>({"Select", "Button", "FormControl"});
-
-    switch (component) {
-        case StyleComponent::PushButton:
-            return pushButton;
-        case StyleComponent::ToolButton:
-            return toolButton;
-        case StyleComponent::LineEdit:
-            return lineEdit;
-        case StyleComponent::TextEdit:
-            return textEdit;
-        case StyleComponent::Select:
-            return select;
-        default:
-            return {};
-    }
+    return std::span<const std::string_view>(lookup(componentChains, component));
 }
 
 // ── Variant slot string tables ───────────────────────────────────────────────
@@ -1229,8 +1204,9 @@ StyleContext FreeCADStyle::contextOf(const QWidget* widget, const QStyleOption* 
     else if (qobject_cast<const QTextEdit*>(widget) || qobject_cast<const QPlainTextEdit*>(widget)) {
         context.component = StyleComponent::TextEdit;
     }
-    else if (qobject_cast<const QComboBox*>(widget)) {
-        context.component = StyleComponent::Select;
+    else if (const auto* comboBox = qobject_cast<const QComboBox*>(widget)) {
+        context.component = comboBox->isEditable() ? StyleComponent::ComboBox
+                                                   : StyleComponent::Select;
     }
 
     // ButtonType — derived from style option features first, then widget properties.
@@ -1288,6 +1264,17 @@ StyleContext FreeCADStyle::contextOf(const QWidget* widget, const QStyleOption* 
     if (qobject_cast<const QAbstractSpinBox*>(widget)) {
         if (const QLineEdit* innerEdit = widget->findChild<QLineEdit*>()) {
             if (innerEdit->hasFocus()) {
+                context.state |= StyleState::Focused;
+            }
+        }
+    }
+
+    // An editable QComboBox also delegates keyboard focus to its inner QLineEdit.
+    // Same pattern as QAbstractSpinBox: supplement state from the inner edit.
+    if (const auto* comboBox = qobject_cast<const QComboBox*>(widget);
+        comboBox && comboBox->isEditable()) {
+        if (const QLineEdit* lineEdit = comboBox->lineEdit()) {
+            if (lineEdit->hasFocus()) {
                 context.state |= StyleState::Focused;
             }
         }
