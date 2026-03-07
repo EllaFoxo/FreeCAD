@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 #include <QAbstractSpinBox>
+#include <QFrame>
 #include <QGroupBox>
 #include <QImage>
 #include <QLayout>
@@ -662,6 +663,14 @@ void FreeCADStyle::drawPrimitive(
         }
     }
 
+    if (element == PE_IndicatorToolBarSeparator) {
+        // In a horizontal toolbar the buttons are side-by-side, so the separator
+        // is a vertical line; in a vertical toolbar it is a horizontal line.
+        const bool toolbarIsHorizontal = option->state & QStyle::State_Horizontal;
+        drawSeparatorLine(painter, option->rect, !toolbarIsHorizontal);
+        return;
+    }
+
     QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
@@ -934,6 +943,16 @@ void FreeCADStyle::drawControl(
         if (const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
             drawToolButtonLabel(painter, tbOption, widget);
             return;
+        }
+    }
+
+    if (element == CE_ShapedFrame) {
+        if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option)) {
+            const QFrame::Shape shape = frameOption->frameShape;
+            if (shape == QFrame::HLine || shape == QFrame::VLine) {
+                drawSeparatorLine(painter, option->rect, shape == QFrame::HLine);
+                return;
+            }
         }
     }
 
@@ -1358,6 +1377,35 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
     }
 
     return result;
+}
+
+void FreeCADStyle::drawComponent(QPainter* painter, const QRect& rect, const StyleContext& context) const
+{
+    drawBoxBackground(painter, rect, resolveBoxStyle(context));
+}
+
+void FreeCADStyle::drawComponent(
+    QPainter* painter,
+    const QRect& rect,
+    const QWidget* widget,
+    const QStyleOption* option
+) const
+{
+    drawComponent(painter, rect, contextOf(widget, option));
+}
+
+void FreeCADStyle::drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const
+{
+    int thickness = 1;
+    if (const auto numeric = resolve<StyleParameters::Numeric>("SeparatorThickness")) {
+        thickness = static_cast<int>(numeric->value);
+    }
+    if (const auto color = resolve<Base::Color>("SeparatorColor")) {
+        const QRect lineRect = isHorizontal
+            ? QRect(rect.left(), rect.center().y() - (thickness / 2), rect.width(), thickness)
+            : QRect(rect.center().x() - (thickness / 2), rect.top(), thickness, rect.height());
+        painter->fillRect(lineRect, color->asValue<QColor>());
+    }
 }
 
 void FreeCADStyle::clearTokenCache()
