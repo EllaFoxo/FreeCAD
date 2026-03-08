@@ -44,6 +44,10 @@
 #include <QStyleOption>
 #include <QRadialGradient>
 #include <QStyleOption>
+#include <QAbstractItemView>
+#include <QListView>
+#include <QStyleOptionViewItem>
+#include <QTreeView>
 #include <QToolBar>
 
 #include <Base/Color.h>
@@ -290,6 +294,8 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::TextEdit,   {"TextEdit", "LineEdit", "FormControl"}},
     {StyleComponent::Select,     {"Select", "Button", "FormControl"}},
     {StyleComponent::ComboBox,   {"ComboBox", "LineEdit", "FormControl"}},
+    {StyleComponent::ListItem,   {"ListItem"}},
+    {StyleComponent::TreeItem,   {"TreeItem"}},
 };
 // clang-format on
 
@@ -752,11 +758,75 @@ QSize FreeCADStyle::sizeFromContents(
         return {width, height};
     }
 
+    if (type == CT_ItemViewItem) {
+        const StyleContext context = contextOf(widget, option);
+        const bool isItemComponent = context.component == StyleComponent::ListItem
+            || context.component == StyleComponent::TreeItem;
+        if (!isItemComponent) {
+            return QProxyStyle::sizeFromContents(type, option, size, widget);
+        }
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+
+        // If there is an index widget registered for this item (set via setItemWidget),
+        // use its natural sizeHint as the base so callers do not need to setSizeHint.
+        QSize baseSize = size;
+        const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+        if (const auto* view = qobject_cast<const QAbstractItemView*>(widget);
+            view && vopt && vopt->index.isValid()) {
+            if (const QWidget* indexWidget = view->indexWidget(vopt->index)) {
+                baseSize = indexWidget->sizeHint();
+            }
+        }
+        if (!baseSize.isValid()) {
+            baseSize = QProxyStyle::sizeFromContents(type, option, size, widget);
+        }
+
+        return {baseSize.width() + geometry.paddingH(), baseSize.height() + geometry.paddingV()};
+    }
+
     return QProxyStyle::sizeFromContents(type, option, size, widget);
 }
 
 QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* option, const QWidget* widget) const
 {
+    // QProxyStyle sets baseStyle->proxy = this, so the base style's drawControl(CE_ItemViewItem)
+    // calls proxy()->subElementRect() which reaches OUR overrides below.  We therefore only need
+    // to override SE_ItemViewItemDecoration and SE_ItemViewItemText — the inset propagates into
+    // both drawing (via the base-style drawControl callback) and editor/widget placement (via
+    // updateEditorGeometry).  We delegate to QProxyStyle with the already-inset rect so
+    // viewItemLayout positions the icon within the inset area and the text rect after it.
+    const auto itemViewInsetRect = [&](SubElement el) -> QRect {
+        const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+        // option->widget is the view; widget may be the viewport during some repaints.
+        const QWidget* effectiveWidget = widget;
+        if (!effectiveWidget && vopt) {
+            effectiveWidget = vopt->widget;
+        }
+        const StyleContext context = contextOf(effectiveWidget, option);
+        const bool isItemComponent = context.component == StyleComponent::ListItem
+            || context.component == StyleComponent::TreeItem;
+        if (!isItemComponent || !vopt) {
+            return QProxyStyle::subElementRect(el, option, widget);
+        }
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+        QStyleOptionViewItem adjustedOption = *vopt;
+        adjustedOption.rect = vopt->rect.adjusted(
+            static_cast<int>(geometry.padding.left()),
+            static_cast<int>(geometry.padding.top()),
+            -static_cast<int>(geometry.padding.right()),
+            -static_cast<int>(geometry.padding.bottom())
+        );
+        return QProxyStyle::subElementRect(el, &adjustedOption, widget);
+    };
+
+    if (element == SE_ItemViewItemDecoration) {
+        return itemViewInsetRect(SE_ItemViewItemDecoration);
+    }
+
+    if (element == SE_ItemViewItemText) {
+        return itemViewInsetRect(SE_ItemViewItemText);
+    }
+
     if (element == SE_LineEditContents) {
         // Qt sets lineWidth = 0 on the inner QLineEdit of QAbstractSpinBox (setFrame(false)).
         // In that case, the spinbox itself manages the edit field rect — do not apply our
@@ -1319,6 +1389,12 @@ StyleContext FreeCADStyle::contextOf(const QWidget* widget, const QStyleOption* 
     else if (const auto* comboBox = qobject_cast<const QComboBox*>(widget)) {
         context.component = comboBox->isEditable() ? StyleComponent::ComboBox
                                                    : StyleComponent::Select;
+    }
+    else if (qobject_cast<const QListView*>(widget)) {
+        context.component = StyleComponent::ListItem;
+    }
+    else if (qobject_cast<const QTreeView*>(widget)) {
+        context.component = StyleComponent::TreeItem;
     }
 
     // ButtonType — derived from style option features first, then widget properties.
