@@ -17,7 +17,7 @@ Gui--OverlaySplitterHandle {
 
 
 /* Overwrites Properties panel to use white text. */
- Gui--TreePanel QTreeView {
+Gui--TreePanel QTreeView {
   background-color: @PrimaryColor;
   border: 0px solid   @TextForegroundColor;
   color: @TextForegroundColor;
@@ -25,11 +25,11 @@ Gui--OverlaySplitterHandle {
   border-radius: 0px;
 }
 
- Gui--TreePanel QTreeView::item {
+Gui--TreePanel QTreeView::item {
   color: @TextForegroundColor;
 }
 
- Gui--TreePanel QTreeView::item:disabled {
+Gui--TreePanel QTreeView::item:disabled {
   color: @TextDisabledColor;
 }
 
