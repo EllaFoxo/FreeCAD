@@ -139,6 +139,27 @@ protected:
         const QWidget* widget = nullptr
     ) const override;
 
+    void drawControl(
+        ControlElement element,
+        const QStyleOption* option,
+        QPainter* painter,
+        const QWidget* widget = nullptr
+    ) const override;
+
+    QSize sizeFromContents(
+        ContentsType type,
+        const QStyleOption* option,
+        const QSize& size,
+        const QWidget* widget = nullptr
+    ) const override;
+
+    QRect subControlRect(
+        ComplexControl complexControl,
+        const QStyleOptionComplex* option,
+        SubControl subControl,
+        const QWidget* widget = nullptr
+    ) const override;
+
     /**
      * @brief Paints a background box with optional rounded corners and border.
      *
@@ -272,6 +293,26 @@ private:
 
     /** @brief Clears the token resolution cache; call when the active theme changes. */
     void clearTokenCache();
+
+    /**
+     * @brief Returns the resolved icon-to-text spacing in pixels.
+     *
+     * Falls back to Qt's built-in default of 4 px when no IconSpacing token is defined.
+     */
+    int resolveIconSpacing(const StyleContext& context) const;
+
+    /**
+     * @brief Paints the label (icon + text) of a tool button.
+     *
+     * Handles padding inset, icon/arrow pixmap selection, pressed-state shift,
+     * and the two layout modes: TextBesideIcon and TextUnderIcon.
+     * Called from drawControl when element == CE_ToolButtonLabel.
+     */
+    void drawToolButtonLabel(
+        QPainter* painter,
+        const QStyleOptionToolButton* option,
+        const QWidget* widget
+    ) const;
 
     // Cache for resolve(StyleContext, StyleProperty). Key is a bit-packed uint32_t;
     // value is the resolved result including nullopt for confirmed misses.
