@@ -1387,6 +1387,7 @@ SET(FreeCADGui_SRCS
     FreeCADGuiInit.py
     FreeCADGuiTest.py
     FreeCADStyle.h
+    StyleToken.h
     GraphicsViewZoom.h
     GuiApplication.h
     GuiApplicationNativeEventAware.h

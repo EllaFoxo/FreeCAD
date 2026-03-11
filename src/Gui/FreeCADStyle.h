@@ -23,10 +23,23 @@
 
 #pragma once
 
+#include <initializer_list>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <FCGlobal.h>
+#include <Base/Color.h>
+#include <QBrush>
+#include <QColor>
+#include <QMarginsF>
+#include <QPainter>
 #include <QProxyStyle>
 #include <QEvent>
 #include <QPushButton>
+#include <QToolButton>
+#include "StyleParameters/Value.h"
+#include "StyleToken.h"
 
 namespace Gui
 {
@@ -40,8 +53,178 @@ public:
         : QProxyStyle(QStringLiteral("Fusion"))
     {}
 
+    /**
+     * @brief Per-corner border radii in pixels.
+     */
+    struct CornerRadii
+    {
+        qreal topLeft = 0;
+        qreal topRight = 0;
+        qreal bottomRight = 0;
+        qreal bottomLeft = 0;
+    };
+
+    /**
+     * @brief Describes the visual appearance of a painted background box.
+     *
+     * All border fields must be set together (borderColor + borderThickness)
+     * for a border to be drawn; partial specification is silently ignored.
+     */
+    struct BoxStyleDefinition
+    {
+        QBrush background;
+        std::optional<QColor> borderColor;
+        std::optional<QMarginsF> borderThickness;
+        CornerRadii borderRadius;  // default: all zero (sharp corners)
+        std::optional<QColor> overlay;
+    };
+
 protected:
+    void drawPrimitive(
+        PrimitiveElement element,
+        const QStyleOption* option,
+        QPainter* painter,
+        const QWidget* widget = nullptr
+    ) const override;
+
+    /**
+     * @brief Paints a background box with optional rounded corners and border.
+     *
+     * If borderColor + borderThickness are both set:
+     *   1. Fill the outer rounded rect (borderRadius) with borderColor.
+     *   2. Fill the inner rounded rect (inset by borderThickness, inner radii
+     *      shrunk by thickness) with background.
+     * Otherwise just fill the outer rounded rect with background.
+     *
+     * The painter state (pen, brush, render hints) is saved and restored.
+     */
+    static void drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& style);
+
     bool eventFilter(QObject* obj, QEvent* event) override;
+
+private:
+    /**
+     * @brief Resolves a single named parameter from the application's StyleParameterManager.
+     *
+     * Returns nullopt if the manager is unavailable or the parameter is not defined.
+     */
+    std::optional<StyleParameters::Value> resolve(std::string_view name) const;
+
+    /**
+     * @brief Tries each name in order and returns the first match.
+     *
+     * Useful for resolved-with-fallback patterns, e.g.:
+     * @code{.cpp}
+     * resolve({"ToolButtonSmallPadding", "ToolButtonPadding"})
+     * @endcode
+     */
+    std::optional<StyleParameters::Value> resolve(std::initializer_list<std::string_view> names) const;
+
+    /**
+     * @brief Tries resolving each @p prefix concatenated with @p suffix, in order.
+     *
+     * Useful for the prefix-fallback pattern used in resolveBoxBackground:
+     * @code{.cpp}
+     * resolve({"ButtonHoverPrimary", "ButtonHover", "Button"}, "Background")
+     * @endcode
+     */
+    std::optional<StyleParameters::Value> resolve(
+        std::initializer_list<std::string_view> prefixes,
+        std::string_view suffix
+    ) const;
+
+    /**
+     * @brief Resolves a style token from a @p context and @p property with caching.
+     *
+     * Builds the token prefix fallback chain from the context (component, variant,
+     * active state flags in priority order) and caches the result so subsequent
+     * calls for the same (context, property) tuple avoid all string operations.
+     *
+     * The cache is invalidated by calling clearTokenCache(), which should be done
+     * whenever the active theme changes.
+     */
+    std::optional<StyleParameters::Value> resolve(
+        const StyleContext& context,
+        StyleProperty property
+    ) const;
+
+    /**
+     * @brief Typed variants of each resolve() overload.
+     *
+     * Wraps the corresponding untyped resolve() with StyleParameters::valueAs<T>,
+     * so call sites obtain a specific domain type (Numeric, Insets, Corners, …)
+     * directly as an optional without explicit holds<>/get<> checks or try/catch:
+     *
+     * @code{.cpp}
+     * if (const auto height = resolve<Numeric>(context, StyleProperty::Height)) {
+     *     widget->setFixedHeight(static_cast<int>(height->value));
+     * }
+     * if (const auto padding = resolve<Insets>(context, StyleProperty::Padding)) {
+     *     paddingF = Base::convertTo<QMarginsF>(*padding);
+     * }
+     * @endcode
+     *
+     * For variant member types (Numeric, Base::Color, std::string, Tuple) the
+     * value is returned only when it holds exactly T.  For domain wrapper types
+     * constructible from Value (Insets, Corners, InnerShadow, …) construction is
+     * attempted and nullopt is returned on failure.
+     */
+    template<typename T>
+    std::optional<T> resolve(std::string_view name) const
+    {
+        return StyleParameters::valueAs<T>(resolve(name));
+    }
+
+    template<typename T>
+    std::optional<T> resolve(std::initializer_list<std::string_view> names) const
+    {
+        return StyleParameters::valueAs<T>(resolve(names));
+    }
+
+    template<typename T>
+    std::optional<T> resolve(std::initializer_list<std::string_view> prefixes, std::string_view suffix) const
+    {
+        return StyleParameters::valueAs<T>(resolve(prefixes, suffix));
+    }
+
+    template<typename T>
+    std::optional<T> resolve(const StyleContext& context, StyleProperty property) const
+    {
+        return StyleParameters::valueAs<T>(resolve(context, property));
+    }
+
+    /**
+     * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
+     *
+     * Calls resolve(context, property) for each visual property, so all
+     * per-property lookups are individually cached.
+     */
+    BoxStyleDefinition resolveBoxStyle(const StyleContext& context) const;
+
+    /**
+     * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
+     *
+     * Calls resolve(context, property) for Padding, Height, MinWidth, and IconSpacing.
+     * All per-property lookups are individually cached.
+     */
+    BoxGeometryDefinition resolveBoxGeometry(const StyleContext& context) const;
+
+    /**
+     * @brief Builds a StyleContext from a widget and its current style option.
+     *
+     * Derives component from the widget type, variant slots from widget properties
+     * (controlSize, isDefault, isFlat, autoRaise, property("flat")), and state
+     * from option->state flags. Passing @p option as nullptr yields Normal state.
+     */
+    static StyleContext contextOf(const QWidget* widget, const QStyleOption* option = nullptr);
+
+    /** @brief Clears the token resolution cache; call when the active theme changes. */
+    void clearTokenCache();
+
+    // Cache for resolve(StyleContext, StyleProperty). Key is a bit-packed uint32_t;
+    // value is the resolved result including nullopt for confirmed misses.
+    // Mutable so const draw methods can populate the cache.
+    mutable std::unordered_map<uint32_t, std::optional<StyleParameters::Value>> tokenCache;
 };
 
 }  // namespace Gui
