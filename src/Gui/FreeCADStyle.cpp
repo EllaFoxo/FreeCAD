@@ -45,6 +45,7 @@
 #include <QRadialGradient>
 #include <QStyleOption>
 #include <QAbstractItemView>
+#include <QCheckBox>
 #include <QListView>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
@@ -298,6 +299,7 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::ListItem,   {"ListItem"}},
     {StyleComponent::Tree,       {"Tree", "List"}},
     {StyleComponent::TreeItem,   {"TreeItem", "ListItem"}},
+    {StyleComponent::CheckBox,   {"CheckBox", "FormControl"}},
 };
 // clang-format on
 
@@ -377,6 +379,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::Overlay,         "Overlay"},
     {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
     {StyleProperty::InnerShadow,     "InnerShadow"},
+    {StyleProperty::TickColor,       "TickColor"},
 };
 // clang-format on
 
@@ -617,6 +620,33 @@ void FreeCADStyle::polish(QPalette& palette)
     setDisabled(QPalette::HighlightedText, "BaseDisabledTextColor");
 }
 
+int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
+{
+    if (qobject_cast<const QCheckBox*>(widget)) {
+        const StyleContext context = contextOf(widget, option);
+
+        if (metric == PM_IndicatorWidth) {
+            if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
+                return static_cast<int>(width->value);
+            }
+        }
+
+        if (metric == PM_IndicatorHeight) {
+            if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
+                return static_cast<int>(height->value);
+            }
+        }
+
+        if (metric == PM_CheckBoxLabelSpacing) {
+            if (const auto spacing = resolve<StyleParameters::Numeric>("CheckBoxSpacing")) {
+                return static_cast<int>(spacing->value);
+            }
+        }
+    }
+
+    return QProxyStyle::pixelMetric(metric, option, widget);
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,
@@ -662,6 +692,71 @@ void FreeCADStyle::drawPrimitive(
         if (option->state & QStyle::State_Item) {
             return;
         }
+    }
+
+    if (element == PE_IndicatorCheckBox) {
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
+        drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+
+        const bool isChecked = option->state & QStyle::State_On;
+        const bool isPartial = option->state & QStyle::State_NoChange;
+
+        if (isChecked || isPartial) {
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+
+            // Tick colour: from design token, falling back to the Fusion palette role so
+            // it follows the active theme even without an explicit token.
+            QColor markColor = option->palette.text().color();
+            if (const auto tickColor = resolve<Base::Color>(context, StyleProperty::TickColor)) {
+                markColor = tickColor->asValue<QColor>();
+            }
+
+            // Inner mark padding: from design token, falling back to a proportional default.
+            constexpr qreal checkPaddingRatio = 0.2;  // fallback: fraction of box width
+            constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
+            constexpr qreal checkMinPenWidth = 1.5;     // minimum stroke width in pixels
+
+            qreal padding = static_cast<qreal>(option->rect.width()) * checkPaddingRatio;
+            if (const auto paddings
+                = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
+                padding = paddings->left().value;
+            }
+
+            const QRectF innerRect
+                = QRectF(option->rect).adjusted(padding, padding, -padding, -padding);
+            const qreal penWidth = qMax(checkMinPenWidth, innerRect.width() * checkPenWidthRatio);
+
+            if (isChecked) {
+                // Proportional anchor points for the check mark path (relative to inner rect).
+                constexpr qreal checkMidY = 0.5;   // vertical mid-point of the left arm
+                constexpr qreal checkKneeX = 0.4;  // horizontal position of the knee (valley)
+
+                QPainterPath checkPath;
+                checkPath.moveTo(innerRect.left(), innerRect.top() + (innerRect.height() * checkMidY));
+                checkPath.lineTo(
+                    innerRect.left() + (innerRect.width() * checkKneeX),
+                    innerRect.bottom()
+                );
+                checkPath.lineTo(innerRect.right(), innerRect.top());
+                painter->strokePath(
+                    checkPath,
+                    QPen(markColor, penWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
+                );
+            }
+            else {
+                // Partial check: horizontal dash
+                painter->setPen(QPen(markColor, penWidth, Qt::SolidLine, Qt::RoundCap));
+                painter->drawLine(
+                    QPointF(innerRect.left(), innerRect.center().y()),
+                    QPointF(innerRect.right(), innerRect.center().y())
+                );
+            }
+
+            painter->restore();
+        }
+        return;
     }
 
     if (element == PE_IndicatorToolBarSeparator) {
@@ -1396,6 +1491,9 @@ StyleContext FreeCADStyle::contextOf(
         context.component = comboBox->isEditable() ? StyleComponent::ComboBox
                                                    : StyleComponent::Select;
     }
+    else if (qobject_cast<const QCheckBox*>(widget)) {
+        context.component = StyleComponent::CheckBox;
+    }
     else if (qobject_cast<const QTreeView*>(widget)) {
         context.component = element == StyleComponentElement::Root ? StyleComponent::Tree
                                                                    : StyleComponent::TreeItem;
@@ -1443,7 +1541,8 @@ StyleContext FreeCADStyle::contextOf(
         // to Pressed for button components to avoid masking the Focused state on inputs.
         const bool isButton = context.component == StyleComponent::PushButton
             || context.component == StyleComponent::ToolButton
-            || context.component == StyleComponent::Select;
+            || context.component == StyleComponent::Select
+            || context.component == StyleComponent::CheckBox;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }

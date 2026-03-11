@@ -146,6 +146,12 @@ public:
 
     void polish(QPalette& palette) override;
 
+    int pixelMetric(
+        PixelMetric metric,
+        const QStyleOption* option = nullptr,
+        const QWidget* widget = nullptr
+    ) const override;
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,

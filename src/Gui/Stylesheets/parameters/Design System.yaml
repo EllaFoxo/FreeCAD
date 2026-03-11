@@ -188,6 +188,29 @@ GroupBoxTitleTextColor: "@Contrast.500"
 SeparatorThickness: 1px
 SeparatorColor: "@BaseBorderColor"
 
+CheckBoxWidth: 15px
+CheckBoxHeight: "@CheckBoxWidth"
+CheckBoxSpacing: "@Spacing.150"
+
+CheckBoxSmallWidth: 12px
+CheckBoxSmallHeight: "@CheckBoxSmallWidth"
+
+# Indicator box appearance
+CheckBoxBackground: "@Background.000"
+CheckBoxBorderRadius: "@BaseRadius.medium"
+CheckBoxPadding: "padding(@Spacing.100)"
+CheckBoxTickColor: "@BaseTextColor"
+
+
+# State overrides
+CheckBoxFocusedBorderColor: "@Accent.500"
+CheckBoxHoveredBorderColor: "@Neutral.600"
+
+CheckBoxDisabledBackground: "@BaseDisabledBackground"
+CheckBoxDisabledTickColor: "@BaseDisabledTextColor"
+
+CheckBoxPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 1px, blur: 4px)"
+
 # ── Scroll Bar ───────────────────────────────────────────────────────────
 ScrollBarBackground: transparent
 ScrollBarHoveredBackground: "opacity(@BaseBorderColor, 0.1)"

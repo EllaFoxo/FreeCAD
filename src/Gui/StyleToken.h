@@ -48,6 +48,7 @@ enum class StyleComponent : uint8_t
     ListItem,  // item of QListWidget or QListView
     Tree,      // QtreeWidget, QTreeView
     TreeItem,  // item of QTreeWidget or QTreeView
+    CheckBox,  // QCheckBox indicator
     // Add new components before COUNT
     COUNT
 };
@@ -144,6 +145,7 @@ enum class StyleProperty : uint8_t
     Overlay,
     OverlayOpacity,
     InnerShadow,
+    TickColor,
     // Add new properties before COUNT
     COUNT
 };
