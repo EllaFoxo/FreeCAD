@@ -188,7 +188,7 @@ GroupBoxTitleTextColor: "@Contrast.500"
 SeparatorThickness: 1px
 SeparatorColor: "@BaseBorderColor"
 
-CheckBoxWidth: 15px
+CheckBoxWidth: 14px
 CheckBoxHeight: "@CheckBoxWidth"
 CheckBoxSpacing: "@Spacing.150"
 
@@ -210,6 +210,11 @@ CheckBoxDisabledBackground: "@BaseDisabledBackground"
 CheckBoxDisabledTickColor: "@BaseDisabledTextColor"
 
 CheckBoxPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 1px, blur: 4px)"
+
+# ── Radio Button indicator ────────────────────────────────────────────────
+# Inherits all visual properties from CheckBox; only border radius is overridden
+# to produce a circular indicator.
+RadioButtonBorderRadius: "border_radius(100px)"
 
 # ── Scroll Bar ───────────────────────────────────────────────────────────
 ScrollBarBackground: transparent

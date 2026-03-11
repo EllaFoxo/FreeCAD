@@ -46,6 +46,7 @@
 #include <QStyleOption>
 #include <QAbstractItemView>
 #include <QCheckBox>
+#include <QRadioButton>
 #include <QListView>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
@@ -126,10 +127,13 @@ constexpr qreal arcSweepClockwise = -90;
 
 QPainterPath roundedRectPath(const QRectF& rect, const FreeCADStyle::CornerRadii& radii)
 {
-    const qreal topLeft = radii.topLeft;
-    const qreal topRight = radii.topRight;
-    const qreal bottomRight = radii.bottomRight;
-    const qreal bottomLeft = radii.bottomLeft;
+    // Clamp each radius to at most half the shorter side so the path stays valid
+    // even when a large radius (e.g. 100 px) is used to produce a circular shape.
+    const qreal maxRadius = std::min(rect.width(), rect.height()) / 2.0;
+    const qreal topLeft = std::min(radii.topLeft, maxRadius);
+    const qreal topRight = std::min(radii.topRight, maxRadius);
+    const qreal bottomRight = std::min(radii.bottomRight, maxRadius);
+    const qreal bottomLeft = std::min(radii.bottomLeft, maxRadius);
 
     QPainterPath path;
     path.moveTo(rect.left() + topLeft, rect.top());
@@ -299,7 +303,8 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::ListItem,   {"ListItem"}},
     {StyleComponent::Tree,       {"Tree", "List"}},
     {StyleComponent::TreeItem,   {"TreeItem", "ListItem"}},
-    {StyleComponent::CheckBox,   {"CheckBox", "FormControl"}},
+    {StyleComponent::CheckBox,       {"CheckBox", "FormControl"}},
+    {StyleComponent::RadioButton,    {"RadioButton", "CheckBox", "FormControl"}},
 };
 // clang-format on
 
@@ -622,6 +627,28 @@ void FreeCADStyle::polish(QPalette& palette)
 
 int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
 {
+    if (qobject_cast<const QRadioButton*>(widget)) {
+        const StyleContext context = contextOf(widget, option);
+
+        if (metric == PM_ExclusiveIndicatorWidth) {
+            if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
+                return static_cast<int>(width->value);
+            }
+        }
+
+        if (metric == PM_ExclusiveIndicatorHeight) {
+            if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
+                return static_cast<int>(height->value);
+            }
+        }
+
+        if (metric == PM_CheckBoxLabelSpacing) {
+            if (const auto spacing = resolve<StyleParameters::Numeric>("CheckBoxSpacing")) {
+                return static_cast<int>(spacing->value);
+            }
+        }
+    }
+
     if (qobject_cast<const QCheckBox*>(widget)) {
         const StyleContext context = contextOf(widget, option);
 
@@ -692,6 +719,34 @@ void FreeCADStyle::drawPrimitive(
         if (option->state & QStyle::State_Item) {
             return;
         }
+    }
+
+    if (element == PE_IndicatorRadioButton) {
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
+        drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+
+        if (option->state & QStyle::State_On) {
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+
+            QColor dotColor = option->palette.text().color();
+            if (const auto tickColor = resolve<Base::Color>(context, StyleProperty::TickColor)) {
+                dotColor = tickColor->asValue<QColor>();
+            }
+
+            constexpr qreal dotPaddingRatio = 0.2;  // fallback: fraction of indicator width
+            qreal padding = static_cast<qreal>(option->rect.width()) * dotPaddingRatio;
+            if (const auto paddings
+                = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
+                padding = paddings->left().value;
+            }
+
+            painter->setBrush(dotColor);
+            painter->drawEllipse(QRectF(option->rect).adjusted(padding, padding, -padding, -padding));
+            painter->restore();
+        }
+        return;
     }
 
     if (element == PE_IndicatorCheckBox) {
@@ -1491,7 +1546,10 @@ StyleContext FreeCADStyle::contextOf(
         context.component = comboBox->isEditable() ? StyleComponent::ComboBox
                                                    : StyleComponent::Select;
     }
-    else if (qobject_cast<const QCheckBox*>(widget)) {
+    else if (qobject_cast<const QRadioButton*>(widget)) {
+        context.component = StyleComponent::RadioButton;
+    }
+    else if (qobject_cast<const QCheckBox*>(widget) || element == StyleComponentElement::Indicator) {
         context.component = StyleComponent::CheckBox;
     }
     else if (qobject_cast<const QTreeView*>(widget)) {
@@ -1542,7 +1600,8 @@ StyleContext FreeCADStyle::contextOf(
         const bool isButton = context.component == StyleComponent::PushButton
             || context.component == StyleComponent::ToolButton
             || context.component == StyleComponent::Select
-            || context.component == StyleComponent::CheckBox;
+            || context.component == StyleComponent::CheckBox
+            || context.component == StyleComponent::RadioButton;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }
