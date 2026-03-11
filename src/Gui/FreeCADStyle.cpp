@@ -45,8 +45,20 @@
 #include "Application.h"
 #include "StyleParameters/Corners.h"
 #include "StyleParameters/Gradient.h"
+#include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
+
+QT_BEGIN_NAMESPACE
+extern Q_WIDGETS_EXPORT void qt_blurImage(
+    QPainter* painter,
+    QImage& blurImage,
+    qreal radius,
+    bool quality,
+    bool alphaOnly,
+    int transposed = 0
+);
+QT_END_NAMESPACE
 
 using namespace Gui;
 
@@ -73,67 +85,16 @@ FreeCADStyle::CornerRadii convertTo<FreeCADStyle::CornerRadii, StyleParameters::
 }
 
 template<>
-QMarginsF convertTo<QMarginsF, StyleParameters::Insets>(const StyleParameters::Insets& insets)
+FreeCADStyle::InnerShadow convertTo<FreeCADStyle::InnerShadow, StyleParameters::InnerShadow>(
+    const StyleParameters::InnerShadow& shadow
+)
 {
-    return QMarginsF(insets.left().value, insets.top().value, insets.right().value, insets.bottom().value);
-}
-
-template<>
-QBrush convertTo<QBrush, StyleParameters::Value>(const StyleParameters::Value& value)
-{
-    using namespace StyleParameters;
-
-    if (value.holds<::Base::Color>()) {
-        return QBrush(value.get<::Base::Color>().asValue<QColor>());
-    }
-
-    if (!value.holds<Tuple>()) {
-        return Qt::NoBrush;
-    }
-
-    const Tuple& tuple = value.get<Tuple>();
-
-    const auto applyStopsAndBuild = [](auto qGradient, const auto& gradient) -> QBrush {
-        qGradient.setCoordinateMode(QGradient::ObjectMode);
-        for (const auto& stop : gradient.colorStops()) {
-            qGradient.setColorAt(stop.position.value, stop.color.template asValue<QColor>());
-        }
-        return QBrush(qGradient);
+    return {
+        .color = shadow.color().asValue<QColor>(),
+        .x = shadow.x(),
+        .y = shadow.y(),
+        .blur = shadow.blur(),
     };
-
-    if (tuple.kind == TupleKind::LinearGradient) {
-        try {
-            const LinearGradient gradient(tuple);
-            return applyStopsAndBuild(
-                QLinearGradient(gradient.x1(), gradient.y1(), gradient.x2(), gradient.y2()),
-                gradient
-            );
-        }
-        catch (const ::Base::Exception&) {
-            return Qt::NoBrush;
-        }
-    }
-
-    if (tuple.kind == TupleKind::RadialGradient) {
-        try {
-            const RadialGradient gradient(tuple);
-            return applyStopsAndBuild(
-                QRadialGradient(
-                    gradient.cx(),
-                    gradient.cy(),
-                    gradient.radius(),
-                    gradient.fx(),
-                    gradient.fy()
-                ),
-                gradient
-            );
-        }
-        catch (const ::Base::Exception&) {
-            return Qt::NoBrush;
-        }
-    }
-
-    return Qt::NoBrush;
 }
 
 }  // namespace Base
@@ -201,6 +162,88 @@ FreeCADStyle::CornerRadii innerRadii(const FreeCADStyle::CornerRadii& outer, con
         .bottomRight = shrink(outer.bottomRight, thickness.bottom(), thickness.right()),
         .bottomLeft = shrink(outer.bottomLeft, thickness.bottom(), thickness.left()),
     };
+}
+
+struct ShadowCacheKey
+{
+    int width, height;
+    qreal x, y, blur;
+    QRgb color;
+    qreal radiusTopLeft, radiusTopRight, radiusBottomRight, radiusBottomLeft;
+
+    auto operator<=>(const ShadowCacheKey&) const = default;
+};
+
+QImage buildShadowImage(
+    const QRect& rect,
+    const FreeCADStyle::CornerRadii& radii,
+    const FreeCADStyle::InnerShadow& shadow
+)
+{
+    const int padding = static_cast<int>(std::ceil(shadow.blur)) + 1;
+    const QSize imageSize = rect.size() + QSize(2 * padding, 2 * padding);
+
+    // Create a fully opaque black image and punch a transparent hole in the shape.
+    // The opaque ring that remains around the hole produces the shadow after blurring.
+    QImage mask(imageSize, QImage::Format_ARGB32_Premultiplied);
+    mask.fill(Qt::black);
+
+    {
+        QPainter maskPainter(&mask);
+        maskPainter.setRenderHint(QPainter::Antialiasing);
+        maskPainter.setCompositionMode(QPainter::CompositionMode_Clear);
+        maskPainter.fillPath(
+            roundedRectPath(QRectF(padding, padding, rect.width(), rect.height()), radii),
+            Qt::transparent
+        );
+    }
+
+    QImage blurred(imageSize, QImage::Format_ARGB32_Premultiplied);
+    blurred.fill(Qt::transparent);
+    {
+        QPainter blurPainter(&blurred);
+        qt_blurImage(&blurPainter, mask, shadow.blur, false, false);
+    }
+
+    // Tint the blurred image with the shadow color.
+    {
+        QPainter tintPainter(&blurred);
+        tintPainter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        tintPainter.fillRect(blurred.rect(), shadow.color);
+    }
+
+    return blurred;
+}
+
+const QImage& getCachedShadowImage(
+    const QRect& rect,
+    const FreeCADStyle::CornerRadii& radii,
+    const FreeCADStyle::InnerShadow& shadow
+)
+{
+    constexpr int maxCacheEntries = 32;
+    static std::map<ShadowCacheKey, QImage> cache;
+
+    const ShadowCacheKey key {
+        .width = rect.width(),
+        .height = rect.height(),
+        .x = shadow.x,
+        .y = shadow.y,
+        .blur = shadow.blur,
+        .color = shadow.color.rgba(),
+        .radiusTopLeft = radii.topLeft,
+        .radiusTopRight = radii.topRight,
+        .radiusBottomRight = radii.bottomRight,
+        .radiusBottomLeft = radii.bottomLeft,
+    };
+
+    if (auto it = cache.find(key); it != cache.end()) {
+        return it->second;
+    }
+    if (static_cast<int>(cache.size()) >= maxCacheEntries) {
+        cache.erase(cache.begin());
+    }
+    return cache.emplace(key, buildShadowImage(rect, radii, shadow)).first->second;
 }
 
 // ─── StyleToken string tables ──────────────────────────────────────────────
@@ -480,6 +523,23 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
     }
 
     painter->restore();
+
+    if (hasInnerShadow) {
+        const int padding = static_cast<int>(std::ceil(rule.innerShadow->blur)) + 1;
+        const QImage& shadowImage = getCachedShadowImage(rect, rule.borderRadius, *rule.innerShadow);
+
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing);
+        painter->setClipPath(roundedRectPath(QRectF(rect), rule.borderRadius), Qt::IntersectClip);
+        painter->drawImage(
+            QPointF(
+                rect.left() - padding + rule.innerShadow->x,
+                rect.top() - padding + rule.innerShadow->y
+            ),
+            shadowImage
+        );
+        painter->restore();
+    }
 }
 
 void FreeCADStyle::drawPrimitive(
@@ -634,6 +694,11 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
     if (const auto borderRadius
         = resolve<StyleParameters::Corners>(context, StyleProperty::BorderRadius)) {
         result.borderRadius = Base::convertTo<CornerRadii>(*borderRadius);
+    }
+
+    if (const auto innerShadow
+        = resolve<StyleParameters::InnerShadow>(context, StyleProperty::InnerShadow)) {
+        result.innerShadow = Base::convertTo<FreeCADStyle::InnerShadow>(*innerShadow);
     }
 
     return result;
