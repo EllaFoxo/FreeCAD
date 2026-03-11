@@ -25,11 +25,14 @@
 
 #include <cmath>
 #include <limits>
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QFileDialog>
 #include <QLocale>
 #include <QMessageBox>
 #include <QString>
+#include <QStyledItemDelegate>
+#include <QToolButton>
 #include <algorithm>
 
 #include <App/Document.h>
@@ -61,6 +64,88 @@ using namespace Gui::Dialog;
 namespace fs = std::filesystem;
 using Base::QuantityFormat;
 using Base::UnitsApi;
+
+namespace
+{
+
+/**
+ * @brief Delegate for the button column in the PreferencePacks tree widget.
+ *
+ * sizeHint() is called at layout time (after the button is parented and polished),
+ * so it returns the button's true QSS-aware height plus the QTreeView::item cell
+ * padding via CT_ItemViewItem.
+ *
+ * updateEditorGeometry() keeps the button at its natural height and centers it
+ * vertically inside the padded cell, matching the behaviour of other tree items.
+ */
+class PreferencePackButtonDelegate: public QStyledItemDelegate
+{
+public:
+    explicit PreferencePackButtonDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent)
+    {}
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    {
+        const auto* view = qobject_cast<const QAbstractItemView*>(option.widget);
+        if (!view) {
+            return QStyledItemDelegate::sizeHint(option, index);
+        }
+
+        auto* widget = view->indexWidget(index);
+        if (!widget) {
+            return QStyledItemDelegate::sizeHint(option, index);
+        }
+
+        widget->ensurePolished();
+
+        // Probe SE_ItemViewItemText with a large test rect to find the vertical
+        // cell padding from QTreeView::item { padding: ... } in the QSS.
+        // The padding is absolute (px), so the probe result is rect-size-independent.
+        QStyleOptionViewItem probeOpt = option;
+        constexpr int probeSize = 1000;
+        probeOpt.rect = QRect(0, 0, probeSize, probeSize);
+        const QRect contentRect
+            = view->style()->subElementRect(QStyle::SE_ItemViewItemText, &probeOpt, view);
+        const int vertPadding = qMax(0, (probeSize - contentRect.height()) / 2);
+        const int horizPadding = qMax(0, probeSize - contentRect.width());
+
+        const QSize buttonSize = widget->sizeHint();
+        return QSize(buttonSize.width() + horizPadding, buttonSize.height() + 2 * vertPadding);
+    }
+
+    void updateEditorGeometry(
+        QWidget* editor,
+        const QStyleOptionViewItem& option,
+        const QModelIndex& index
+    ) const override
+    {
+        Q_UNUSED(index)
+        if (!option.widget) {
+            QStyledItemDelegate::updateEditorGeometry(editor, option, index);
+            return;
+        }
+
+        editor->ensurePolished();
+        const QSize naturalSize = editor->sizeHint();
+
+        // Derive the content rect (cell rect minus QSS padding) from the actual
+        // cell rect so the button is inset by the same padding as text items.
+        QStyleOptionViewItem opt = option;
+        const QRect contentRect
+            = option.widget->style()->subElementRect(QStyle::SE_ItemViewItemText, &opt, option.widget);
+
+        const int vertOffset = qMax(0, (contentRect.height() - naturalSize.height()) / 2);
+        editor->setGeometry(QRect(
+            contentRect.left(),
+            contentRect.top() + vertOffset,
+            naturalSize.width(),
+            naturalSize.height()
+        ));
+    }
+};
+
+}  // anonymous namespace
 
 /* TRANSLATOR Gui::Dialog::DlgSettingsGeneral */
 
@@ -620,21 +705,23 @@ void DlgSettingsGeneral::loadDockWindowVisibility()
 
 void DlgSettingsGeneral::recreatePreferencePackMenu()
 {
-    ui->PreferencePacks->setRowCount(0);  // Begin by clearing whatever is there
-    ui->PreferencePacks->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft);
+    ui->PreferencePacks->setRootIsDecorated(false);
+    ui->PreferencePacks->setUniformRowHeights(false);
+    ui->PreferencePacks->clear();
     ui->PreferencePacks->setColumnCount(3);
-    ui->PreferencePacks->setSelectionMode(QAbstractItemView::SelectionMode::NoSelection);
-    ui->PreferencePacks->horizontalHeader()->setStretchLastSection(false);
-    ui->PreferencePacks->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeMode::Stretch);
-    ui->PreferencePacks->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeMode::Stretch);
-    ui->PreferencePacks->horizontalHeader()->setSectionResizeMode(
-        2,
-        QHeaderView::ResizeMode::ResizeToContents
-    );
-    QStringList columnHeaders;
-    columnHeaders << tr("Preference Pack Name") << tr("Tags")
-                  << QString();  // for the "Load" buttons
-    ui->PreferencePacks->setHorizontalHeaderLabels(columnHeaders);
+    ui->PreferencePacks->header()->setDefaultAlignment(Qt::AlignLeft);
+    ui->PreferencePacks->header()->setStretchLastSection(false);
+    ui->PreferencePacks->header()->setSectionResizeMode(0, QHeaderView::ResizeMode::Stretch);
+    ui->PreferencePacks->header()->setSectionResizeMode(1, QHeaderView::ResizeMode::Stretch);
+    ui->PreferencePacks->header()->setSectionResizeMode(2, QHeaderView::ResizeMode::ResizeToContents);
+    ui->PreferencePacks->setHeaderLabels({tr("Preference Pack Name"), tr("Tags"), QString()});
+
+    if (!dynamic_cast<PreferencePackButtonDelegate*>(ui->PreferencePacks->itemDelegateForColumn(2))) {
+        ui->PreferencePacks->setItemDelegateForColumn(
+            2,
+            new PreferencePackButtonDelegate(ui->PreferencePacks)
+        );
+    }
 
     // Populate the Preference Packs list
     Application::Instance->prefPackManager()->rescan();
@@ -651,28 +738,25 @@ void DlgSettingsGeneral::recreatePreferencePackMenu()
         packs.erase(key);  // Remove the elements from the map
     }
 
-    ui->PreferencePacks->setRowCount(packs.size());
-
-    int row = 0;
     QIcon icon = style()->standardIcon(QStyle::SP_DialogApplyButton);
     for (const auto& pack : packs) {
-        auto name = new QTableWidgetItem(QString::fromStdString(pack.first));
-        name->setToolTip(QString::fromStdString(pack.second.metadata().description()));
-        ui->PreferencePacks->setItem(row, 0, name);
+        auto* item = new QTreeWidgetItem(ui->PreferencePacks);
+        item->setText(0, QString::fromStdString(pack.first));
+        item->setToolTip(0, QString::fromStdString(pack.second.metadata().description()));
+
         auto tags = pack.second.metadata().tag();
-        QString tagString;
+        QStringList tagList;
         for (const auto& tag : tags) {
-            if (tagString.isEmpty()) {
-                tagString.append(QString::fromStdString(tag));
-            }
-            else {
-                tagString.append(QStringLiteral(", ") + QString::fromStdString(tag));
-            }
+            tagList.append(QString::fromStdString(tag));
         }
-        auto kind = new QTableWidgetItem(tagString);
-        ui->PreferencePacks->setItem(row, 1, kind);
-        auto button = new QPushButton(icon, tr("Apply"));
+        item->setText(1, tagList.join(QStringLiteral(", ")));
+
+        auto* button = new QToolButton();
+        button->setText(tr("Apply"));
+        button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        button->setIcon(icon);
         button->setEnabled(true);
+        button->setProperty("controlSize", "small");
         Gui::Document* doc = Gui::Application::Instance->activeDocument();
         if (doc) {
             Gui::View3DInventor* view = qobject_cast<Gui::View3DInventor*>(doc->getActiveView());
@@ -691,8 +775,7 @@ void DlgSettingsGeneral::recreatePreferencePackMenu()
                 onLoadPreferencePackClicked(pack.first);
             });
         }
-        ui->PreferencePacks->setCellWidget(row, 2, button);
-        ++row;
+        ui->PreferencePacks->setItemWidget(item, 2, button);
     }
 }
 
