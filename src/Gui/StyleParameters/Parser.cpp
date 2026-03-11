@@ -278,9 +278,31 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
         return result;
     };
 
+    const auto opacity = [&args]() -> Value {
+        auto resolved = ArgumentParser {{"color"}, {"alpha"}}.resolve(args);
+        const auto& alpha = resolved.get<Numeric>("alpha");
+
+        const float alphaValue = alpha.unit == "%" ? static_cast<float>(alpha.value / 100.0)
+                                                   : static_cast<float>(alpha.value);
+
+        const auto applyAlpha = [alphaValue](const Base::Color& color) -> Base::Color {
+            return Base::Color(color.r, color.g, color.b, alphaValue);
+        };
+
+        const Value* colorValue = resolved.find("color");
+        if (colorValue->holds<Tuple>()) {
+            return Gradient::mapStopColors(colorValue->get<Tuple>(), applyAlpha);
+        }
+
+        return applyAlpha(resolved.get<Base::Color>("color"));
+    };
+
     const auto contentBox = [&args]() -> Value {
         if (args.size() < 2) {
-            THROWM(Base::ExpressionError, "content_box requires at least 2 arguments: a size tuple and at least one inset");
+            THROWM(
+                Base::ExpressionError,
+                "content_box requires at least 2 arguments: a size tuple and at least one inset"
+            );
         }
 
         const Value& sizeValue = args.at(0);
@@ -296,7 +318,10 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
             height = sizeValue.get<Numeric>();
         }
         else {
-            THROWM(Base::TypeError, "content_box: first argument must be a (width, height) size tuple or a Numeric");
+            THROWM(
+                Base::TypeError,
+                "content_box: first argument must be a (width, height) size tuple or a Numeric"
+            );
         }
 
         for (size_t index = 1; index < args.size(); ++index) {
@@ -314,6 +339,7 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
     std::map<std::string, std::function<Value()>> functions = {
         {"lighten", lightenOrDarken},
         {"darken", lightenOrDarken},
+        {"opacity", opacity},
         {"blend", blend},
         {"shade", shade},
         {"shades", shades},
