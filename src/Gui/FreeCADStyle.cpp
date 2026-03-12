@@ -385,6 +385,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
     {StyleProperty::InnerShadow,     "InnerShadow"},
     {StyleProperty::TickColor,       "TickColor"},
+    {StyleProperty::MenuWidth,       "MenuWidth"},
 };
 // clang-format on
 
@@ -485,6 +486,21 @@ uint32_t packCacheKey(const StyleContext& context, StyleProperty property)
          | (static_cast<uint32_t>(property)                         << propertyBitOffset)
          | (packVariant(context.variant)                            << variantBitOffset);
     // clang-format on
+}
+
+/**
+ * @brief Returns the orientation of the nearest ancestor QToolBar, or nullopt if the widget is
+ *        not inside a toolbar.
+ */
+std::optional<Qt::Orientation> toolbarOrientationOf(const QWidget* widget)
+{
+    for (const QWidget* ancestor = widget ? widget->parentWidget() : nullptr; ancestor != nullptr;
+         ancestor = ancestor->parentWidget()) {
+        if (const auto* toolbar = qobject_cast<const QToolBar*>(ancestor)) {
+            return toolbar->orientation();
+        }
+    }
+    return std::nullopt;
 }
 
 }  // namespace
@@ -668,6 +684,25 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
             if (const auto spacing = resolve<StyleParameters::Numeric>("CheckBoxSpacing")) {
                 return static_cast<int>(spacing->value);
             }
+        }
+    }
+
+    if (qobject_cast<const QToolButton*>(widget) && metric == PM_MenuButtonIndicator) {
+        const StyleContext context = contextOf(widget, option);
+        if (const auto token = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
+            return static_cast<int>(token->value);
+        }
+    }
+
+    if (metric == PM_ToolBarItemSpacing) {
+        if (const auto spacing = resolve<StyleParameters::Numeric>("ToolBarItemSpacing")) {
+            return static_cast<int>(spacing->value);
+        }
+    }
+
+    if (metric == PM_ToolBarItemMargin) {
+        if (const auto spacing = resolve<StyleParameters::Numeric>("ToolBarItemMargin")) {
+            return static_cast<int>(spacing->value);
         }
     }
 
@@ -903,8 +938,26 @@ QSize FreeCADStyle::sizeFromContents(
             width += geometry.iconGapDelta();
         }
 
-        if (geometry.height) {
+        // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
+        // naturally from the uniform padding. The height token still applies to all other
+        // ToolButton contexts (form-control-style buttons with text, small/big variants, etc).
+        const std::optional<Qt::Orientation> toolbarOrientation = toolbarOrientationOf(widget);
+        const bool isToolbarIconOnly = toolbarOrientation.has_value() && tbOption
+            && tbOption->toolButtonStyle == Qt::ToolButtonIconOnly;
+
+        if (geometry.height && !isToolbarIconOnly) {
             height = *geometry.height;
+        }
+
+        // QToolButton::sizeHint() adds PM_MenuButtonIndicator to the width for
+        // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar
+        // orientation. For vertical toolbars the strip goes below the icon, so we move
+        // the indicator contribution from width to height.
+        if (tbOption && (tbOption->features & QStyleOptionToolButton::MenuButtonPopup)
+            && toolbarOrientation == Qt::Vertical) {
+            const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+            width -= menuWidth;
+            height += menuWidth;
         }
 
         return {width, height};
@@ -1082,6 +1135,43 @@ QRect FreeCADStyle::subControlRect(
         }
     }
 
+    if (complexControl == CC_ToolButton) {
+        if (const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            if (tbOption->features & QStyleOptionToolButton::MenuButtonPopup) {
+                const StyleContext context = contextOf(widget, option);
+                const QRect rect = option->rect;
+
+                int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+                if (const auto token
+                    = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
+                    menuWidth = static_cast<int>(token->value);
+                }
+
+                const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
+
+                switch (subControl) {
+                    case SC_ToolButton:
+                        if (isVertical) {
+                            return {rect.left(), rect.top(), rect.width(), rect.height() - menuWidth};
+                        }
+                        return {rect.left(), rect.top(), rect.width() - menuWidth, rect.height()};
+                    case SC_ToolButtonMenu:
+                        if (isVertical) {
+                            return {
+                                rect.left(),
+                                rect.bottom() - menuWidth + 1,
+                                rect.width(),
+                                menuWidth,
+                            };
+                        }
+                        return {rect.right() - menuWidth + 1, rect.top(), menuWidth, rect.height()};
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
     return QProxyStyle::subControlRect(complexControl, option, subControl, widget);
 }
 
@@ -1149,6 +1239,112 @@ void FreeCADStyle::drawComplexControl(
                     = proxy()->subControlRect(CC_ComboBox, option, SC_ComboBoxArrow, widget);
                 proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
             }
+
+            return;
+        }
+    }
+
+    if (control == CC_ToolButton) {
+        if (const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            const bool hasMenuButton = tbOption->features & QStyleOptionToolButton::MenuButtonPopup;
+            const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
+
+            // Resolves a BoxStyleDefinition and, for MenuButtonPopup buttons, zeroes the
+            // border thickness and corner radii on the edge that joins the two halves.
+            // This prevents a double border at the seam and keeps corners square where
+            // the main button and the menu strip meet.
+            // isTrailing = true  → main button (join is on its trailing/right or bottom edge)
+            // isTrailing = false → menu strip  (join is on its leading/left or top edge)
+            const auto seamed = [&](const StyleContext& context,
+                                    bool isTrailing) -> BoxStyleDefinition {
+                BoxStyleDefinition style = resolveBoxStyle(context);
+                if (!hasMenuButton) {
+                    return style;
+                }
+
+                // The main button (isTrailing) keeps its border on the joining edge — it acts as
+                // the visible separator between the two halves. The menu strip removes its border
+                // on that same edge to avoid a double border.
+                if (!isTrailing && style.borderThickness.has_value()) {
+                    if (isVertical) {
+                        style.borderThickness->setTop(0);
+                    }
+                    else {
+                        style.borderThickness->setLeft(0);
+                    }
+                }
+
+                // Both halves need square corners at the seam.
+                if (isVertical) {
+                    if (isTrailing) {
+                        style.borderRadius.setBottom(0);
+                    }
+                    else {
+                        style.borderRadius.setTop(0);
+                    }
+                }
+                else {
+                    if (isTrailing) {
+                        style.borderRadius.setRight(0);
+                    }
+                    else {
+                        style.borderRadius.setLeft(0);
+                    }
+                }
+                return style;
+            };
+
+            // Draw the main button area. Strip State_Sunken when only the menu strip is the
+            // active subcontrol so that clicking the dropdown does not depress the main area.
+            // When the menu strip is being pressed Qt may clear State_MouseOver from the overall
+            // state. Use activeSubControls instead: it is non-zero whenever the mouse is over
+            // any part of the split button, so the main half keeps its hover look.
+            const QRect mainRect
+                = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButton, widget);
+            QStyleOptionToolButton mainOption = *tbOption;
+            if (!(tbOption->activeSubControls & SC_ToolButton)) {
+                mainOption.state &= ~State_Sunken;
+            }
+            if (hasMenuButton && tbOption->activeSubControls) {
+                mainOption.state |= State_MouseOver;
+            }
+            drawBoxBackground(painter, mainRect, seamed(contextOf(widget, &mainOption), true));
+
+            if (hasMenuButton) {
+                // Draw the dropdown arrow strip with its own interactive state.
+                const QRect menuRect
+                    = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButtonMenu, widget);
+                QStyleOptionToolButton menuOption = *tbOption;
+                if (!(tbOption->activeSubControls & SC_ToolButtonMenu)) {
+                    menuOption.state &= ~State_Sunken;
+                }
+                drawBoxBackground(painter, menuRect, seamed(contextOf(widget, &menuOption), false));
+
+                // Arrow direction follows toolbar orientation.
+                QStyleOptionToolButton arrowOption = *tbOption;
+                arrowOption.rect = menuRect;
+                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+            }
+            else if (tbOption->features & QStyleOptionToolButton::HasMenu) {
+                // Instant/delayed popup: draw a small arrow indicator in the bottom-right corner.
+                const int arrowSize = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+                QStyleOptionToolButton arrowOption = *tbOption;
+                arrowOption.rect = QRect(
+                    option->rect.right() - arrowSize + 1,
+                    option->rect.bottom() - arrowSize + 1,
+                    arrowSize,
+                    arrowSize
+                );
+                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+            }
+
+            // Draw label (icon + text). Restrict to SC_ToolButton so it does not bleed into
+            // the menu strip. Also clear SC_ToolButtonMenu so QCommonStyle::CE_ToolButtonLabel
+            // does not draw its own menu indicator arrow on top of ours.
+            QStyleOptionToolButton labelOption = *tbOption;
+            labelOption.rect = mainRect;
+            labelOption.subControls &= ~SC_ToolButtonMenu;
+            proxy()->drawControl(CE_ToolButtonLabel, &labelOption, painter, widget);
 
             return;
         }

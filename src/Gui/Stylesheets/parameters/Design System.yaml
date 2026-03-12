@@ -139,12 +139,36 @@ ButtonDisabledBorderColor: "@BaseBorderColor"
 ButtonPrimaryBackground: "blend(@ButtonBackground, @Accent.500, 15%)"
 ButtonPrimaryBorderColor: "blend(@ButtonBorderColor, @Accent.500, 25%)"
 
+ButtonLinkBackground: transparent
+ButtonLinkBorderColor: transparent
+
+ButtonLinkHoveredBackground: "@Background.100"
+ButtonLinkHoveredBorderColor: "@BaseBorderColor"
+
+ButtonLinkPressedBackground: "@Background.200"
+ButtonLinkPressedBorderColor: "@BaseBorderColor"
+ButtonLinkPressedInnerShadow: "@ButtonPressedInnerShadow"
+
+ButtonLinkCheckedBackground: "@Background.150"
+ButtonLinkCheckedBorderColor: "@BaseBorderColor"
+ButtonLinkCheckedInnerShadow: "@ButtonCheckedInnerShadow"
+
 ToolButtonPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
 ToolButtonSmallPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
 
-ToolButtonHeight: "@FormControlHeight"
 ToolButtonSmallHeight: "@FormControlSmallHeight"
 ToolButtonBigHeight: "@FormControlBigHeight"
+
+# ── ToolButton – Link variant (auto-raise / toolbar buttons) ──────────────────
+# These tokens define the visual appearance of QToolButton with autoRaise=true,
+# which covers all standard toolbar buttons. The padding is uniform so that
+# icon-only buttons are naturally square: size = iconSize + 2 * padding.
+
+ToolButtonLinkPadding: "@Spacing.100"
+ToolButtonMenuWidth: 12px
+
+ToolBarItemSpacing: "@Spacing.100"
+ToolBarItemMargin: "@Spacing.100"
 
 # ── Select Padding overrides
 SelectPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"

@@ -147,6 +147,7 @@ enum class StyleProperty : uint8_t
     OverlayOpacity,
     InnerShadow,
     TickColor,
+    MenuWidth,
     // Add new properties before COUNT
     COUNT
 };
