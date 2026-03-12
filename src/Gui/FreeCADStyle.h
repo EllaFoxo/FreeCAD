@@ -62,6 +62,30 @@ public:
         qreal topRight = 0;
         qreal bottomRight = 0;
         qreal bottomLeft = 0;
+
+        void setLeft(qreal left)
+        {
+            topLeft = left;
+            bottomLeft = left;
+        }
+
+        void setRight(qreal right)
+        {
+            topRight = right;
+            bottomRight = right;
+        }
+
+        void setTop(qreal top)
+        {
+            topLeft = top;
+            topRight = top;
+        }
+
+        void setBottom(qreal bottom)
+        {
+            bottomLeft = bottom;
+            bottomRight = bottom;
+        }
     };
 
     /**
