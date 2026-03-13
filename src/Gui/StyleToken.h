@@ -135,6 +135,7 @@ enum class StyleProperty : uint8_t
     BorderThickness,
     BorderRadius,
     BorderColor,
+    BorderOverlay,
     Padding,
     Margin,
     IconSize,

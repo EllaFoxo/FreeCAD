@@ -373,6 +373,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::BorderThickness, "BorderThickness"},
     {StyleProperty::BorderRadius,    "BorderRadius"},
     {StyleProperty::BorderColor,     "BorderColor"},
+    {StyleProperty::BorderOverlay,   "BorderOverlay"},
     {StyleProperty::Padding,         "Padding"},
     {StyleProperty::Margin,          "Margin"},
     {StyleProperty::IconSize,        "IconSize"},
@@ -542,8 +543,12 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         );
         backgroundRadii = innerRadii(rule.borderRadius, snappedThickness);
 
-        // Fill outer rect with border colour.
+        // Fill outer rect with border colour, then optional overlay on top.
         painter->fillPath(roundedRectPath(QRectF(rect), rule.borderRadius), QBrush(*rule.borderColor));
+
+        if (rule.borderOverlay) {
+            painter->fillPath(roundedRectPath(QRectF(rect), rule.borderRadius), *rule.borderOverlay);
+        }
     }
 
     if (hasBackground) {
@@ -1890,6 +1895,10 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
 
     if (const auto borderColor = resolve<Base::Color>(context, StyleProperty::BorderColor)) {
         result.borderColor = borderColor->asValue<QColor>();
+    }
+
+    if (const auto borderOverlay = resolve<Base::Color>(context, StyleProperty::BorderOverlay)) {
+        result.borderOverlay = borderOverlay->asValue<QColor>();
     }
 
     if (const auto borderThickness
