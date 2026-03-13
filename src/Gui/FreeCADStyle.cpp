@@ -494,12 +494,12 @@ uint32_t packCacheKey(const StyleContext& context, StyleProperty property)
  */
 std::optional<Qt::Orientation> toolbarOrientationOf(const QWidget* widget)
 {
-    for (const QWidget* ancestor = widget ? widget->parentWidget() : nullptr; ancestor != nullptr;
-         ancestor = ancestor->parentWidget()) {
-        if (const auto* toolbar = qobject_cast<const QToolBar*>(ancestor)) {
-            return toolbar->orientation();
-        }
+    const QWidget* ancestor = widget ? widget->parentWidget() : nullptr;
+
+    if (const auto* toolbar = qobject_cast<const QToolBar*>(ancestor)) {
+        return toolbar->orientation();
     }
+
     return std::nullopt;
 }
 
@@ -853,7 +853,12 @@ void FreeCADStyle::drawPrimitive(
         // In a horizontal toolbar the buttons are side-by-side, so the separator
         // is a vertical line; in a vertical toolbar it is a horizontal line.
         const bool toolbarIsHorizontal = option->state & QStyle::State_Horizontal;
-        drawSeparatorLine(painter, option->rect, !toolbarIsHorizontal);
+        drawSeparatorLine(
+            painter,
+            toolbarIsHorizontal ? option->rect.adjusted(0, 4, 0, -4)
+                                : option->rect.adjusted(4, 0, -4, 0),
+            !toolbarIsHorizontal
+        );
         return;
     }
 
@@ -935,7 +940,7 @@ QSize FreeCADStyle::sizeFromContents(
         if (needsCustomLayout && tbOption->toolButtonStyle == Qt::ToolButtonTextBesideIcon) {
             // Qt hardcodes qtBuiltInIconGap px as the icon-text gap in QToolButton::sizeHint.
             // Replace that with our spacing so the widget is wide enough.
-            width += geometry.iconGapDelta();
+            // width += geometry.iconGapDelta();
         }
 
         // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
@@ -949,15 +954,23 @@ QSize FreeCADStyle::sizeFromContents(
             height = *geometry.height;
         }
 
+        const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+        const bool hasMenu = tbOption->features & QStyleOptionToolButton::MenuButtonPopup;
+
         // QToolButton::sizeHint() adds PM_MenuButtonIndicator to the width for
         // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar
         // orientation. For vertical toolbars the strip goes below the icon, so we move
         // the indicator contribution from width to height.
-        if (tbOption && (tbOption->features & QStyleOptionToolButton::MenuButtonPopup)
-            && toolbarOrientation == Qt::Vertical) {
-            const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+        if (tbOption && hasMenu && toolbarOrientation == Qt::Vertical) {
             width -= menuWidth;
             height += menuWidth;
+        }
+
+        if (geometry.minWidth) {
+            width = std::max(
+                width,
+                *geometry.minWidth + ((hasMenu && toolbarOrientation != Qt::Vertical) ? menuWidth : 0)
+            );
         }
 
         return {width, height};
