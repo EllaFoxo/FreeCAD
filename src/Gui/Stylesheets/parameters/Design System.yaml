@@ -191,6 +191,7 @@ LineEditHeight: "@FormControlHeight"
 LineEditSmallHeight: "@FormControlSmallHeight"
 
 LineEditFocusedBorderColor: "@Accent.500"
+LineEditHoveredBorderOverlay: "opacity(@Contrast.700, 20%)"
 
 LineEditDisabledBackground: "@BaseDisabledBackground"
 LineEditDisabledTextColor: "@BaseDisabledTextColor"
@@ -234,7 +235,7 @@ CheckBoxTickColor: "@BaseTextColor"
 
 # State overrides
 CheckBoxFocusedBorderColor: "@Accent.500"
-CheckBoxHoveredBorderColor: "@Neutral.600"
+CheckBoxHoveredBorderOverlay: "@LineEditHoveredBorderOverlay"
 
 CheckBoxDisabledBackground: "@BaseDisabledBackground"
 CheckBoxDisabledTickColor: "@BaseDisabledTextColor"
