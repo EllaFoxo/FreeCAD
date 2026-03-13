@@ -222,12 +222,12 @@ QPixmap IconManager::renderSvg(const QByteArray& svg, const QSize& size, qreal d
     pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
-    auto offset = size.width() / 24.0f;
+    auto offset = 0;  // size.width() / 24.0f / 2;
 
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    renderer.render(&painter, QRectF(QPointF(offset, offset), QSizeF(size)));
+    renderer.render(&painter, QRectF(QPointF(-offset, offset), QSizeF(size)));
 
     return pixmap;
 }
