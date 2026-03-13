@@ -484,13 +484,6 @@ Gui--StatefulLabel[state="fully_constrained"] {
 Start page
 ==================================================================================================*/
 
-/**
- * Special handling for WB Tab Bar
- */
- #WbTabBar #WbTabBarMore {
-  padding-right: 12px;
- }
-
 QPushButton[objectName="buttonIFCPropertiesDelete"] {
   min-width: 100px;
 }

@@ -126,6 +126,7 @@ WorkbenchTabWidget::WorkbenchTabWidget(WorkbenchGroup* aGroup, QWidget* parent)
     moreButton->setPopupMode(QToolButton::InstantPopup);
     moreButton->setMenu(new QMenu(moreButton));
     moreButton->setObjectName(QStringLiteral("WbTabBarMore"));
+    moreButton->setAutoRaise(true);
 
     if (parent->inherits("QToolBar")) {
         // when toolbar is created it is not yet placed in its designated area
