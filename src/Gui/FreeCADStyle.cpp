@@ -293,24 +293,38 @@ auto lookup(const Map& map, const typename Map::key_type& key) -> const typename
 // To add a new abstract base: edit the relevant chain — no enum change needed.
 // clang-format off
 const std::map<StyleComponent, std::vector<std::string_view>> componentChains = {
-    {StyleComponent::PushButton, {"Button", "FormControl"}},
-    {StyleComponent::ToolButton, {"ToolButton", "Button", "FormControl"}},
-    {StyleComponent::LineEdit,   {"LineEdit", "FormControl"}},
-    {StyleComponent::TextEdit,   {"TextEdit", "LineEdit", "FormControl"}},
-    {StyleComponent::Select,     {"Select", "Button", "FormControl"}},
-    {StyleComponent::ComboBox,   {"ComboBox", "LineEdit", "FormControl"}},
-    {StyleComponent::List,       {"List"}},
-    {StyleComponent::ListItem,   {"ListItem"}},
-    {StyleComponent::Tree,       {"Tree", "List"}},
-    {StyleComponent::TreeItem,   {"TreeItem", "ListItem"}},
-    {StyleComponent::CheckBox,       {"CheckBox", "FormControl"}},
-    {StyleComponent::RadioButton,    {"RadioButton", "CheckBox", "FormControl"}},
+    {StyleComponent::PushButton,  {"Button", "FormControl"}},
+    {StyleComponent::ToolButton,  {"ToolButton", "Button", "FormControl"}},
+    {StyleComponent::LineEdit,    {"LineEdit", "FormControl"}},
+    {StyleComponent::TextEdit,    {"TextEdit", "LineEdit", "FormControl"}},
+    {StyleComponent::Select,      {"Select", "Button", "FormControl"}},
+    {StyleComponent::ComboBox,    {"ComboBox", "LineEdit", "FormControl"}},
+    {StyleComponent::List,        {"List"}},
+    {StyleComponent::Tree,        {"Tree", "List"}},
+    {StyleComponent::CheckBox,    {"CheckBox", "FormControl"}},
+    {StyleComponent::RadioButton, {"RadioButton", "CheckBox", "FormControl"}},
 };
 // clang-format on
 
 std::span<const std::string_view> componentChain(StyleComponent component)
 {
     return std::span<const std::string_view>(lookup(componentChains, component));
+}
+
+// ── Element string table ─────────────────────────────────────────────────────
+// Root (0) is absent; elementString returns "" for it, so Root components
+// produce the same token prefixes as before this field was introduced.
+
+// clang-format off
+const std::map<StyleComponentElement, std::string_view> elementNames = {
+    {StyleComponentElement::Item,      "Item"},
+    {StyleComponentElement::Indicator, "Indicator"},
+};
+// clang-format on
+
+std::string_view elementString(StyleComponentElement element)
+{
+    return lookup(elementNames, element);
 }
 
 // ── Variant slot string tables ───────────────────────────────────────────────
@@ -419,6 +433,7 @@ constexpr auto statePriorityOrder = std::to_array({
 
 std::vector<std::string> buildPrefixes(const StyleContext& context)
 {
+    const std::string elementSuffix = std::string(elementString(context.element));
     const std::string variantSuffix = variantString(context.variant);
 
     std::vector<StyleState> activeStates;
@@ -431,20 +446,22 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
     std::vector<std::string> prefixes;
 
     for (const std::string_view componentPrefix : componentChain(context.component)) {
+        const std::string componentWithElement = std::string(componentPrefix) + elementSuffix;
+
         if (!variantSuffix.empty()) {
             for (const StyleState stateFlag : activeStates) {
                 prefixes.push_back(
-                    std::string(componentPrefix) + variantSuffix + std::string(stateString(stateFlag))
+                    componentWithElement + variantSuffix + std::string(stateString(stateFlag))
                 );
             }
-            prefixes.push_back(std::string(componentPrefix) + variantSuffix);
+            prefixes.push_back(componentWithElement + variantSuffix);
         }
 
         for (const StyleState stateFlag : activeStates) {
-            prefixes.push_back(std::string(componentPrefix) + std::string(stateString(stateFlag)));
+            prefixes.push_back(componentWithElement + std::string(stateString(stateFlag)));
         }
 
-        prefixes.push_back(std::string(componentPrefix));
+        prefixes.push_back(componentWithElement);
     }
 
     return prefixes;
@@ -455,10 +472,11 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
 // Packs a (StyleContext, StyleProperty) pair into a uint32_t for use as an
 // unordered_map key. Bit layout:
 //
-//   bits  0– 4 : StyleComponent  (5 bits, up to 32 values)
-//   bits  5– 9 : StyleState      (5-bit bitmask)
-//   bits 10–15 : StyleProperty   (6 bits, up to 64 values)
-//   bits 16–.. : VariantSlots    (4 bits each, starting at bit 16)
+//   bits  0– 3 : StyleComponent        (4 bits, up to 16 values)
+//   bits  4– 5 : StyleComponentElement (2 bits, up to 4 values)
+//   bits  6–10 : StyleState            (5-bit bitmask)
+//   bits 11–15 : StyleProperty         (5 bits, up to 32 values)
+//   bits 16–.. : VariantSlots          (4 bits each, starting at bit 16)
 //
 // Adding a new VariantSlot or enum value does not require changing this function.
 
@@ -474,15 +492,17 @@ uint32_t packVariant(const VariantKey& variant)
 // clang-format off
 // Bit offsets within the packed cache key.
 constexpr uint32_t componentBitOffset = 0;
-constexpr uint32_t stateBitOffset     = 5;   // component (5 bits) ends at bit 4
-constexpr uint32_t propertyBitOffset  = 10;  // state (5-bit bitmask) ends at bit 9
-constexpr uint32_t variantBitOffset   = 16;  // property (6 bits) ends at bit 15
+constexpr uint32_t elementBitOffset   = 4;   // component (4 bits) ends at bit 3
+constexpr uint32_t stateBitOffset     = 6;   // element (2 bits) ends at bit 5
+constexpr uint32_t propertyBitOffset  = 11;  // state (5-bit bitmask) ends at bit 10
+constexpr uint32_t variantBitOffset   = 16;  // property (5 bits) ends at bit 15
 // clang-format on
 
 uint32_t packCacheKey(const StyleContext& context, StyleProperty property)
 {
     // clang-format off
     return (static_cast<uint32_t>(context.component)                << componentBitOffset)
+         | (static_cast<uint32_t>(context.element)                  << elementBitOffset)
          | (static_cast<uint32_t>(context.state.toUnderlyingType()) << stateBitOffset)
          | (static_cast<uint32_t>(property)                         << propertyBitOffset)
          | (packVariant(context.variant)                            << variantBitOffset);
@@ -983,8 +1003,7 @@ QSize FreeCADStyle::sizeFromContents(
 
     if (type == CT_ItemViewItem) {
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        const bool isItemComponent = context.component == StyleComponent::ListItem
-            || context.component == StyleComponent::TreeItem;
+        const bool isItemComponent = context.element == StyleComponentElement::Item;
         if (!isItemComponent) {
             return QProxyStyle::sizeFromContents(type, option, size, widget);
         }
@@ -1026,8 +1045,7 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
             effectiveWidget = vopt->widget;
         }
         const StyleContext context = contextOf(effectiveWidget, option, StyleComponentElement::Item);
-        const bool isItemComponent = context.component == StyleComponent::ListItem
-            || context.component == StyleComponent::TreeItem;
+        const bool isItemComponent = context.element == StyleComponentElement::Item;
         if (!isItemComponent || !vopt) {
             return QProxyStyle::subElementRect(el, option, widget);
         }
@@ -1767,12 +1785,12 @@ StyleContext FreeCADStyle::contextOf(
         context.component = StyleComponent::CheckBox;
     }
     else if (qobject_cast<const QTreeView*>(widget)) {
-        context.component = element == StyleComponentElement::Root ? StyleComponent::Tree
-                                                                   : StyleComponent::TreeItem;
+        context.component = StyleComponent::Tree;
+        context.element = element;
     }
     else if (qobject_cast<const QListView*>(widget)) {
-        context.component = element == StyleComponentElement::Root ? StyleComponent::List
-                                                                   : StyleComponent::ListItem;
+        context.component = StyleComponent::List;
+        context.element = element;
     }
 
     // ButtonType — derived from style option features first, then widget properties.

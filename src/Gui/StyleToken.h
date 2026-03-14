@@ -45,9 +45,7 @@ enum class StyleComponent : uint8_t
     Select,       // QComboBox (non-editable), inherits Button styles
     ComboBox,     // QComboBox (editable), inherits LineEdit styles
     List,         // QListWidget, QListView
-    ListItem,     // item of QListWidget or QListView
-    Tree,         // QtreeWidget, QTreeView
-    TreeItem,     // item of QTreeWidget or QTreeView
+    Tree,         // QTreeWidget, QTreeView
     CheckBox,     // QCheckBox indicator
     RadioButton,  // QRadioButton indicator
     // Add new components before COUNT
@@ -205,6 +203,7 @@ struct VariantKey
 struct StyleContext
 {
     StyleComponent component = StyleComponent::PushButton;
+    StyleComponentElement element = StyleComponentElement::Root;
     VariantKey variant = {};
     Base::Flags<StyleState> state;
 
