@@ -703,7 +703,6 @@ void DlgSettingsGeneral::recreatePreferencePackMenu()
         packs.erase(key);  // Remove the elements from the map
     }
 
-    QIcon icon = IconManager::instance().icon(":/icons/tabler/outline/adjustments-check.svg");
     for (const auto& pack : packs) {
         auto* item = new QTreeWidgetItem(ui->PreferencePacks);
         item->setText(0, QString::fromStdString(pack.first));
@@ -719,7 +718,6 @@ void DlgSettingsGeneral::recreatePreferencePackMenu()
         auto* button = new QToolButton();
         button->setText(tr("Apply"));
         button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        button->setIcon(icon);
         button->setEnabled(true);
         button->setProperty("controlSize", "small");
         Gui::Document* doc = Gui::Application::Instance->activeDocument();
