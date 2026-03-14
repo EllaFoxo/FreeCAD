@@ -186,7 +186,7 @@ QByteArray IconManager::materializeSvgDom(const QByteArray& rawSvg, const QColor
     // root.setAttribute("shape-rendering", "geometricPrecision");
     root.setAttribute(
         QStringLiteral("stroke-width"),
-        QString::fromStdString(fmt::format("{:.2f}", 1.66))
+        QString::fromStdString(fmt::format("{:.2f}", 24.f / 16.f))
     );
     recolorCurrentStrokeAttributes(root, color.name(QColor::HexRgb));
     return doc.toByteArray(0);
@@ -222,7 +222,7 @@ QPixmap IconManager::renderSvg(const QByteArray& svg, const QSize& size, qreal d
     pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
-    auto offset = 0;  // size.width() / 24.0f / 2;
+    auto offset = size.width() / 24.0f;
 
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing, true);
