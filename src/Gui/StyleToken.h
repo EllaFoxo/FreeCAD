@@ -25,6 +25,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <Base/Bitmask.h>
 
 namespace Gui
@@ -206,6 +207,14 @@ struct StyleContext
     StyleComponentElement element = StyleComponentElement::Root;
     VariantKey variant = {};
     Base::Flags<StyleState> state;
+    /**
+     * @brief Optional component name override, read from the widget's "component" dynamic property.
+     *
+     * When non-empty, this string is prepended to the normal component chain as an additional
+     * prefix, allowing widgets to opt into custom token namespaces (e.g. "ActionButton") while
+     * still falling back to the standard chain (Button → FormControl).
+     */
+    std::string componentOverride;
 
     bool operator==(const StyleContext&) const = default;
 };

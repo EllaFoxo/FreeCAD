@@ -445,9 +445,9 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
 
     std::vector<std::string> prefixes;
 
-    for (const std::string_view componentPrefix : componentChain(context.component)) {
-        const std::string componentWithElement = std::string(componentPrefix) + elementSuffix;
-
+    // Helper that appends all variant+state combinations for a given base prefix
+    // (componentWithElement). Mirrors the inner logic for each chain entry below.
+    const auto appendPrefixEntries = [&](const std::string& componentWithElement) {
         if (!variantSuffix.empty()) {
             for (const StyleState stateFlag : activeStates) {
                 prefixes.push_back(
@@ -462,6 +462,16 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
         }
 
         prefixes.push_back(componentWithElement);
+    };
+
+    // Component override (from the widget's "component" dynamic property) is tried first,
+    // before any entry in the normal component chain.
+    if (!context.componentOverride.empty()) {
+        appendPrefixEntries(context.componentOverride + elementSuffix);
+    }
+
+    for (const std::string_view componentPrefix : componentChain(context.component)) {
+        appendPrefixEntries(std::string(componentPrefix) + elementSuffix);
     }
 
     return prefixes;
@@ -469,14 +479,15 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
 
 // ─── Cache key packing ─────────────────────────────────────────────────────
 //
-// Packs a (StyleContext, StyleProperty) pair into a uint32_t for use as an
-// unordered_map key. Bit layout:
+// Packs a (StyleContext, StyleProperty, componentOverrideId) tuple into a
+// uint32_t for use as an unordered_map key. Bit layout:
 //
 //   bits  0– 3 : StyleComponent        (4 bits, up to 16 values)
 //   bits  4– 5 : StyleComponentElement (2 bits, up to 4 values)
 //   bits  6–10 : StyleState            (5-bit bitmask)
 //   bits 11–15 : StyleProperty         (5 bits, up to 32 values)
-//   bits 16–.. : VariantSlots          (4 bits each, starting at bit 16)
+//   bits 16–23 : VariantSlots          (4 bits each, starting at bit 16)
+//   bits 24–31 : componentOverrideId   (8 bits; 0 = no override, 1–255 interned)
 //
 // Adding a new VariantSlot or enum value does not require changing this function.
 
@@ -496,16 +507,18 @@ constexpr uint32_t elementBitOffset   = 4;   // component (4 bits) ends at bit 3
 constexpr uint32_t stateBitOffset     = 6;   // element (2 bits) ends at bit 5
 constexpr uint32_t propertyBitOffset  = 11;  // state (5-bit bitmask) ends at bit 10
 constexpr uint32_t variantBitOffset   = 16;  // property (5 bits) ends at bit 15
+constexpr uint32_t overrideBitOffset  = 24;  // variant slots (2 × 4 bits) end at bit 23
 // clang-format on
 
-uint32_t packCacheKey(const StyleContext& context, StyleProperty property)
+uint32_t packCacheKey(const StyleContext& context, StyleProperty property, uint8_t overrideId)
 {
     // clang-format off
     return (static_cast<uint32_t>(context.component)                << componentBitOffset)
          | (static_cast<uint32_t>(context.element)                  << elementBitOffset)
          | (static_cast<uint32_t>(context.state.toUnderlyingType()) << stateBitOffset)
          | (static_cast<uint32_t>(property)                         << propertyBitOffset)
-         | (packVariant(context.variant)                            << variantBitOffset);
+         | (packVariant(context.variant)                            << variantBitOffset)
+         | (static_cast<uint32_t>(overrideId)                       << overrideBitOffset);
     // clang-format on
 }
 
@@ -1820,6 +1833,16 @@ StyleContext FreeCADStyle::contextOf(
         }
     }
 
+    // Component override — derived from the "component" widget property.
+    // Allows a widget to opt into a custom token namespace (e.g. "ActionButton")
+    // while still falling back to the standard component chain.
+    if (widget) {
+        const QString overrideName = widget->property("component").toString();
+        if (!overrideName.isEmpty()) {
+            context.componentOverride = overrideName.toStdString();
+        }
+    }
+
     // State — all active flags captured as a bitmask.
     if (option) {
         if (!(option->state & QStyle::State_Enabled)) {
@@ -1878,7 +1901,10 @@ std::optional<StyleParameters::Value> FreeCADStyle::resolve(
     StyleProperty property
 ) const
 {
-    const uint32_t key = packCacheKey(context, property);
+    const uint8_t overrideId = context.componentOverride.empty()
+        ? uint8_t(0)
+        : internComponentOverride(context.componentOverride);
+    const uint32_t key = packCacheKey(context, property, overrideId);
 
     if (const auto found = tokenCache.find(key); found != tokenCache.end()) {
         return found->second;
@@ -1989,9 +2015,22 @@ void FreeCADStyle::drawSeparatorLine(QPainter* painter, const QRect& rect, bool 
     }
 }
 
+uint8_t FreeCADStyle::internComponentOverride(const std::string& name) const
+{
+    if (const auto found = componentOverrideIds.find(name); found != componentOverrideIds.end()) {
+        return found->second;
+    }
+
+    const uint8_t id = nextComponentOverrideId++;
+    componentOverrideIds.emplace(name, id);
+    return id;
+}
+
 void FreeCADStyle::clearTokenCache()
 {
     tokenCache.clear();
+    componentOverrideIds.clear();
+    nextComponentOverrideId = 1;
 }
 
 bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)

@@ -426,6 +426,21 @@ private:
     // value is the resolved result including nullopt for confirmed misses.
     // Mutable so const draw methods can populate the cache.
     mutable std::unordered_map<uint32_t, std::optional<StyleParameters::Value>> tokenCache;
+
+    /**
+     * @brief Interns a component override string and returns its stable uint8_t id.
+     *
+     * Id 0 is reserved for "no override". Each unique string is assigned a new id
+     * starting from 1 on first encounter. The id is used in packCacheKey() so that
+     * the override string participates in cache-key discrimination without requiring
+     * a string hash in the hot path.
+     *
+     * The intern table is cleared together with tokenCache in clearTokenCache().
+     */
+    uint8_t internComponentOverride(const std::string& name) const;
+
+    mutable std::unordered_map<std::string, uint8_t> componentOverrideIds;
+    mutable uint8_t nextComponentOverrideId = 1;
 };
 
 }  // namespace Gui
