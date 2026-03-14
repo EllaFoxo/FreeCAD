@@ -360,6 +360,7 @@ QTableView::item:selected,
 QTreeView::item:selected,
 QColumnView::item:selected {
   background-color: @AccentBackgroundColor;
+  color: @BaseTextColor;
 }
 
 QTableView::item:hover,

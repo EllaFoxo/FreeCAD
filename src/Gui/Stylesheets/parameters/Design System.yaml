@@ -52,7 +52,7 @@ Background:
   150: "@Neutral.150"
   200: "@Neutral.200"
 
-BaseTextColor: "@Contrast.800"
+BaseTextColor: "@Contrast.900"
 
 # ── Semantic surface tokens (drive QPalette) ─────────────────────────────────
 # Window / panel backgrounds
@@ -61,7 +61,7 @@ BaseAlternateBackground: "@Background.100"
 BaseInputBackground: "@Background.000"
 
 # Selection
-BaseHighlightBackground: "blend(@Background.100, @Accent.500, 75%)"
+BaseHighlightBackground: "@Accent.500"
 BaseHighlightTextColor: "@Neutral.000"
 
 # Disabled
@@ -75,8 +75,8 @@ BasePlaceholderTextColor: "@Contrast.400"
 BaseLinkColor: "@Accent.600"
 
 # Tooltips
-BaseTooltipBackground: "@Contrast.800"
-BaseTooltipTextColor: "@Neutral.050"
+BaseTooltipBackground: "@Background.100"
+BaseTooltipTextColor: "@BaseTextColor"
 
 # 3D shading (QPalette Light / Midlight / Mid / Dark / Shadow)
 BaseShadingLight: "@Neutral.100"
@@ -119,8 +119,8 @@ ButtonContentBox: "content_box((width: @ButtonMinWidth, height: @ButtonHeight), 
 ButtonSmallFontSize: 11px
 ButtonSmallFontWeight: 500
 
-ButtonFocusedBorderColor: "@Accent.500"
-ButtonPrimaryFocusedBorderColor: "@Accent.500"
+ButtonFocusedBorderColor: "@Accent.600"
+ButtonPrimaryFocusedBorderColor: "@Accent.600"
 
 ButtonSpacing: "@Spacing.250"
 
