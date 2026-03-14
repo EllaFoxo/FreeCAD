@@ -49,6 +49,7 @@ enum class StyleComponent : uint8_t
     Tree,         // QTreeWidget, QTreeView
     CheckBox,     // QCheckBox indicator
     RadioButton,  // QRadioButton indicator
+    TabBar,       // QTabBar
     // Add new components before COUNT
     COUNT
 };
@@ -64,6 +65,7 @@ enum class StyleComponentElement : uint8_t
     Root,       // Main component
     Item,       // Item of the component (useful for lists, trees etc_
     Indicator,  // Checkbox for items
+    Tab,        // Individual tab of a TabBar
     // Add new components before COUNT
     COUNT,
 };
@@ -98,6 +100,26 @@ enum class ControlSize : uint8_t
     Small,
     Big,
     // Add new sizes before COUNT
+    COUNT
+};
+
+/**
+ * @brief Tab bar position — the edge at which the tabs sit.
+ *
+ * North (0) is canonical: geometric tokens (BorderRadius, Padding, BorderThickness) are
+ * always resolved with North and then rotated to the actual position. Visual tokens
+ * (Background, TextColor, etc.) are resolved with the actual position, so per-position
+ * colour overrides (e.g. TabBarTabSouthBackground) work naturally.
+ *
+ * Add new positions before COUNT.
+ */
+enum class TabPosition : uint8_t
+{
+    North = 0,  // canonical; maps to "" in token names (default variant)
+    East,       // "East"
+    South,      // "South"
+    West,       // "West"
+    // Add new positions before COUNT
     COUNT
 };
 
@@ -166,6 +188,7 @@ enum class VariantSlot : uint8_t
 {
     ButtonType,
     ControlSize,
+    TabPosition,
     // Add new variant dimensions before COUNT
     COUNT
 };

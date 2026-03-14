@@ -37,6 +37,8 @@
 #include <QProxyStyle>
 #include <QComboBox>
 #include <QPushButton>
+#include <QStyleOption>
+#include <QTabBar>
 #include <QToolButton>
 #include "StyleParameters/Value.h"
 #include "StyleToken.h"
@@ -353,6 +355,17 @@ private:
         const QStyleOption* option = nullptr,
         const StyleComponentElement& element = StyleComponentElement::Root
     );
+
+    /**
+     * @brief Paints the background shape of a single tab.
+     *
+     * Handles geometric rotation (BorderRadius, BorderThickness) from the canonical
+     * North definition to the actual tab position, while resolving visual tokens
+     * (Background, TextColor, Overlay) with the full position context so per-position
+     * colour overrides (e.g. TabBarTabSouthBackground) work naturally.
+     * Called from drawControl when element == CE_TabBarTabShape.
+     */
+    void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
     /**
      * @brief Paints the label (icon + text) of a push button.

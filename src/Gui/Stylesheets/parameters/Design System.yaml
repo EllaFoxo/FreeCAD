@@ -265,3 +265,30 @@ ListItemIconSpacing: "@Spacing.150"
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
 DocumentTreeItemPadding: "padding(0)"
+
+# ── Tab Bar ─────────────────────────────────────────────────────────────────
+# TabPosition = North is canonical (default). Geometric tokens (BorderRadius,
+# BorderThickness) are auto-rotated to South/East/West; theme authors only need
+# to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
+
+TabBarTabHoveredBackground: "@Background.300"
+TabBarTabCheckedBackground: "@BaseWindowBackground"
+
+TabBarTabBorderRadius: "border_radius(@BaseRadius.medium, @BaseRadius.medium, 0, 0)"
+TabBarTabHoveredBorderColor: "@BaseBorderColor"
+TabBarTabBorderThickness: "border_thickness(1px, bottom: 0)"
+
+# Spacing between adjacent tabs (gap semantics: positive = gap, negative = overlap).
+# Default -1px produces 1px overlap so adjacent tab borders merge into one.
+# Set to e.g. 4px for a spaced-apart appearance.
+TabBarTabSpacing: -1px
+
+TabBarTabPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.250)"
+TabBarTabCheckedPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.250)"
+
+TabBarTabCheckedBorderColor: "@BaseBorderColor"
+TabBarTabDisabledBackground: "@BaseDisabledBackground"
+TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
+
+TabBarTabMargin: "padding(0px, bottom: @Spacing.050)"
+TabBarTabCheckedMargin: "padding(0px, bottom: 1px)"
