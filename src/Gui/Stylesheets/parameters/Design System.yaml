@@ -263,3 +263,5 @@ ListItemIconSpacing: "@Spacing.150"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
+
+DocumentTreeItemPadding: "padding(0)"
