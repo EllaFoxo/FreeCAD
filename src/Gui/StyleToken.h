@@ -50,6 +50,7 @@ enum class StyleComponent : uint8_t
     CheckBox,     // QCheckBox indicator
     RadioButton,  // QRadioButton indicator
     TabBar,       // QTabBar
+    TabWidget,    // QTabWidget pane (PE_FrameTabWidget)
     // Add new components before COUNT
     COUNT
 };

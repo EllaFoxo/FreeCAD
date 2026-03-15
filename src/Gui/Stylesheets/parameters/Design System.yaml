@@ -12,8 +12,8 @@ BaseShades:
   900: 0.90
 
 BaseRadius:
-  small: 1px
-  medium: 2px
+  small: 2px
+  medium: 3px
   large: 4px
 
 BaseSpacing: 4px
@@ -103,7 +103,7 @@ FormControlIconSpacing: "@Spacing.150"
 
 FormControlPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 FormControlBorderThickness: 1px
-FormControlBorderRadius: 3px
+FormControlBorderRadius: "@BaseRadius.medium"
 FormControlBorderColor: "@BaseBorderColor"
 FormControlTextColor: "@BaseTextColor"
 
@@ -273,7 +273,7 @@ DocumentTreeItemPadding: "padding(0)"
 # to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
 
 TabBarTabHoveredBackground: "@Background.300"
-TabBarTabCheckedBackground: "@BaseWindowBackground"
+TabBarTabCheckedBackground: "@Background.100"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
@@ -296,8 +296,15 @@ TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
 # TabBarBaseOverlap: how many px the strip extends under the tab row (PM_TabBarBaseOverlap).
 # Qt sizes the PE_FrameTabBarBase rect to Height + Overlap, then hides the overlap portion
 # under the tabs, leaving exactly TabBarBaseHeight px visible.
-TabBarBaseHeight:          4px
-TabBarBaseOverlap:         4px
-TabBarBaseBorderColor:     "@BaseBorderColor"
+TabBarBaseHeight: 4px
+TabBarBaseOverlap: 4px
+TabBarBaseBorderColor: "@BaseBorderColor"
 TabBarBaseBorderThickness: "border_thickness(0px, bottom: 1px)"
-TabBarBaseBackground:      "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, opacity(@BaseBorderColor, 0%), opacity(@BaseBorderColor, 40%))"
+TabBarBaseBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, opacity(@BaseBorderColor, 0%), opacity(@BaseBorderColor, 40%))"
+
+# ── Tab Widget Pane ──────────────────────────────────────────────────────────
+TabWidgetBackground: "@BaseBackground"
+TabWidgetBorderColor: "@BaseBorderColor"
+TabWidgetBorderRadius: "border_radius(@BaseRadius.medium)"
+TabWidgetBorderThickness: "border_thickness(1px)"
+TabWidgetPadding: 0

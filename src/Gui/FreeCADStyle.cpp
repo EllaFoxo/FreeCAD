@@ -305,6 +305,7 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::CheckBox,    {"CheckBox", "FormControl"}},
     {StyleComponent::RadioButton, {"RadioButton", "CheckBox", "FormControl"}},
     {StyleComponent::TabBar,      {"TabBar"}},
+    {StyleComponent::TabWidget,   {"TabWidget"}},
 };
 // clang-format on
 
@@ -1093,6 +1094,13 @@ void FreeCADStyle::drawPrimitive(
         }
     }
 
+    if (element == PE_FrameTabWidget) {
+        if (const auto* tabWidgetOption = qstyleoption_cast<const QStyleOptionTabWidgetFrame*>(option)) {
+            drawTabWidgetFrame(painter, tabWidgetOption);
+            return;
+        }
+    }
+
     QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
@@ -1272,6 +1280,15 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
 
     if (element == SE_ItemViewItemText) {
         return itemViewInsetRect(SE_ItemViewItemText);
+    }
+
+    if (element == SE_TabWidgetTabContents) {
+        StyleContext paneContext;
+        paneContext.component = StyleComponent::TabWidget;
+        paneContext.element = StyleComponentElement::Root;
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(paneContext);
+        const QRect paneRect = QProxyStyle::subElementRect(SE_TabWidgetTabPane, option, widget);
+        return geometry.contentRect(paneRect);
     }
 
     if (element == SE_LineEditContents) {
@@ -1987,15 +2004,11 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
     drawBoxBackground(painter, drawRect, style);
 }
 
-void FreeCADStyle::drawTabBarBase(
-    QPainter* painter,
-    const QStyleOptionTabBarBase* option,
-    const QWidget* widget
+FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBaseStripStyle(
+    const StyleContext& positionContext
 ) const
 {
-    const Position position = tabPositionOf(option->shape);
-
-    const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Base);
+    const auto position = static_cast<Position>(positionContext.variant.get(VariantSlot::Position));
 
     StyleContext northContext = positionContext;
     northContext.variant.set(VariantSlot::Position, Position::North);
@@ -2012,7 +2025,66 @@ void FreeCADStyle::drawTabBarBase(
         style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
     }
 
-    drawBoxBackground(painter, option->rect, style);
+    return style;
+}
+
+void FreeCADStyle::drawTabBarBase(
+    QPainter* painter,
+    const QStyleOptionTabBarBase* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Base);
+    drawBoxBackground(painter, option->rect, resolveBaseStripStyle(positionContext));
+}
+
+void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const
+{
+    const Position position = tabPositionOf(option->shape);
+
+    // Draw the pane frame using design-system tokens.
+    StyleContext paneContext;
+    paneContext.component = StyleComponent::TabWidget;
+    paneContext.element = StyleComponentElement::Root;
+    drawBoxBackground(painter, option->rect, resolveBoxStyle(paneContext));
+
+    // Draw the shadow strip at the attachment edge.
+    // Build context manually — contextOf() requires a QTabBar widget to produce the
+    // TabBar component; here the widget is QTabWidget.
+    StyleContext stripContext;
+    stripContext.component = StyleComponent::TabBar;
+    stripContext.element = StyleComponentElement::Base;
+    stripContext.variant.set(VariantSlot::Position, position);
+
+    const int stripHeight = [&]() -> int {
+        if (const auto height = resolve<StyleParameters::Numeric>(stripContext, StyleProperty::Height)) {
+            return static_cast<int>(height->value);
+        }
+        return 0;
+    }();
+
+    if (stripHeight == 0) {
+        return;
+    }
+
+    const QRect& rect = option->rect;
+    // clang-format off
+    const QRect stripRect = [&]() -> QRect {
+        switch (position) {
+            case Position::South: return {rect.left(), rect.bottom() + 1, rect.width(), stripHeight};
+            case Position::East:  return {rect.right() + 1, rect.top(), stripHeight, rect.height()};
+            case Position::West:  return {rect.left() - stripHeight, rect.top(), stripHeight, rect.height()};
+            default:              return {rect.left(), rect.top() - stripHeight, rect.width(), stripHeight};
+        }
+    }();
+    // clang-format on
+
+    BoxStyleDefinition stripStyle = resolveBaseStripStyle(stripContext);
+    // The pane box already draws the border; suppress the strip's own border to avoid doubling.
+    stripStyle.borderColor = std::nullopt;
+    stripStyle.borderThickness = std::nullopt;
+
+    drawBoxBackground(painter, stripRect, stripStyle);
 }
 
 std::optional<StyleParameters::Value> FreeCADStyle::resolve(std::string_view name) const
