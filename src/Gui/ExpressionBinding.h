@@ -34,7 +34,7 @@ namespace App
 class Expression;
 }
 
-class ExpressionLabel;
+class ExpressionButton;
 class QLineEdit;
 
 namespace Gui
@@ -105,7 +105,7 @@ protected:
     void makeLabel(QLineEdit* parent);
 
 protected:
-    ExpressionLabel* iconLabel {nullptr};
+    ExpressionButton* iconLabel {nullptr};
     QPalette defaultPalette;
     int iconHeight {-1};
 };

@@ -84,12 +84,12 @@ InputField::InputField(QWidget* parent)
     else {
         setFocusPolicy(Qt::StrongFocus);
     }
-    iconLabel = new ExpressionLabel(this);
-    iconLabel->setCursor(Qt::ArrowCursor);
+    iconLabel = new ExpressionButton(this);
     QFontMetrics fm(font());
     int iconSize = fm.height();
     QPixmap pixmap = getValidationIcon(":/icons/button_invalid.svg", QSize(iconSize, iconSize));
-    iconLabel->setPixmap(pixmap);
+    iconLabel->setIcon(QIcon(pixmap));
+    iconLabel->setIconSize(QSize(iconSize, iconSize));
     iconLabel->hide();
     connect(this, &QLineEdit::textChanged, this, &InputField::updateIconLabel);
 

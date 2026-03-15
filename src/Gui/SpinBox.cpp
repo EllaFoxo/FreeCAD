@@ -100,7 +100,7 @@ ExpressionSpinBox::ExpressionSpinBox(QAbstractSpinBox* sb)
     lineedit->setAlignment(Qt::AlignVCenter);
 
     makeLabel(lineedit);
-    QObject::connect(iconLabel, &ExpressionLabel::clicked, [this]() { this->openFormulaDialog(); });
+    QObject::connect(iconLabel, &QAbstractButton::clicked, [this]() { this->openFormulaDialog(); });
 
     lineedit->installEventFilter(new SpinBoxPrivate::ExpressionResetDoubleClickFilter(*this, spinbox));
     // FocusOut filter goes on the spinbox, not lineedit
@@ -175,7 +175,7 @@ void ExpressionSpinBox::showInvalidExpression(const QString& tip)
     p.setColor(QPalette::Active, QPalette::Text, Qt::red);
     lineedit->setPalette(p);
     iconLabel->setToolTip(tip);
-    iconLabel->setPixmap(getIcon(":/icons/button_invalid.svg", QSize(iconHeight, iconHeight)));
+    iconLabel->setIcon(QIcon(getIcon(":/icons/button_invalid.svg", QSize(iconHeight, iconHeight))));
 }
 
 void ExpressionSpinBox::showValidExpression(ExpressionSpinBox::Number number)
@@ -203,7 +203,8 @@ void ExpressionSpinBox::showExpression(Number number)
         }
 
         spinbox->setReadOnly(true);
-        iconLabel->setPixmap(getIcon(":/icons/bound-expression.svg", QSize(iconHeight, iconHeight)));
+        iconLabel->restoreNormalIcon();
+        iconLabel->setChecked(true);
 
         QPalette p(lineedit->palette());
         p.setColor(QPalette::Text, Qt::lightGray);
@@ -215,8 +216,8 @@ void ExpressionSpinBox::showExpression(Number number)
 void ExpressionSpinBox::clearExpression()
 {
     spinbox->setReadOnly(false);
-    QPixmap pixmap = getIcon(":/icons/bound-expression-unset.svg", QSize(iconHeight, iconHeight));
-    iconLabel->setPixmap(pixmap);
+    iconLabel->restoreNormalIcon();
+    iconLabel->setChecked(false);
 
     QPalette p(lineedit->palette());
     p.setColor(QPalette::Active, QPalette::Text, defaultPalette.color(QPalette::Text));

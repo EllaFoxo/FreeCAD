@@ -22,51 +22,66 @@
 
 #pragma once
 
-#include <QLabel>
-#include <QMouseEvent>
 #include <QLineEdit>
+#include <QToolButton>
 
-class ExpressionLabel: public QLabel
+#include <Gui/Application.h>
+#include <Gui/StyleParameters.h>
+
+class ExpressionButton: public QToolButton
 {
     Q_OBJECT
 public:
-    ExpressionLabel(QWidget* parent)
-        : QLabel(parent)
-    {}
+    explicit ExpressionButton(QWidget* parent)
+        : QToolButton(parent)
+    {
+        using namespace Gui::StyleParameters;
+
+        setAutoRaise(true);
+        setCheckable(true);
+        setFocusPolicy(Qt::NoFocus);
+        setProperty("component", "ExpressionButton");
+
+        int size = static_cast<int>(
+            Gui::Application::Instance->styleParameterManager()->resolve(ExpressionButtonSize).value
+        );
+
+        setFixedSize(size, size);
+    }
 
     void setExpressionText(const QString& text)
     {
         if (text.isEmpty()) {
-            this->setToolTip(genericExpressionEditorTooltip);
+            setToolTip(genericExpressionEditorTooltip);
         }
         else {
-            this->setToolTip(expressionEditorTooltipPrefix + text);
+            setToolTip(expressionEditorTooltipPrefix + text);
         }
     }
 
     void show()
     {
-        if (auto parentLineEdit = qobject_cast<QLineEdit*>(parent())) {
-            // horizontal margin, so text will not be behind the icon
+        if (auto* parentLineEdit = qobject_cast<QLineEdit*>(parent())) {
             QMargins margins = parentLineEdit->contentsMargins();
             margins.setRight(2 * margins.right() + sizeHint().width());
             parentLineEdit->setContentsMargins(margins);
         }
-        QLabel::show();
+        QToolButton::show();
     }
 
-protected:
-    void mouseReleaseEvent(QMouseEvent* event) override
+    void setNormalIcon(const QIcon& icon)
     {
-        if (rect().contains(event->pos())) {
-            Q_EMIT clicked();
-        }
+        normalIcon_ = icon;
+        setIcon(icon);
     }
 
-Q_SIGNALS:
-    void clicked();
+    void restoreNormalIcon()
+    {
+        setIcon(normalIcon_);
+    }
 
 private:
+    QIcon normalIcon_;
     const QString genericExpressionEditorTooltip = tr("Enter expression… (=)");
     const QString expressionEditorTooltipPrefix = tr("Expression:") + QStringLiteral(" ");
 };

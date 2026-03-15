@@ -353,10 +353,22 @@ void ExpressionWidget::makeLabel(QLineEdit* le)
     /* Icon for f(x) */
     QFontMetrics fm(le->font());
     iconHeight = fm.height();
-    iconLabel = new ExpressionLabel(le);
+    iconLabel = new ExpressionButton(le);
+
+    QIcon icon;
+    icon.addPixmap(
+        getIcon(":/icons/bound-expression-unset.svg", QSize(iconHeight, iconHeight)),
+        QIcon::Normal,
+        QIcon::Off
+    );
+    icon.addPixmap(
+        getIcon(":/icons/bound-expression.svg", QSize(iconHeight, iconHeight)),
+        QIcon::Normal,
+        QIcon::On
+    );
     iconLabel->setCursor(Qt::ArrowCursor);
-    QPixmap pixmap = getIcon(":/icons/bound-expression-unset.svg", QSize(iconHeight, iconHeight));
-    iconLabel->setPixmap(pixmap);
+    iconLabel->setNormalIcon(icon);
+    iconLabel->setIconSize(QSize(iconHeight, iconHeight));
     iconLabel->hide();
     iconLabel->setExpressionText(QString());
 }

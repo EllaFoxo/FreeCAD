@@ -58,6 +58,7 @@
 #include <Base/Exception.h>
 
 #include "Application.h"
+#include "QuantitySpinBox_p.h"
 #include "ThemeReloadEvent.h"
 #include "Utilities.h"
 #include "StyleParameters/Corners.h"
@@ -65,6 +66,8 @@
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
+
+#include <IconManager.h>
 
 QT_BEGIN_NAMESPACE
 extern Q_WIDGETS_EXPORT void qt_blurImage(
@@ -1732,6 +1735,8 @@ void FreeCADStyle::drawToolButtonLabel(
             iconMode,
             iconState
         );
+
+        pixmap = generatedIconPixmap(QIcon::Active, pixmap, option);
         pixmapSize = pixmap.size() / painter->device()->devicePixelRatio();
     }
 
@@ -2496,6 +2501,30 @@ void FreeCADStyle::polish(QWidget* widget)
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
         widget->installEventFilter(this);
+    }
+
+    if (const auto expressionButton = qobject_cast<ExpressionButton*>(widget)) {
+        QIcon icon;
+        icon.addPixmap(
+            IconManager::instance()
+                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::Black),
+            QIcon::Normal,
+            QIcon::Off
+        );
+        icon.addPixmap(
+            IconManager::instance()
+                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::Black),
+            QIcon::Active,
+            QIcon::Off
+        );
+        icon.addPixmap(
+            IconManager::instance()
+                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::White),
+            QIcon::Normal,
+            QIcon::On
+        );
+
+        expressionButton->setNormalIcon(icon);
     }
 }
 

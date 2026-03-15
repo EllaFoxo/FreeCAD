@@ -231,6 +231,7 @@ protected:
         const QWidget* widget = nullptr
     ) const override;
 
+protected:
     /**
      * @brief Paints a background box with optional rounded corners and border.
      *
