@@ -940,6 +940,20 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
     return QProxyStyle::pixelMetric(metric, option, widget);
 }
 
+int FreeCADStyle::styleHint(
+    StyleHint hint,
+    const QStyleOption* option,
+    const QWidget* widget,
+    QStyleHintReturn* returnData
+) const
+{
+    if (hint == SH_DialogButtonBox_ButtonsHaveIcons) {
+        return 0;
+    }
+
+    return QProxyStyle::styleHint(hint, option, widget, returnData);
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,

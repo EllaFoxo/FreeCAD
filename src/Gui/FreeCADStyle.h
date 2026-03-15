@@ -179,6 +179,13 @@ public:
         const QWidget* widget = nullptr
     ) const override;
 
+    int styleHint(
+        StyleHint hint,
+        const QStyleOption* option,
+        const QWidget* widget,
+        QStyleHintReturn* returnData
+    ) const override;
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,
