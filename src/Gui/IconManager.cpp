@@ -25,19 +25,112 @@
 
 #include <QApplication>
 #include <QFile>
+#include <QIconEngine>
 #include <QPainter>
-#include <QSvgRenderer>
 #include <QPalette>
+#include <QSvgRenderer>
 #include <QDomDocument>
 
 #include <fmt/format.h>
 
 using namespace Gui;
 
+// ---------------------------------------------------------------------------
+// IconManagerEngine — custom QIconEngine that renders via IconManager at the
+// color resolved by the registered IconColorProvider.
+// ---------------------------------------------------------------------------
+
+class IconManagerEngine: public QIconEngine
+{
+    IconManager::IconMeta m_meta;
+
+public:
+    explicit IconManagerEngine(IconManager::IconMeta meta)
+        : m_meta(std::move(meta))
+    {}
+
+    QPixmap pixmap(const QSize& size, QIcon::Mode mode, QIcon::State state) override
+    {
+        const QColor color = IconManager::instance().provideIconColor(m_meta, mode, state);
+        return IconManager::instance().render(
+            m_meta,
+            {
+                .size = size,
+                .dpr = 1.0,
+                .color = color,
+                .mode = mode,
+                .state = state,
+            }
+        );
+    }
+
+    void paint(QPainter* painter, const QRect& rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        const QPixmap px = pixmap(rect.size(), mode, state);
+        if (!px.isNull()) {
+            painter->drawPixmap(rect, px);
+        }
+    }
+
+    QString key() const override
+    {
+        return QStringLiteral("FreeCAD/IconManagerEngine");
+    }
+
+    QIconEngine* clone() const override
+    {
+        return new IconManagerEngine(*this);
+    }
+
+    bool isNull() override
+    {
+        return false;
+    }
+
+    QList<QSize> availableSizes(
+        QIcon::Mode /*mode*/ = QIcon::Normal,
+        QIcon::State /*state*/ = QIcon::Off
+    ) override
+    {
+        return {};
+    }
+};
+
+// ---------------------------------------------------------------------------
+
 IconManager& IconManager::instance()
 {
     static IconManager s_instance;
     return s_instance;
+}
+
+IconManager::IconManager()
+    : m_iconColorProvider([](const IconMeta& /*meta*/, QIcon::Mode mode, QIcon::State /*state*/) {
+        if (mode == QIcon::Disabled) {
+            return qApp->palette().color(QPalette::Disabled, QPalette::ButtonText);
+        }
+        return qApp->palette().buttonText().color();
+    })
+{}
+
+void IconManager::setIconColorProvider(IconColorProvider provider)
+{
+    if (provider) {
+        m_iconColorProvider = std::move(provider);
+    }
+    else {
+        m_iconColorProvider = [](const IconMeta& /*meta*/, QIcon::Mode mode, QIcon::State /*state*/) {
+            if (mode == QIcon::Disabled) {
+                return qApp->palette().color(QPalette::Disabled, QPalette::ButtonText);
+            }
+            return qApp->palette().buttonText().color();
+        };
+    }
+}
+
+QColor IconManager::provideIconColor(const IconMeta& meta, QIcon::Mode mode, QIcon::State state) const
+{
+    return m_iconColorProvider(meta, mode, state);
 }
 
 void IconManager::registerPixmap(const QPixmap& pixmap, const IconMeta& meta)
@@ -82,8 +175,30 @@ QPixmap IconManager::pixmap(const QString& path, const QSize& size, QColor color
 
 QIcon IconManager::icon(const QString& path)
 {
-    QPixmap px = pixmap(path, QSize(24, 24), qApp->palette().text().color());
-    return QIcon(px);
+    IconMeta meta {.iconId = path, .svgPath = path, .themed = true};
+    QIcon result(new IconManagerEngine(meta));
+
+    QMutexLocker lock(&m_mutex);
+    m_metaByIconCacheKey.insert(result.cacheKey(), meta);
+    return result;
+}
+
+const IconManager::IconMeta* IconManager::metaForIcon(const QIcon& icon) const
+{
+    if (icon.isNull()) {
+        return nullptr;
+    }
+    QMutexLocker lock(&m_mutex);
+    auto it = m_metaByIconCacheKey.constFind(icon.cacheKey());
+    return it != m_metaByIconCacheKey.constEnd() ? &it.value() : nullptr;
+}
+
+QPixmap IconManager::render(const QIcon& icon, const RenderRequest& request) const
+{
+    if (const IconMeta* meta = metaForIcon(icon)) {
+        return render(*meta, request);
+    }
+    return icon.pixmap(request.size, request.dpr, request.mode, request.state);
 }
 
 QPixmap IconManager::render(const IconMeta& meta, const RenderRequest& request) const
@@ -149,6 +264,7 @@ void IconManager::clear()
 {
     QMutexLocker lock(&m_mutex);
     m_metaByPixmapKey.clear();
+    m_metaByIconCacheKey.clear();
     m_svgCacheByPath.clear();
     m_renderCache.clear();
 }

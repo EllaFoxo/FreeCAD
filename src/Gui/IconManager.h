@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <functional>
 #include <QByteArray>
 #include <QColor>
 #include <QHash>
@@ -72,19 +73,37 @@ public:
         QIcon::State state = QIcon::Off;
     };
 
+    /**
+     * @brief Callback invoked by IconManagerEngine to resolve the icon color for a given
+     *        mode/state combination.
+     *
+     * The default provider returns the palette button text color, adjusted for Disabled mode.
+     * FreeCADStyle replaces this with a token-driven provider so icon colors react to theme
+     * changes and interactive state.
+     */
+    using IconColorProvider = std::function<QColor(const IconMeta&, QIcon::Mode, QIcon::State)>;
+
     static IconManager& instance();
+
+    void setIconColorProvider(IconColorProvider provider);
 
     void registerPixmap(const QPixmap& pixmap, const IconMeta& meta);
     const IconMeta* metaForPixmap(const QPixmap& pixmap) const;
+
+    const IconMeta* metaForIcon(const QIcon& icon) const;
 
     QPixmap pixmap(const QString& path, const QSize& size, QColor color);
     QIcon icon(const QString& path);
 
     QPixmap render(const IconMeta& meta, const RenderRequest& request) const;
+    QPixmap render(const QIcon& icon, const RenderRequest& request) const;
+
+    QColor provideIconColor(const IconMeta& meta, QIcon::Mode mode, QIcon::State state) const;
+
     void clear();
 
 private:
-    IconManager() = default;
+    IconManager();
     IconManager(const IconManager&) = delete;
     IconManager& operator=(const IconManager&) = delete;
 
@@ -102,8 +121,10 @@ private:
 private:
     mutable QMutex m_mutex;
     QHash<qint64, IconMeta> m_metaByPixmapKey;
+    QHash<qint64, IconMeta> m_metaByIconCacheKey;
     mutable QHash<QString, SvgSource> m_svgCacheByPath;
     mutable QHash<IconRenderCacheKey, QPixmap> m_renderCache;
+    IconColorProvider m_iconColorProvider;
 };
 
 }  // namespace Gui
