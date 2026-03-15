@@ -51,9 +51,8 @@ class GuiExport FreeCADStyle: public QProxyStyle
     Q_OBJECT
 
 public:
-    FreeCADStyle()
-        : QProxyStyle(QStringLiteral("Fusion"))
-    {}
+    FreeCADStyle();
+    ~FreeCADStyle() override;
 
     /**
      * @brief Per-corner border radii in pixels.

@@ -82,6 +82,40 @@ QT_END_NAMESPACE
 
 using namespace Gui;
 
+// ─── FreeCADStyle constructor / destructor ────────────────────────────────
+
+FreeCADStyle::FreeCADStyle()
+    : QProxyStyle(QStringLiteral("Fusion"))
+{
+    IconManager::instance().setIconColorProvider(
+        [this](const IconManager::IconMeta& /*meta*/, QIcon::Mode mode, QIcon::State /*state*/) -> QColor {
+            StyleContext context;
+            context.component = StyleComponent::PushButton;
+            if (mode == QIcon::Disabled) {
+                context.state |= StyleState::Disabled;
+            }
+            else if (mode == QIcon::Active) {
+                context.state |= StyleState::Hovered;
+            }
+            else if (mode == QIcon::Selected) {
+                context.state |= StyleState::Checked;
+            }
+            if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
+                return color->asValue<QColor>();
+            }
+            if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+                return color->asValue<QColor>();
+            }
+            return qApp->palette().buttonText().color();
+        }
+    );
+}
+
+FreeCADStyle::~FreeCADStyle()
+{
+    IconManager::instance().setIconColorProvider({});
+}
+
 // ─── Base::convertTo specializations ──────────────────────────────────────
 // Conversions for FreeCADStyle-specific types (CornerRadii, InnerShadow) that
 // cannot live in Utilities.h because they depend on types declared in this
@@ -414,6 +448,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::InnerShadow,     "InnerShadow"},
     {StyleProperty::TickColor,       "TickColor"},
     {StyleProperty::MenuWidth,       "MenuWidth"},
+    {StyleProperty::IconColor,       "IconColor"},
 };
 // clang-format on
 
@@ -1698,10 +1733,55 @@ void FreeCADStyle::drawToolButtonLabel(
         && (tbStyle == Qt::ToolButtonTextBesideIcon || tbStyle == Qt::ToolButtonTextUnderIcon);
 
     if (!needsCustomLayout) {
-        // Icon-only, text-only, FollowStyle, etc.: delegate to parent unchanged.
-        // The parent handles its own internal spacing; we must not inset the rect
-        // because the button may be parent-sized (not padded) and inset would go negative.
-        QProxyStyle::drawControl(CE_ToolButtonLabel, option, painter, widget);
+        // Icon-only with a real (non-arrow) icon: draw it ourselves so the
+        // token-based icon color is applied. Text-only, arrow-only, and
+        // ToolButtonTextOnly always delegate — we have nothing to colour there.
+        const bool hasRealIcon = !option->icon.isNull() && option->arrowType == Qt::NoArrow
+            && tbStyle != Qt::ToolButtonTextOnly;
+        if (!hasRealIcon) {
+            QProxyStyle::drawControl(CE_ToolButtonLabel, option, painter, widget);
+            return;
+        }
+
+        QRect shiftedRect = contentRect;
+        if (option->state & (State_Sunken | State_On)) {
+            shiftedRect.translate(
+                proxy()->pixelMetric(PM_ButtonShiftHorizontal, option, widget),
+                proxy()->pixelMetric(PM_ButtonShiftVertical, option, widget)
+            );
+        }
+
+        const QIcon::State iconState = (option->state & State_On) ? QIcon::On : QIcon::Off;
+        QIcon::Mode iconMode = QIcon::Normal;
+        if (!(option->state & State_Enabled)) {
+            iconMode = QIcon::Disabled;
+        }
+        else if ((option->state & State_MouseOver) && (option->state & State_AutoRaise)) {
+            iconMode = QIcon::Active;
+        }
+
+        QColor iconColor = option->palette.buttonText().color();
+        if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
+            iconColor = color->asValue<QColor>();
+        }
+        else if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+            iconColor = color->asValue<QColor>();
+        }
+
+        const QPixmap pixmap = IconManager::instance().render(
+            option->icon,
+            {
+                .size = shiftedRect.size().boundedTo(option->iconSize),
+                .dpr = painter->device()->devicePixelRatio(),
+                .color = iconColor,
+                .mode = iconMode,
+                .state = iconState,
+            }
+        );
+
+        if (!pixmap.isNull()) {
+            proxy()->drawItemPixmap(painter, shiftedRect, Qt::AlignCenter, pixmap);
+        }
         return;
     }
 
@@ -1729,14 +1809,23 @@ void FreeCADStyle::drawToolButtonLabel(
         else if ((option->state & State_MouseOver) && (option->state & State_AutoRaise)) {
             iconMode = QIcon::Active;
         }
-        pixmap = option->icon.pixmap(
-            shiftedContentRect.size().boundedTo(option->iconSize),
-            painter->device()->devicePixelRatio(),
-            iconMode,
-            iconState
+        QColor iconColor = option->palette.buttonText().color();
+        if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
+            iconColor = color->asValue<QColor>();
+        }
+        else if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+            iconColor = color->asValue<QColor>();
+        }
+        pixmap = IconManager::instance().render(
+            option->icon,
+            {
+                .size = shiftedContentRect.size().boundedTo(option->iconSize),
+                .dpr = painter->device()->devicePixelRatio(),
+                .color = iconColor,
+                .mode = iconMode,
+                .state = iconState,
+            }
         );
-
-        pixmap = generatedIconPixmap(QIcon::Active, pixmap, option);
         pixmapSize = pixmap.size() / painter->device()->devicePixelRatio();
     }
 
@@ -1863,11 +1952,22 @@ void FreeCADStyle::drawPushButtonLabel(
 
     const QIcon::State iconState = (option->state & State_On) ? QIcon::On : QIcon::Off;
     const QIcon::Mode iconMode = (option->state & State_Enabled) ? QIcon::Normal : QIcon::Disabled;
-    const QPixmap pixmap = option->icon.pixmap(
-        shiftedContentRect.size().boundedTo(option->iconSize),
-        painter->device()->devicePixelRatio(),
-        iconMode,
-        iconState
+    QColor iconColor = option->palette.buttonText().color();
+    if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
+        iconColor = color->asValue<QColor>();
+    }
+    else if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+        iconColor = color->asValue<QColor>();
+    }
+    const QPixmap pixmap = IconManager::instance().render(
+        option->icon,
+        {
+            .size = shiftedContentRect.size().boundedTo(option->iconSize),
+            .dpr = painter->device()->devicePixelRatio(),
+            .color = iconColor,
+            .mode = iconMode,
+            .state = iconState,
+        }
     );
     const QSize pixmapSize = pixmap.size() / painter->device()->devicePixelRatio();
 
@@ -2504,27 +2604,9 @@ void FreeCADStyle::polish(QWidget* widget)
     }
 
     if (const auto expressionButton = qobject_cast<ExpressionButton*>(widget)) {
-        QIcon icon;
-        icon.addPixmap(
-            IconManager::instance()
-                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::Black),
-            QIcon::Normal,
-            QIcon::Off
+        expressionButton->setNormalIcon(
+            IconManager::instance().icon(":/icons/bound-expression-symbol.svg")
         );
-        icon.addPixmap(
-            IconManager::instance()
-                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::Black),
-            QIcon::Active,
-            QIcon::Off
-        );
-        icon.addPixmap(
-            IconManager::instance()
-                .pixmap(":/icons/bound-expression-symbol.svg", QSize(18, 18), QColorConstants::White),
-            QIcon::Normal,
-            QIcon::On
-        );
-
-        expressionButton->setNormalIcon(icon);
     }
 }
 

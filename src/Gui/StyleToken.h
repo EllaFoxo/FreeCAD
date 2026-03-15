@@ -171,6 +171,7 @@ enum class StyleProperty : uint8_t
     InnerShadow,
     TickColor,
     MenuWidth,
+    IconColor,
     // Add new properties before COUNT
     COUNT
 };
