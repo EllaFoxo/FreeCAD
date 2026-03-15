@@ -104,16 +104,15 @@ enum class ControlSize : uint8_t
 };
 
 /**
- * @brief Tab bar position — the edge at which the tabs sit.
+ * @brief Edge position — the edge at which a component attaches.
  *
- * North (0) is canonical: geometric tokens (BorderRadius, Padding, BorderThickness) are
- * always resolved with North and then rotated to the actual position. Visual tokens
- * (Background, TextColor, etc.) are resolved with the actual position, so per-position
+ * North (0) is canonical. Geometric tokens are resolved with North and rotated to the
+ * actual position; visual tokens are resolved with the actual position so per-position
  * colour overrides (e.g. TabBarTabSouthBackground) work naturally.
  *
  * Add new positions before COUNT.
  */
-enum class TabPosition : uint8_t
+enum class Position : uint8_t
 {
     North = 0,  // canonical; maps to "" in token names (default variant)
     East,       // "East"
@@ -188,7 +187,7 @@ enum class VariantSlot : uint8_t
 {
     ButtonType,
     ControlSize,
-    TabPosition,
+    Position,
     // Add new variant dimensions before COUNT
     COUNT
 };

@@ -343,10 +343,10 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
         {static_cast<uint8_t>(ControlSize::Small), "Small"},
         {static_cast<uint8_t>(ControlSize::Big),   "Big"},
     }},
-    {VariantSlot::TabPosition, {
-        {static_cast<uint8_t>(TabPosition::East),  "East"},
-        {static_cast<uint8_t>(TabPosition::South), "South"},
-        {static_cast<uint8_t>(TabPosition::West),  "West"},
+    {VariantSlot::Position, {
+        {static_cast<uint8_t>(Position::East),  "East"},
+        {static_cast<uint8_t>(Position::South), "South"},
+        {static_cast<uint8_t>(Position::West),  "West"},
     }},
 };
 // clang-format on
@@ -497,7 +497,7 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
 //   bits 16–24 : VariantSlots          (3 bits each × 3 slots, starting at bit 16)
 //   bits 25–31 : componentOverrideId   (7 bits; 0 = no override, 1–127 interned)
 //
-// 3 bits per slot: ButtonType (3 values), ControlSize (3 values), TabPosition (4 values)
+// 3 bits per slot: ButtonType (3 values), ControlSize (3 values), Position (4 values)
 // all fit in 3 bits (≤ 7). 7-bit override IDs allow 127 unique custom component names.
 //
 // Adding a new VariantSlot or enum value does not require changing this function
@@ -552,154 +552,104 @@ std::optional<Qt::Orientation> toolbarOrientationOf(const QWidget* widget)
 // ─── Tab bar utilities ──────────────────────────────────────────────────────
 
 /**
- * @brief Maps a QTabBar::Shape to the canonical TabPosition category.
+ * @brief Maps a QTabBar::Shape to the canonical Position.
  *
  * Both Rounded and Triangular shapes at the same edge map to the same position.
  */
-TabPosition tabPositionOf(QTabBar::Shape shape)
+Position tabPositionOf(QTabBar::Shape shape)
 {
     switch (shape) {
         case QTabBar::RoundedNorth:
         case QTabBar::TriangularNorth:
-            return TabPosition::North;
+            return Position::North;
         case QTabBar::RoundedEast:
         case QTabBar::TriangularEast:
-            return TabPosition::East;
+            return Position::East;
         case QTabBar::RoundedSouth:
         case QTabBar::TriangularSouth:
-            return TabPosition::South;
+            return Position::South;
         case QTabBar::RoundedWest:
         case QTabBar::TriangularWest:
-            return TabPosition::West;
+            return Position::West;
         default:
-            return TabPosition::North;
+            return Position::North;
     }
 }
 
 /**
- * @brief Rotates canonical (North) corner radii to the given tab position.
+ * @brief Applies the standard 4-way edge rotation to an array of values.
  *
- * Canonical definition: top corners are the free (visible) edge, bottom corners
- * are the attachment edge (flush against the panel).
- *
- * | Position | topLeft | topRight | bottomRight | bottomLeft |
- * |----------|---------|----------|-------------|------------|
- * | North    |   TL    |    TR    |     BR      |     BL     |
- * | South    |   BR    |    BL    |     TL      |     TR     |
- * | East     |   BL    |    TL    |     TR      |     BR     |
- * | West     |   TR    |    BR    |     BL      |     TL     |
+ * Canonical (North) order: (left/topLeft, top/topRight, right/bottomRight, bottom/bottomLeft).
+ * South swaps opposite pairs; East/West rotate by one step in either direction.
  */
-FreeCADStyle::CornerRadii rotatedCorners(const FreeCADStyle::CornerRadii& canonical, TabPosition position)
+template<typename T>
+std::array<T, 4> rotate4(std::array<T, 4> values, Position position)
 {
-    const qreal topLeft = canonical.topLeft;
-    const qreal topRight = canonical.topRight;
-    const qreal bottomRight = canonical.bottomRight;
-    const qreal bottomLeft = canonical.bottomLeft;
-
+    // clang-format off
     switch (position) {
-        case TabPosition::North:
-            return {
-                .topLeft = topLeft,
-                .topRight = topRight,
-                .bottomRight = bottomRight,
-                .bottomLeft = bottomLeft,
-            };
-        case TabPosition::South:
-            return {
-                .topLeft = bottomRight,
-                .topRight = bottomLeft,
-                .bottomRight = topLeft,
-                .bottomLeft = topRight,
-            };
-        case TabPosition::East:
-            return {
-                .topLeft = bottomLeft,
-                .topRight = topLeft,
-                .bottomRight = topRight,
-                .bottomLeft = bottomRight,
-            };
-        case TabPosition::West:
-            return {
-                .topLeft = topRight,
-                .topRight = bottomRight,
-                .bottomRight = bottomLeft,
-                .bottomLeft = topLeft,
-            };
-        default:
-            return canonical;
+        case Position::South: return {values[2], values[3], values[0], values[1]};
+        case Position::East:  return {values[3], values[0], values[1], values[2]};
+        case Position::West:  return {values[1], values[2], values[3], values[0]};
+        default:              return values;
     }
+    // clang-format on
+}
+
+/** @brief Rotates canonical (North) margins to the given position. */
+QMarginsF rotated(const QMarginsF& margins, Position position)
+{
+    const auto [left, top, right, bottom] = rotate4(
+        std::to_array({margins.left(), margins.top(), margins.right(), margins.bottom()}),
+        position
+    );
+    return {left, top, right, bottom};
+}
+
+/** @brief Rotates canonical (North) corner radii to the given position. */
+FreeCADStyle::CornerRadii rotated(const FreeCADStyle::CornerRadii& corners, Position position)
+{
+    const auto [topLeft, topRight, bottomRight, bottomLeft] = rotate4(
+        std::to_array({corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft}),
+        position
+    );
+    return {.topLeft = topLeft, .topRight = topRight, .bottomRight = bottomRight, .bottomLeft = bottomLeft};
 }
 
 /**
- * @brief Rotates canonical (North) margins to the given tab position.
+ * @brief Rotates a canonical (North, top→bottom) linear gradient brush to the given position.
  *
- * Canonical definition (North): top = free edge, bottom = attachment edge.
- * QMarginsF layout: (left, top, right, bottom).
- *
- * | Position | left | top | right | bottom |
- * |----------|------|-----|-------|--------|
- * | North    |  L   |  T  |   R   |   B    |
- * | South    |  R   |  B  |   L   |   T    |
- * | East     |  B   |  L  |   T   |   R    |
- * | West     |  T   |  R  |   B   |   L    |
+ * Point transform: North=(px,py), South=(px,1-py), East=(1-py,px), West=(py,1-px).
+ * Non-linear-gradient brushes are returned unchanged.
  */
-QMarginsF rotatedMargins(const QMarginsF& canonical, TabPosition position)
+// clang-format off
+QBrush rotated(const QBrush& brush, Position position)
 {
-    const qreal left = canonical.left();
-    const qreal top = canonical.top();
-    const qreal right = canonical.right();
-    const qreal bottom = canonical.bottom();
+    if (position == Position::North) {
+        return brush;
+    }
+    const QGradient* gradient = brush.gradient();
+    if (!gradient || gradient->type() != QGradient::LinearGradient) {
+        return brush;
+    }
+    const auto* linear = static_cast<const QLinearGradient*>(gradient);
+    const auto rotatePoint = [position](const QPointF& p) -> QPointF {
+        switch (position) {
+            case Position::South: return {p.x(),       1.0 - p.y()};
+            case Position::East:  return {1.0 - p.y(), p.x()      };
+            case Position::West:  return {p.y(),       1.0 - p.x()};
+            default:              return p;
+        }
+    };
 
-    switch (position) {
-        case TabPosition::North:
-            return {left, top, right, bottom};
-        case TabPosition::South:
-            return {right, bottom, left, top};
-        case TabPosition::East:
-            return {bottom, left, top, right};
-        case TabPosition::West:
-            return {top, right, bottom, left};
-        default:
-            return canonical;
-    }
-}
+    QLinearGradient result(rotatePoint(linear->start()), rotatePoint(linear->finalStop()));
+    result.setStops(linear->stops());
+    result.setCoordinateMode(linear->coordinateMode());
+    result.setSpread(linear->spread());
 
-/**
- * @brief Builds a StyleContext for a tab bar tab with the given position and state.
- *
- * Encapsulates the shared context-construction logic used by drawTabBarTab (full
- * position context and North-position context) and pixelMetric (PM_TabBarTabHSpace/VSpace).
- * State flags are derived from @p option; component override is read from @p widget.
- * TabPosition::North should be passed when a canonical (rotation-ready) context is needed.
- */
-StyleContext makeTabContext(const QStyleOption* option, const QWidget* widget, TabPosition position)
-{
-    StyleContext context;
-    context.component = StyleComponent::TabBar;
-    context.element = StyleComponentElement::Tab;
-    context.variant.set(VariantSlot::TabPosition, position);
-    if (option) {
-        if (!(option->state & QStyle::State_Enabled)) {
-            context.state |= StyleState::Disabled;
-        }
-        if (option->state & QStyle::State_Selected) {
-            context.state |= StyleState::Checked;
-        }
-        if (option->state & QStyle::State_MouseOver) {
-            context.state |= StyleState::Hovered;
-        }
-        if (option->state & QStyle::State_HasFocus) {
-            context.state |= StyleState::Focused;
-        }
-    }
-    if (widget) {
-        const QString overrideName = widget->property("component").toString();
-        if (!overrideName.isEmpty()) {
-            context.componentOverride = overrideName.toStdString();
-        }
-    }
-    return context;
+    return result;
 }
+// clang-format on
+
 
 }  // namespace
 
@@ -740,11 +690,14 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         );
         backgroundRadii = innerRadii(rule.borderRadius, snappedThickness);
 
-        // Fill outer rect with border colour, then optional overlay on top.
-        painter->fillPath(roundedRectPath(QRectF(rect), rule.borderRadius), QBrush(*rule.borderColor));
+        // Subtract inner from outer path to fill only the border ring, preserving transparency.
+        const QPainterPath outerPath = roundedRectPath(QRectF(rect), rule.borderRadius);
+        const QPainterPath innerPath = roundedRectPath(QRectF(backgroundRect), backgroundRadii);
+        const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
+        painter->fillPath(borderRingPath, QBrush(*rule.borderColor));
 
         if (rule.borderOverlay) {
-            painter->fillPath(roundedRectPath(QRectF(rect), rule.borderRadius), *rule.borderOverlay);
+            painter->fillPath(borderRingPath, *rule.borderOverlay);
         }
     }
 
@@ -927,7 +880,8 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
     // position is used because QTabBar::tabSizeHint() transposes the returned size for East/West
     // tabs itself. State is preserved (e.g. checked tabs use TabBarTabCheckedPadding).
     if (metric == PM_TabBarTabHSpace || metric == PM_TabBarTabVSpace) {
-        const StyleContext context = makeTabContext(option, widget, TabPosition::North);
+        StyleContext context = contextOf(widget, option, StyleComponentElement::Tab);
+        context.variant.set(VariantSlot::Position, Position::North);
         if (const auto padding = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
             const QMarginsF margins = Base::convertTo<QMarginsF>(*padding);
             if (metric == PM_TabBarTabHSpace) {
@@ -1953,36 +1907,24 @@ void FreeCADStyle::drawComboBoxLabel(
 
 void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const
 {
-    const TabPosition position = tabPositionOf(option->shape);
+    const Position position = tabPositionOf(option->shape);
 
-    // Position context: visual tokens (Background, TextColor, Overlay, etc.)
-    // resolved with TabPosition variant set — tries "TabBarTabSouth..." before "TabBarTab..." fallback.
-    const StyleContext positionContext = makeTabContext(option, widget, position);
+    // Position context: visual tokens resolved with actual position (supports per-position overrides).
+    const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Tab);
 
-    // North context: geometric tokens always resolved from North (TabPosition = 0)
-    // so rotation is applied uniformly regardless of position-specific colour overrides.
+    // North context: geometric tokens always resolved canonical, then rotated.
     StyleContext northContext = positionContext;
-    northContext.variant.set(VariantSlot::TabPosition, TabPosition::North);
+    northContext.variant.set(VariantSlot::Position, Position::North);
 
-    // Resolve visual style via position context (picks up per-position colour overrides).
     BoxStyleDefinition style = resolveBoxStyle(positionContext);
 
-    // Override geometry with north context + rotation so theme authors only define North.
     if (const auto corners
         = resolve<StyleParameters::Corners>(northContext, StyleProperty::BorderRadius)) {
-        style.borderRadius = rotatedCorners(Base::convertTo<CornerRadii>(*corners), position);
+        style.borderRadius = rotated(Base::convertTo<CornerRadii>(*corners), position);
     }
     if (const auto thickness
         = resolve<StyleParameters::Insets>(northContext, StyleProperty::BorderThickness)) {
-        style.borderThickness = rotatedMargins(Base::convertTo<QMarginsF>(*thickness), position);
-    }
-
-    // Margin: shrinks the background rect from the outside, producing the "inactive tabs are
-    // shorter" visual effect. Resolved from the north context and rotated to the actual position
-    // so TabBarTabMargin: "padding(bottom: 2px)" always trims the attachment edge.
-    QMarginsF margin;
-    if (const auto insets = resolve<StyleParameters::Insets>(northContext, StyleProperty::Margin)) {
-        margin = rotatedMargins(Base::convertTo<QMarginsF>(*insets), position);
+        style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
     }
 
     // Apply trailing-edge spacing: PM_TabBarTabOverlap is a purely visual hint that tells the
@@ -1998,14 +1940,9 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
         || option->position == QStyleOptionTab::OnlyOneTab;
     const int tabOverlap = isLastOrOnly ? 0
                                         : proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
-    const bool isVertical = (position == TabPosition::East || position == TabPosition::West);
+    const bool isVertical = (position == Position::East || position == Position::West);
 
-    QRect drawRect = option->rect.adjusted(
-        static_cast<int>(margin.left()),
-        static_cast<int>(margin.top()),
-        -static_cast<int>(margin.right()),
-        -static_cast<int>(margin.bottom())
-    );
+    QRect drawRect = option->rect;
     if (tabOverlap != 0) {
         if (isVertical) {
             drawRect = drawRect.adjusted(0, 0, 0, tabOverlap);
@@ -2089,7 +2026,11 @@ StyleContext FreeCADStyle::contextOf(
     else if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {
         context.component = StyleComponent::TabBar;
         context.element = element;
-        context.variant.set(VariantSlot::TabPosition, tabPositionOf(tabBar->shape()));
+        context.variant.set(VariantSlot::Position, tabPositionOf(tabBar->shape()));
+        // QTabBar uses State_Selected (not State_On) to mark the active tab; map it to Checked.
+        if (option && (option->state & QStyle::State_Selected)) {
+            context.state |= StyleState::Checked;
+        }
     }
 
     // ButtonType — derived from style option features first, then widget properties.
