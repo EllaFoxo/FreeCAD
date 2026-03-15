@@ -284,6 +284,7 @@ TabBarTabBorderThickness: "border_thickness(1px, bottom: 0)"
 TabBarTabSpacing: -1px
 
 TabBarTabPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.300)"
+TabBarTabIconSpacing: "@Spacing.150"
 
 TabBarTabCheckedBorderColor: "@BaseBorderColor"
 TabBarTabDisabledBackground: "@BaseDisabledBackground"

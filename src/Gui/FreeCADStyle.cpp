@@ -1153,6 +1153,18 @@ QSize FreeCADStyle::sizeFromContents(
         return result;
     }
 
+    if (type == CT_TabBarTab) {
+        const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
+        if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
+            StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
+            geometryContext.variant.set(VariantSlot::Position, Position::North);
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
+            QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
+            result.rwidth() += geometry.iconGapDelta();
+            return result;
+        }
+    }
+
     if (type == CT_LineEdit || type == CT_SpinBox) {
         const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
         QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
@@ -1647,6 +1659,13 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    if (element == CE_TabBarTabLabel) {
+        if (const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option)) {
+            drawTabBarTabLabel(painter, tabOption, widget);
+            return;
+        }
+    }
+
     if (element == CE_ShapedFrame) {
         if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option)) {
             const QFrame::Shape shape = frameOption->frameShape;
@@ -2002,6 +2021,79 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
     }
 
     drawBoxBackground(painter, drawRect, style);
+}
+
+void FreeCADStyle::drawTabBarTabLabel(
+    QPainter* painter,
+    const QStyleOptionTab* option,
+    const QWidget* widget
+) const
+{
+    const Position position = tabPositionOf(option->shape);
+    const bool isVertical = (position == Position::East || position == Position::West);
+
+    // Vertical tabs require a rotated painter set up by Qt — delegate to parent.
+    if (isVertical) {
+        QProxyStyle::drawControl(CE_TabBarTabLabel, option, painter, widget);
+        return;
+    }
+
+    const bool hasIcon = !option->icon.isNull();
+    const bool hasText = !option->text.isEmpty();
+
+    // Only customise when both icon and text are present; delegate otherwise.
+    if (!hasIcon || !hasText) {
+        QProxyStyle::drawControl(CE_TabBarTabLabel, option, painter, widget);
+        return;
+    }
+
+    // Geometry is always resolved in the canonical North context (PM_TabBarTabHSpace/VSpace does
+    // the same: the tab size is computed in North space and transposed by QTabBar for East/West).
+    StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
+    geometryContext.variant.set(VariantSlot::Position, Position::North);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
+
+    const QRect contentRect = geometry.contentRect(option->rect);
+
+    const QIcon::State iconState = (option->state & State_On) ? QIcon::On : QIcon::Off;
+    const QIcon::Mode iconMode = (option->state & State_Enabled) ? QIcon::Normal : QIcon::Disabled;
+    const QPixmap pixmap = option->icon.pixmap(
+        option->iconSize,
+        painter->device()->devicePixelRatio(),
+        iconMode,
+        iconState
+    );
+    const QSize pixmapSize = pixmap.size() / painter->device()->devicePixelRatio();
+
+    const int iconSpacing = geometry.iconSpacing;
+
+    const QRect iconRect(
+        contentRect.left(),
+        contentRect.top() + (contentRect.height() - pixmapSize.height()) / 2,
+        pixmapSize.width(),
+        pixmapSize.height()
+    );
+    const QRect textRect = contentRect.adjusted(pixmapSize.width() + iconSpacing, 0, 0, 0);
+
+    int textFlags = Qt::TextShowMnemonic;
+    if (!proxy()->styleHint(SH_UnderlineShortcut, option, widget)) {
+        textFlags |= Qt::TextHideMnemonic;
+    }
+
+    painter->save();
+
+    proxy()->drawItemPixmap(painter, iconRect, Qt::AlignCenter, pixmap);
+    proxy()->drawItemText(
+        painter,
+        QStyle::visualRect(option->direction, contentRect, textRect),
+        textFlags | Qt::AlignLeft | Qt::AlignVCenter,
+        option->palette,
+        option->state & State_Enabled,
+        option->text,
+        QPalette::ButtonText
+    );
+
+    painter->restore();
 }
 
 FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBaseStripStyle(

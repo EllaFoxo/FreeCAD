@@ -378,6 +378,16 @@ private:
     void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
     /**
+     * @brief Paints the label (icon + text) of a tab bar tab.
+     *
+     * Overrides CE_TabBarTabLabel to apply the TabBarTabIconSpacing token as the
+     * icon-to-text gap (Qt Fusion hardcodes 4 px). Only active when both icon and
+     * text are present and the tab is horizontal (North/South); vertical (East/West)
+     * tabs delegate to the parent.
+     */
+    void drawTabBarTabLabel(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
+
+    /**
      * @brief Resolves a BoxStyleDefinition for the tab bar base strip from a position context.
      *
      * The background and border thickness are resolved from the canonical North position
