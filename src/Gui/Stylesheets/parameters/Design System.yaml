@@ -86,6 +86,7 @@ BaseShadingDark: "@Neutral.600"
 BaseShadingShadow: "@Neutral.800"
 
 BaseBorderColor: "@Neutral.400"
+BaseShadowColor: "rgba(0, 0, 0, 0.08)"
 
 BaseHoveredOverlay: "#ffffff"
 BaseHoveredOverlayOpacity: 50%
@@ -274,7 +275,7 @@ DocumentTreeItemPadding: "padding(0)"
 TabBarTabHoveredBackground: "@Background.300"
 TabBarTabCheckedBackground: "@BaseWindowBackground"
 
-TabBarTabBorderRadius: "border_radius(@BaseRadius.medium, @BaseRadius.medium, 0, 0)"
+TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
 TabBarTabBorderThickness: "border_thickness(1px, bottom: 0)"
 
@@ -290,5 +291,13 @@ TabBarTabCheckedBorderColor: "@BaseBorderColor"
 TabBarTabDisabledBackground: "@BaseDisabledBackground"
 TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
 
-TabBarTabMargin: "padding(0px, bottom: @Spacing.050)"
-TabBarTabCheckedMargin: "padding(0px, bottom: 1px)"
+# ── Tab Bar Base ─────────────────────────────────────────────────────────────
+# TabBarBaseHeight:  visible strip height below the tabs (PM_TabBarBaseHeight - PM_TabBarBaseOverlap).
+# TabBarBaseOverlap: how many px the strip extends under the tab row (PM_TabBarBaseOverlap).
+# Qt sizes the PE_FrameTabBarBase rect to Height + Overlap, then hides the overlap portion
+# under the tabs, leaving exactly TabBarBaseHeight px visible.
+TabBarBaseHeight:          4px
+TabBarBaseOverlap:         4px
+TabBarBaseBorderColor:     "@BaseBorderColor"
+TabBarBaseBorderThickness: "border_thickness(0px, bottom: 1px)"
+TabBarBaseBackground:      "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, opacity(@BaseBorderColor, 0%), opacity(@BaseBorderColor, 40%))"

@@ -322,6 +322,7 @@ const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Item,      "Item"},
     {StyleComponentElement::Indicator, "Indicator"},
     {StyleComponentElement::Tab,       "Tab"},
+    {StyleComponentElement::Base,      "Base"},
 };
 // clang-format on
 
@@ -516,10 +517,10 @@ uint32_t packVariant(const VariantKey& variant)
 // Bit offsets within the packed cache key.
 constexpr uint32_t componentBitOffset = 0;
 constexpr uint32_t elementBitOffset   = 4;   // component (4 bits) ends at bit 3
-constexpr uint32_t stateBitOffset     = 6;   // element (2 bits) ends at bit 5
-constexpr uint32_t propertyBitOffset  = 11;  // state (5-bit bitmask) ends at bit 10
-constexpr uint32_t variantBitOffset   = 16;  // property (5 bits) ends at bit 15
-constexpr uint32_t overrideBitOffset  = 25;  // variant slots (3 × 3 bits) end at bit 24
+constexpr uint32_t stateBitOffset     = 7;   // element (3 bits) ends at bit 6
+constexpr uint32_t propertyBitOffset  = 12;  // state (5-bit bitmask) ends at bit 11
+constexpr uint32_t variantBitOffset   = 17;  // property (5 bits) ends at bit 16
+constexpr uint32_t overrideBitOffset  = 26;  // variant slots (3 × 3 bits) end at bit 25
 // clang-format on
 
 uint32_t packCacheKey(const StyleContext& context, StyleProperty property, uint8_t overrideId)
@@ -891,6 +892,30 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
         }
     }
 
+    // PM_TabBarBaseHeight / PM_TabBarBaseOverlap are only meaningful for a standalone QTabBar
+    // that actually draws its base strip (PE_FrameTabBarBase). QCommonStyle also queries
+    // PM_TabBarBaseOverlap via SE_TabWidgetTabPane with widget = QTabWidget to compute the
+    // pane inset — returning our large overlap there would push the frame into the tab row.
+    // Guard on widget being a QTabBar so the QTabWidget pane calculation gets 0 (flush).
+    if (qobject_cast<const QTabBar*>(widget)) {
+        if (metric == PM_TabBarBaseHeight) {
+            const auto height = resolve<StyleParameters::Numeric>("TabBarBaseHeight");
+            const auto overlap = resolve<StyleParameters::Numeric>("TabBarBaseOverlap");
+            if (height) {
+                const int overlapPx = overlap ? static_cast<int>(overlap->value) : 0;
+                return static_cast<int>(height->value) + overlapPx;
+            }
+        }
+        if (metric == PM_TabBarBaseOverlap) {
+            if (const auto overlap = resolve<StyleParameters::Numeric>("TabBarBaseOverlap")) {
+                return static_cast<int>(overlap->value);
+            }
+        }
+    }
+    else if (metric == PM_TabBarBaseOverlap) {
+        return 1;
+    }
+
     return QProxyStyle::pixelMetric(metric, option, widget);
 }
 
@@ -1059,6 +1084,13 @@ void FreeCADStyle::drawPrimitive(
             !toolbarIsHorizontal
         );
         return;
+    }
+
+    if (element == PE_FrameTabBarBase) {
+        if (const auto* tabBaseOption = qstyleoption_cast<const QStyleOptionTabBarBase*>(option)) {
+            drawTabBarBase(painter, tabBaseOption, widget);
+            return;
+        }
     }
 
     QProxyStyle::drawPrimitive(element, option, painter, widget);
@@ -1953,6 +1985,34 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
     }
 
     drawBoxBackground(painter, drawRect, style);
+}
+
+void FreeCADStyle::drawTabBarBase(
+    QPainter* painter,
+    const QStyleOptionTabBarBase* option,
+    const QWidget* widget
+) const
+{
+    const Position position = tabPositionOf(option->shape);
+
+    const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Base);
+
+    StyleContext northContext = positionContext;
+    northContext.variant.set(VariantSlot::Position, Position::North);
+
+    // Visual tokens (BorderColor, Overlay, etc.) from position context; background and geometric
+    // tokens from North canonical and rotated — treated uniformly since the gradient is directional.
+    BoxStyleDefinition style = resolveBoxStyle(positionContext);
+
+    if (const auto background = resolve(northContext, StyleProperty::Background)) {
+        style.background = rotated(Base::convertTo<QBrush>(*background), position);
+    }
+    if (const auto thickness
+        = resolve<StyleParameters::Insets>(northContext, StyleProperty::BorderThickness)) {
+        style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
+    }
+
+    drawBoxBackground(painter, option->rect, style);
 }
 
 std::optional<StyleParameters::Value> FreeCADStyle::resolve(std::string_view name) const

@@ -375,6 +375,21 @@ private:
     void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
     /**
+     * @brief Paints the decorative base strip between the tab bar and the page content area.
+     *
+     * Renders a 4px-tall strip at the attachment edge using a transparent→shadow gradient
+     * and a 1px border on the attachment edge. Geometric tokens are resolved from the
+     * canonical North position and rotated to the actual position; visual tokens are
+     * resolved with the full position context so per-position overrides work naturally.
+     * Called from drawPrimitive when element == PE_FrameTabBarBase.
+     */
+    void drawTabBarBase(
+        QPainter* painter,
+        const QStyleOptionTabBarBase* option,
+        const QWidget* widget
+    ) const;
+
+    /**
      * @brief Paints the label (icon + text) of a push button.
      *
      * Overrides CE_PushButtonLabel to apply the ButtonIconSpacing token as the

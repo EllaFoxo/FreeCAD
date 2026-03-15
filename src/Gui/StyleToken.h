@@ -66,6 +66,7 @@ enum class StyleComponentElement : uint8_t
     Item,       // Item of the component (useful for lists, trees etc_
     Indicator,  // Checkbox for items
     Tab,        // Individual tab of a TabBar
+    Base,       // Base strip of a TabBar (PE_FrameTabBarBase)
     // Add new components before COUNT
     COUNT,
 };
