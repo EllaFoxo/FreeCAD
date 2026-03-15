@@ -2163,6 +2163,12 @@ StyleContext FreeCADStyle::contextOf(
         if (option && (option->state & QStyle::State_Selected)) {
             context.state |= StyleState::Checked;
         }
+        // State_MouseOver is not reliably set in QStyleOptionTab — Qt tracks tab hover via
+        // WA_Hover events and an internal hoverIndex, but does not always propagate that to
+        // the option flags. Check cursor position directly instead.
+        if (option && option->rect.contains(tabBar->mapFromGlobal(QCursor::pos()))) {
+            context.state |= StyleState::Hovered;
+        }
     }
 
     // ButtonType — derived from style option features first, then widget properties.
@@ -2392,6 +2398,23 @@ void FreeCADStyle::clearTokenCache()
     nextComponentOverrideId = 1;
 }
 
+void FreeCADStyle::polish(QWidget* widget)
+{
+    QProxyStyle::polish(widget);
+    if (qobject_cast<QTabBar*>(widget)) {
+        widget->setMouseTracking(true);
+        widget->installEventFilter(this);
+    }
+}
+
+void FreeCADStyle::unpolish(QWidget* widget)
+{
+    if (qobject_cast<QTabBar*>(widget)) {
+        widget->removeEventFilter(this);
+    }
+    QProxyStyle::unpolish(widget);
+}
+
 bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
 {
     if (event->type() == ThemeReloadEvent::registeredType()) {
@@ -2423,6 +2446,16 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         }
         else if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(obj)) {
             applyTextEditDocumentMargin(plainTextEdit, plainTextEdit->document());
+        }
+    }
+
+    // Force tab bar repaint on mouse move/leave so our cursor-position hover check in
+    // contextOf() sees up-to-date state. Qt's internal WA_Hover tracking for QTabBar does
+    // not consistently trigger repaints in all configurations.
+    if (qobject_cast<QTabBar*>(obj)) {
+        if (event->type() == QEvent::MouseMove || event->type() == QEvent::Leave
+            || event->type() == QEvent::HoverMove || event->type() == QEvent::HoverLeave) {
+            static_cast<QWidget*>(obj)->update();
         }
     }
 

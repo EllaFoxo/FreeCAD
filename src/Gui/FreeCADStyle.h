@@ -186,6 +186,9 @@ public:
         QStyleHintReturn* returnData
     ) const override;
 
+    void polish(QWidget* widget) override;
+    void unpolish(QWidget* widget) override;
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,

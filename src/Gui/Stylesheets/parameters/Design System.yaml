@@ -272,7 +272,6 @@ DocumentTreeItemPadding: "padding(0)"
 # BorderThickness) are auto-rotated to South/East/West; theme authors only need
 # to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
 
-TabBarTabHoveredBackground: "@Background.300"
 TabBarTabCheckedBackground: "@Background.100"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
@@ -284,8 +283,7 @@ TabBarTabBorderThickness: "border_thickness(1px, bottom: 0)"
 # Set to e.g. 4px for a spaced-apart appearance.
 TabBarTabSpacing: -1px
 
-TabBarTabPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.250)"
-TabBarTabCheckedPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.250)"
+TabBarTabPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.300)"
 
 TabBarTabCheckedBorderColor: "@BaseBorderColor"
 TabBarTabDisabledBackground: "@BaseDisabledBackground"
@@ -303,7 +301,7 @@ TabBarBaseBorderThickness: "border_thickness(0px, bottom: 1px)"
 TabBarBaseBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, opacity(@BaseBorderColor, 0%), opacity(@BaseBorderColor, 40%))"
 
 # ── Tab Widget Pane ──────────────────────────────────────────────────────────
-TabWidgetBackground: "@BaseBackground"
+TabWidgetBackground: "@Background.100"
 TabWidgetBorderColor: "@BaseBorderColor"
 TabWidgetBorderRadius: "border_radius(@BaseRadius.medium)"
 TabWidgetBorderThickness: "border_thickness(1px)"
