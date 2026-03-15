@@ -63,7 +63,7 @@ const IconManager::IconMeta* IconManager::metaForPixmap(const QPixmap& pixmap) c
     }
     return &it.value();
 }
-QPixmap IconManager::pixmap(const QString& path)
+QPixmap IconManager::pixmap(const QString& path, const QSize& size, QColor color)
 {
     IconManager::IconMeta meta;
     meta.iconId = path;
@@ -71,9 +71,9 @@ QPixmap IconManager::pixmap(const QString& path)
     meta.themed = true;
 
     RenderRequest req;
-    req.size = QSize(16, 16);
+    req.size = size;
     req.dpr = 1.0;
-    req.color = qApp->palette().text().color();
+    req.color = color;
 
     QPixmap px = render(meta, req);
     registerPixmap(px, meta);
@@ -82,7 +82,7 @@ QPixmap IconManager::pixmap(const QString& path)
 
 QIcon IconManager::icon(const QString& path)
 {
-    QPixmap px = pixmap(path);
+    QPixmap px = pixmap(path, QSize(24, 24), qApp->palette().text().color());
     return QIcon(px);
 }
 
@@ -184,10 +184,10 @@ QByteArray IconManager::materializeSvgDom(const QByteArray& rawSvg, const QColor
         return {};
     }
     // root.setAttribute("shape-rendering", "geometricPrecision");
-    root.setAttribute(
-        QStringLiteral("stroke-width"),
-        QString::fromStdString(fmt::format("{:.2f}", 24.f / 16.f))
-    );
+    // root.setAttribute(
+    //     QStringLiteral("stroke-width"),
+    //     QString::fromStdString(fmt::format("{:.2f}", 24.f / 16.f))
+    // );
     recolorCurrentStrokeAttributes(root, color.name(QColor::HexRgb));
     return doc.toByteArray(0);
 }
@@ -198,6 +198,13 @@ void IconManager::recolorCurrentStrokeAttributes(QDomElement& element, const QSt
         const QString stroke = element.attribute(QStringLiteral("stroke"));
         if (stroke.compare(QStringLiteral("currentColor"), Qt::CaseInsensitive) == 0) {
             element.setAttribute(QStringLiteral("stroke"), colorValue);
+        }
+    }
+
+    if (element.hasAttribute(QStringLiteral("fill"))) {
+        const QString stroke = element.attribute(QStringLiteral("fill"));
+        if (stroke.compare(QStringLiteral("currentColor"), Qt::CaseInsensitive) == 0) {
+            element.setAttribute(QStringLiteral("fill"), colorValue);
         }
     }
 
@@ -222,7 +229,7 @@ QPixmap IconManager::renderSvg(const QByteArray& svg, const QSize& size, qreal d
     pixmap.setDevicePixelRatio(dpr);
     pixmap.fill(Qt::transparent);
 
-    auto offset = size.width() / 24.0f;
+    auto offset = 0;  // size.width() / 24.0f;
 
     QPainter painter(&pixmap);
     painter.setRenderHint(QPainter::Antialiasing, true);

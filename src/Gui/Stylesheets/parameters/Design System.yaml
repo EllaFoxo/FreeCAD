@@ -307,3 +307,11 @@ TabWidgetBorderColor: "@BaseBorderColor"
 TabWidgetBorderRadius: "border_radius(@BaseRadius.medium)"
 TabWidgetBorderThickness: "border_thickness(1px)"
 TabWidgetPadding: 0
+
+ExpressionButtonBackground: "@ButtonBackground"
+ExpressionButtonBorderColor: "@ButtonBorderColor"
+
+ExpressionButtonCheckedBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Accent.700, @Accent.800)"
+ExpressionButtonCheckedBorderColor: "@Accent.900"
+ExpressionButtonCheckedTextColor: "#ffffff"
+ExpressionButtonPadding: "padding(2px)"

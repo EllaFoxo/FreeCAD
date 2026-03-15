@@ -77,7 +77,7 @@ public:
     void registerPixmap(const QPixmap& pixmap, const IconMeta& meta);
     const IconMeta* metaForPixmap(const QPixmap& pixmap) const;
 
-    QPixmap pixmap(const QString& path);
+    QPixmap pixmap(const QString& path, const QSize& size, QColor color);
     QIcon icon(const QString& path);
 
     QPixmap render(const IconMeta& meta, const RenderRequest& request) const;
