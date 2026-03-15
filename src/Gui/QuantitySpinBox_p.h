@@ -80,6 +80,13 @@ public:
         setIcon(normalIcon_);
     }
 
+protected:
+    // Prevent Qt from auto-toggling the checked state on click.
+    // The checked state is driven exclusively by the expression binding
+    // via setChecked(), so clicking must not change it on its own.
+    void nextCheckState() override
+    {}
+
 private:
     QIcon normalIcon_;
     const QString genericExpressionEditorTooltip = tr("Enter expression… (=)");
