@@ -114,6 +114,20 @@ public:
             }
         }();
 
+        // Edge group names override positional (each covers two adjacent corners)
+        if (const Value* found = args.find("top")) {
+            topLeft = topRight = found;
+        }
+        if (const Value* found = args.find("bottom")) {
+            bottomLeft = bottomRight = found;
+        }
+        if (const Value* found = args.find("left")) {
+            topLeft = bottomLeft = found;
+        }
+        if (const Value* found = args.find("right")) {
+            topRight = bottomRight = found;
+        }
+
         // Explicit corner names override positional
         if (const Value* found = args.find("top_left")) {
             topLeft = found;
