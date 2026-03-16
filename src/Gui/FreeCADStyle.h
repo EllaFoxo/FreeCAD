@@ -366,6 +366,18 @@ private:
         const StyleComponentElement& element = StyleComponentElement::Root
     );
 
+    /** @brief Maps a QTabBar::Shape to the canonical Position enum. */
+    static Position tabPositionOf(QTabBar::Shape shape);
+
+    /**
+     * @brief Adjusts the trailing edge of a tab rect by the tab overlap amount.
+     *
+     * Both drawTabBarTab and drawTabBarTabLabel compute this identically: extend
+     * (positive overlap) or shrink (negative overlap) the trailing edge so the
+     * background paint rect and content geometry agree.
+     */
+    static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
+
     /**
      * @brief Paints the background shape of a single tab.
      *
