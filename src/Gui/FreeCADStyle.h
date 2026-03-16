@@ -526,6 +526,17 @@ private:
     ) const;
 
     /**
+     * @brief Convenience overload — derives mode, state, and palette from @p option.
+     */
+    QPixmap renderStyledIcon(
+        QPainter* painter,
+        const QIcon& icon,
+        const QSize& maxSize,
+        const QStyleOption* option,
+        const StyleContext& context
+    ) const;
+
+    /**
      * @brief Returns Qt::TextShowMnemonic, optionally OR'd with Qt::TextHideMnemonic.
      *
      * Queries SH_UnderlineShortcut so all draw methods respect the same style hint
