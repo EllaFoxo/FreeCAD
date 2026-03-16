@@ -783,14 +783,11 @@ void FreeCADStyle::drawPrimitive(
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setPen(Qt::NoPen);
 
-            // Tick colour: from design token, falling back to the Fusion palette role so
-            // it follows the active theme even without an explicit token.
             QColor markColor = option->palette.text().color();
             if (const auto tickColor = resolve<Base::Color>(context, StyleProperty::TickColor)) {
                 markColor = tickColor->asValue<QColor>();
             }
 
-            // Inner mark padding: from design token, falling back to a proportional default.
             constexpr qreal checkPaddingRatio = 0.2;  // fallback: fraction of box width
             constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
             constexpr qreal checkMinPenWidth = 1.5;     // minimum stroke width in pixels
@@ -1227,7 +1224,6 @@ void FreeCADStyle::drawComplexControl(
 {
     if (control == CC_SpinBox) {
         if (const auto* spinOption = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) {
-            // Draw our styled background + border for the full frame.
             if (spinOption->frame && (spinOption->subControls & SC_SpinBoxFrame)) {
                 const QRect frameRect
                     = proxy()->subControlRect(CC_SpinBox, option, SC_SpinBoxFrame, widget);
@@ -1270,10 +1266,8 @@ void FreeCADStyle::drawComplexControl(
 
     if (control == CC_ComboBox) {
         if (const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
-            // Draw our styled background + border for the full frame.
             drawComponent(painter, option->rect, widget, option);
 
-            // Draw the dropdown arrow indicator over the transparent button area.
             // QComboBox::paintEvent draws CE_ComboBoxLabel separately; it uses our
             // subControlRect(SC_ComboBoxEditField) for the text area.
             if (comboOption->subControls & SC_ComboBoxArrow) {
@@ -1363,7 +1357,6 @@ void FreeCADStyle::drawComplexControl(
                 }
                 drawBoxBackground(painter, menuRect, seamed(contextOf(widget, &menuOption), false));
 
-                // Arrow direction follows toolbar orientation.
                 QStyleOptionToolButton arrowOption = *tbOption;
                 arrowOption.rect = menuRect;
                 proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
