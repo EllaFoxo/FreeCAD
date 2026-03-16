@@ -394,6 +394,26 @@ QBrush rotated(const QBrush& brush, Position position)
 }
 // clang-format on
 
+// ─── Icon helpers ────────────────────────────────────────────────────────────
+
+// QIcon::Mode from option state — full check including AutoRaise → Active.
+QIcon::Mode iconModeOf(const QStyleOption* option)
+{
+    if (!(option->state & QStyle::State_Enabled)) {
+        return QIcon::Disabled;
+    }
+    if ((option->state & QStyle::State_MouseOver) && (option->state & QStyle::State_AutoRaise)) {
+        return QIcon::Active;
+    }
+    return QIcon::Normal;
+}
+
+// QIcon::State from option state — State_On → On, else Off.
+QIcon::State iconStateOf(const QStyleOption* option)
+{
+    return (option->state & QStyle::State_On) ? QIcon::On : QIcon::Off;
+}
+
 
 }  // namespace
 
@@ -2048,6 +2068,78 @@ std::optional<StyleParameters::Value> FreeCADStyle::resolve(
         }
     }
     return std::nullopt;
+}
+
+// ─── Drawing helpers ─────────────────────────────────────────────────────────
+
+QColor FreeCADStyle::resolveIconColor(const StyleContext& context, const QPalette& palette) const
+{
+    if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
+        return color->asValue<QColor>();
+    }
+    if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+        return color->asValue<QColor>();
+    }
+    return palette.buttonText().color();
+}
+
+QPixmap FreeCADStyle::renderStyledIcon(
+    QPainter* painter,
+    const QIcon& icon,
+    const QSize& maxSize,
+    QIcon::Mode mode,
+    QIcon::State state,
+    const StyleContext& context,
+    const QPalette& palette
+) const
+{
+    return IconManager::instance().render(
+        icon,
+        {
+            .size = maxSize,
+            .dpr = painter->device()->devicePixelRatio(),
+            .color = resolveIconColor(context, palette),
+            .mode = mode,
+            .state = state,
+        }
+    );
+}
+
+int FreeCADStyle::mnemonicTextFlags(const QStyleOption* option, const QWidget* widget) const
+{
+    int flags = Qt::TextShowMnemonic;
+    if (!proxy()->styleHint(SH_UnderlineShortcut, option, widget)) {
+        flags |= Qt::TextHideMnemonic;
+    }
+    return flags;
+}
+
+QRect FreeCADStyle::applyButtonShift(
+    const QRect& rect,
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    if (!(option->state & (State_Sunken | State_On))) {
+        return rect;
+    }
+    QRect shifted = rect;
+    shifted.translate(
+        proxy()->pixelMetric(PM_ButtonShiftHorizontal, option, widget),
+        proxy()->pixelMetric(PM_ButtonShiftVertical, option, widget)
+    );
+    return shifted;
+}
+
+QRect FreeCADStyle::tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical)
+{
+    if (tabOverlap == 0) {
+        return rect;
+    }
+    if (isVertical) {
+        return rect.adjusted(0, 0, 0, tabOverlap);
+    }
+    return rect.adjusted(0, 0, tabOverlap, 0);
 }
 
 

@@ -502,6 +502,45 @@ private:
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 
+    /**
+     * @brief Resolves the icon color for @p context.
+     *
+     * Tries IconColor token, then TextColor token, then falls back to palette.buttonText().
+     */
+    QColor resolveIconColor(const StyleContext& context, const QPalette& palette) const;
+
+    /**
+     * @brief Renders @p icon via IconManager with the resolved color.
+     *
+     * Combines resolveIconColor() with IconManager::render() so each draw site
+     * needs one call instead of an inline color-resolve + render block.
+     */
+    QPixmap renderStyledIcon(
+        QPainter* painter,
+        const QIcon& icon,
+        const QSize& maxSize,
+        QIcon::Mode mode,
+        QIcon::State state,
+        const StyleContext& context,
+        const QPalette& palette
+    ) const;
+
+    /**
+     * @brief Returns Qt::TextShowMnemonic, optionally OR'd with Qt::TextHideMnemonic.
+     *
+     * Queries SH_UnderlineShortcut so all draw methods respect the same style hint
+     * without duplicating the three-line pattern.
+     */
+    int mnemonicTextFlags(const QStyleOption* option, const QWidget* widget) const;
+
+    /**
+     * @brief Shifts @p rect by PM_ButtonShift{Horizontal,Vertical} when sunken/checked.
+     *
+     * Returns @p rect unchanged when the option state has neither State_Sunken nor
+     * State_On set.
+     */
+    QRect applyButtonShift(const QRect& rect, const QStyleOption* option, const QWidget* widget) const;
+
     // Cache for resolve(StyleContext, StyleProperty). Key is a bit-packed uint32_t;
     // value is the resolved result including nullopt for confirmed misses.
     // Mutable so const draw methods can populate the cache.
