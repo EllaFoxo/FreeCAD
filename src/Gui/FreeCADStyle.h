@@ -161,12 +161,7 @@ public:
         /** @brief Returns @p rect inset by this geometry's padding. */
         [[nodiscard]] QRect contentRect(const QRect& rect) const
         {
-            return rect.adjusted(
-                static_cast<int>(padding.left()),
-                static_cast<int>(padding.top()),
-                -static_cast<int>(padding.right()),
-                -static_cast<int>(padding.bottom())
-            );
+            return rect.marginsRemoved(padding.toMargins());
         }
     };
 
