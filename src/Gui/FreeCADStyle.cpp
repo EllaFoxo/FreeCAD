@@ -1046,12 +1046,7 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
         }
         const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
         QStyleOptionViewItem adjustedOption = *vopt;
-        adjustedOption.rect = vopt->rect.adjusted(
-            static_cast<int>(geometry.padding.left()),
-            static_cast<int>(geometry.padding.top()),
-            -static_cast<int>(geometry.padding.right()),
-            -static_cast<int>(geometry.padding.bottom())
-        );
+        adjustedOption.rect = geometry.contentRect(vopt->rect);
         return QProxyStyle::subElementRect(el, &adjustedOption, widget);
     };
 
