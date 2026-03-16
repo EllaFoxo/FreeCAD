@@ -1124,7 +1124,16 @@ QRect FreeCADStyle::subControlRect(
         if (spinOption) {
             const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
             const QRect outerRect = option->rect;
-            const QRect contentRect = geometry.contentRect(outerRect);
+            const QRect paddedRect = geometry.contentRect(outerRect);
+
+            // If the available height is less than what the style requests (e.g. a
+            // tree-view editor constrained to the row height), skip vertical padding so
+            // the edit field fills the available height instead.
+            const QSize preferredSize
+                = proxy()->sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
+
+            const QRect contentRect = outerRect.height() < preferredSize.height() ? outerRect
+                                                                                  : paddedRect;
 
             // Borrow the button width from the base style; only the position changes.
             const bool hasButtons = spinOption->buttonSymbols != QAbstractSpinBox::NoButtons;
