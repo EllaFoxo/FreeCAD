@@ -176,7 +176,7 @@ protected:
                 fmt::format("Gradient geometry parameter '{}' must be a number", paramName)
             );
         }
-        return found->get<Numeric>().value;
+        return static_cast<double>(found->get<Numeric>());
     }
 
     /**
@@ -234,7 +234,7 @@ protected:
                     THROWM(Base::ExpressionError, "Gradient stop tuple must be (position, color)");
                 }
                 rawStops.push_back({
-                    .position = stopTuple.at(0).get<Numeric>().value,
+                    .position = static_cast<double>(stopTuple.at(0).get<Numeric>()),
                     .color = stopTuple.at(1).get<Base::Color>(),
                 });
             }
@@ -301,19 +301,19 @@ public:
 
     double x1() const
     {
-        return tuple_.get<Numeric>("x1").value;
+        return static_cast<double>(tuple_.get<Numeric>("x1"));
     }
     double y1() const
     {
-        return tuple_.get<Numeric>("y1").value;
+        return static_cast<double>(tuple_.get<Numeric>("y1"));
     }
     double x2() const
     {
-        return tuple_.get<Numeric>("x2").value;
+        return static_cast<double>(tuple_.get<Numeric>("x2"));
     }
     double y2() const
     {
-        return tuple_.get<Numeric>("y2").value;
+        return static_cast<double>(tuple_.get<Numeric>("y2"));
     }
 
     static constexpr TupleKind kind()
@@ -360,23 +360,23 @@ public:
 
     double cx() const
     {
-        return tuple_.get<Numeric>("cx").value;
+        return static_cast<double>(tuple_.get<Numeric>("cx"));
     }
     double cy() const
     {
-        return tuple_.get<Numeric>("cy").value;
+        return static_cast<double>(tuple_.get<Numeric>("cy"));
     }
     double radius() const
     {
-        return tuple_.get<Numeric>("radius").value;
+        return static_cast<double>(tuple_.get<Numeric>("radius"));
     }
     double fx() const
     {
-        return tuple_.get<Numeric>("fx").value;
+        return static_cast<double>(tuple_.get<Numeric>("fx"));
     }
     double fy() const
     {
-        return tuple_.get<Numeric>("fy").value;
+        return static_cast<double>(tuple_.get<Numeric>("fy"));
     }
 
     static constexpr TupleKind kind()

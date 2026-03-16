@@ -74,19 +74,19 @@ public:
     /// Horizontal offset in pixels.
     double x() const
     {
-        return tuple_.get<Numeric>("x").value;
+        return static_cast<double>(tuple_.get<Numeric>("x"));
     }
 
     /// Vertical offset in pixels.
     double y() const
     {
-        return tuple_.get<Numeric>("y").value;
+        return static_cast<double>(tuple_.get<Numeric>("y"));
     }
 
     /// Blur radius in pixels.
     double blur() const
     {
-        return tuple_.get<Numeric>("blur").value;
+        return static_cast<double>(tuple_.get<Numeric>("blur"));
     }
 
     /// Shadow color.

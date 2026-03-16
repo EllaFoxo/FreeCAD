@@ -2060,11 +2060,27 @@ TEST_F(ParserTest, CornersWrapper)
     EXPECT_DOUBLE_EQ(radii.bottomLeft().value, 4.0);
 }
 
-TEST_F(ParserTest, CornersFromUnrelatedTupleDefaultsToZero)
+TEST_F(ParserTest, CornersFromPaddingTupleMapsEdgeGroupNames)
 {
-    // A Padding tuple has no corner-named elements; constructing Corners from it
-    // produces zero radii for all corners rather than throwing.
+    // A Padding tuple has top/right/bottom/left named elements, which Corners::expand()
+    // treats as edge groups — each covering two adjacent corners.
     Parser parser("padding(10px)");
+    auto expr = parser.parse();
+    auto result = expr->evaluate({.manager = &manager, .context = {}});
+    ASSERT_TRUE(result.holds<Tuple>());
+
+    Corners corners(result.get<Tuple>());
+    EXPECT_DOUBLE_EQ(corners.topLeft().value, 10.0);
+    EXPECT_DOUBLE_EQ(corners.topRight().value, 10.0);
+    EXPECT_DOUBLE_EQ(corners.bottomRight().value, 10.0);
+    EXPECT_DOUBLE_EQ(corners.bottomLeft().value, 10.0);
+}
+
+TEST_F(ParserTest, CornersFromGradientTupleDefaultsToZero)
+{
+    // A gradient tuple has no corner or edge-group named elements;
+    // constructing Corners from it produces zero radii for all corners.
+    Parser parser("linear_gradient(#000000, #ffffff)");
     auto expr = parser.parse();
     auto result = expr->evaluate({.manager = &manager, .context = {}});
     ASSERT_TRUE(result.holds<Tuple>());

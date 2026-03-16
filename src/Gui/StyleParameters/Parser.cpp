@@ -81,7 +81,7 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
         // 100 required by Qt.
         //
         // NOLINTNEXTLINE(*-magic-numbers)
-        auto amount = 100 + static_cast<int>(resolved.get<Numeric>("amount").value);
+        auto amount = 100 + static_cast<int>(resolved.get<Numeric>("amount"));
 
         const auto applyToColor = [&](const Base::Color& color) -> Base::Color {
             auto qcolor = color.asValue<QColor>();
@@ -109,7 +109,7 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
     const auto blend = [&args]() -> Value {
         auto resolved = ArgumentParser {{"from"}, {"to"}, {"amount"}}.resolve(args);
 
-        auto amount = Base::fromPercent(static_cast<long>(resolved.get<Numeric>("amount").value));
+        auto amount = Base::fromPercent(static_cast<long>(resolved.get<Numeric>("amount")));
 
         const auto blendColors =
             [amount](const Base::Color& first, const Base::Color& second) -> Base::Color {
@@ -166,7 +166,7 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
         if (numeric.unit == "%") {
             return static_cast<float>(numeric.value / 100.0);
         }
-        return static_cast<float>(numeric.value);
+        return static_cast<float>(numeric);
     };
 
     const auto parseShadingParams = [&asPercent](const Tuple& resolved) {
@@ -283,7 +283,7 @@ Value FunctionCall::evaluate(const EvaluationContext& context) const
         const auto& alpha = resolved.get<Numeric>("alpha");
 
         const float alphaValue = alpha.unit == "%" ? static_cast<float>(alpha.value / 100.0)
-                                                   : static_cast<float>(alpha.value);
+                                                   : static_cast<float>(alpha);
 
         const auto applyAlpha = [alphaValue](const Base::Color& color) -> Base::Color {
             return Base::Color(color.r, color.g, color.b, alphaValue);
