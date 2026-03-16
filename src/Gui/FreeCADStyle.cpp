@@ -1192,15 +1192,25 @@ QSize FreeCADStyle::sizeFromContents(
     }
 
     if (type == CT_TabBarTab) {
+        QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
+
         const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
         if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
             StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
             geometryContext.variant.set(VariantSlot::Position, Position::North);
             const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
-            QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
             result.rwidth() += geometry.iconGapDelta();
-            return result;
         }
+
+        // The background is painted narrower by |tabOverlap| on the trailing edge to create the
+        // visual gap between tabs (see drawTabBarTab). Add that same amount to the tab rect so
+        // the content area, computed from the background rect, still has symmetric padding.
+        const int tabOverlap = proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
+        if (tabOverlap < 0) {
+            result.rwidth() -= tabOverlap;
+        }
+
+        return result;
     }
 
     if (type == CT_LineEdit || type == CT_SpinBox) {
@@ -2100,15 +2110,10 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
         style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
     }
 
-    // Apply trailing-edge spacing: PM_TabBarTabOverlap is a purely visual hint that tells the
-    // style how much to extend (positive) or shrink (negative) each non-last tab's paint rect
-    // on its trailing edge. QTabBar's layoutTabs() does NOT use this metric; all spacing is
-    // achieved here by adjusting the rect before drawing.
-    //
-    // With TabBarTabSpacing = -1px (overlap = 1): paint rect extends 1px into the next tab's
-    // space, so the selected tab's background covers the shared border → seamless appearance.
-    // With TabBarTabSpacing = 4px (overlap = -4): paint rect shrinks by 4px, leaving a visible
-    // gap between the tab background and the start of the next tab.
+    // Apply trailing-edge spacing to the paint rect (positive = extend to hide shared border;
+    // negative = shrink to create visible gap between tabs). The tab rect itself is made wider
+    // in sizeFromContents by |tabOverlap| for the gap case, so shrinking here restores the
+    // correct visual size while keeping symmetric content padding.
     const bool isLastOrOnly = option->position == QStyleOptionTab::End
         || option->position == QStyleOptionTab::OnlyOneTab;
     const int tabOverlap = isLastOrOnly ? 0
@@ -2137,18 +2142,37 @@ void FreeCADStyle::drawTabBarTabLabel(
     const Position position = tabPositionOf(option->shape);
     const bool isVertical = (position == Position::East || position == Position::West);
 
-    // Vertical tabs require a rotated painter set up by Qt — delegate to parent.
-    if (isVertical) {
-        QProxyStyle::drawControl(CE_TabBarTabLabel, option, painter, widget);
-        return;
-    }
-
     const bool hasIcon = !option->icon.isNull();
     const bool hasText = !option->text.isEmpty();
 
-    // Only customise when both icon and text are present; delegate otherwise.
-    if (!hasIcon || !hasText) {
-        QProxyStyle::drawControl(CE_TabBarTabLabel, option, painter, widget);
+    // The background is drawn on a rect shrunk by |tabOverlap| on the trailing edge (see
+    // drawTabBarTab). To keep content padding symmetric relative to the visible background,
+    // base all content geometry on the same visual rect.
+    const bool isLastOrOnly = option->position == QStyleOptionTab::End
+        || option->position == QStyleOptionTab::OnlyOneTab;
+    const int tabOverlap = isLastOrOnly ? 0
+                                        : proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
+    QRect visualRect = option->rect;
+    if (tabOverlap != 0) {
+        if (isVertical) {
+            visualRect = option->rect.adjusted(0, 0, 0, tabOverlap);
+        }
+        else {
+            visualRect = option->rect.adjusted(0, 0, tabOverlap, 0);
+        }
+    }
+
+    // For vertical tabs or non-icon+text tabs, delegate to parent. Apply token text color by
+    // setting palette ButtonText so Qt's draw path picks it up automatically. Use visualRect so
+    // Qt's tabLayout sees the same bounds as the background.
+    if (isVertical || !hasIcon || !hasText) {
+        const StyleContext labelContext = contextOf(widget, option, StyleComponentElement::Tab);
+        QStyleOptionTab adjusted = *option;
+        adjusted.rect = visualRect;
+        if (const auto color = resolve<Base::Color>(labelContext, StyleProperty::TextColor)) {
+            adjusted.palette.setColor(QPalette::All, QPalette::ButtonText, color->asValue<QColor>());
+        }
+        QProxyStyle::drawControl(CE_TabBarTabLabel, &adjusted, painter, widget);
         return;
     }
 
@@ -2158,7 +2182,7 @@ void FreeCADStyle::drawTabBarTabLabel(
     geometryContext.variant.set(VariantSlot::Position, Position::North);
     const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
 
-    const QRect contentRect = geometry.contentRect(option->rect);
+    const QRect contentRect = geometry.contentRect(visualRect);
 
     const QIcon::State iconState = (option->state & State_On) ? QIcon::On : QIcon::Off;
     const QIcon::Mode iconMode = (option->state & State_Enabled) ? QIcon::Normal : QIcon::Disabled;
