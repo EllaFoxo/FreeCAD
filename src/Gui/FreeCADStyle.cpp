@@ -2211,6 +2211,14 @@ void FreeCADStyle::drawTabBarTabLabel(
 
     painter->save();
 
+    // Resolve tab text color from design tokens; fall back to palette ButtonText.
+    const StyleContext labelContext = contextOf(widget, option, StyleComponentElement::Tab);
+    QPalette::ColorRole textRole = QPalette::ButtonText;
+    if (const auto color = resolve<Base::Color>(labelContext, StyleProperty::TextColor)) {
+        painter->setPen(color->asValue<QColor>());
+        textRole = QPalette::NoRole;
+    }
+
     proxy()->drawItemPixmap(painter, iconRect, Qt::AlignCenter, pixmap);
     proxy()->drawItemText(
         painter,
@@ -2219,7 +2227,7 @@ void FreeCADStyle::drawTabBarTabLabel(
         option->palette,
         option->state & State_Enabled,
         option->text,
-        QPalette::ButtonText
+        textRole
     );
 
     painter->restore();
