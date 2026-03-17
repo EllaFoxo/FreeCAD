@@ -1346,7 +1346,7 @@ SET(FreeCADGui_CPP_SRCS
     FileHandler.cpp
     FileHandler.h
     FreeCADStyle.cpp
-    FreeCADStyleContext.cpp
+    StyleToken.cpp
     ThemeReloadEvent.cpp
     GuiApplication.cpp
     GuiApplicationNativeEventAware.cpp

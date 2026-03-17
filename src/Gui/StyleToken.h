@@ -160,6 +160,8 @@ enum class StyleProperty : uint8_t
     BorderOverlay,
     Padding,
     Margin,
+    Spacing,
+    Overlap,
     IconSize,
     IconSpacing,
     FontSize,
@@ -169,11 +171,10 @@ enum class StyleProperty : uint8_t
     Overlay,
     OverlayOpacity,
     InnerShadow,
-    TickColor,
     MenuWidth,
     IconColor,
     // Add new properties before COUNT
-    COUNT
+    COUNT,
 };
 
 /**

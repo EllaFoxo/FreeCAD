@@ -194,6 +194,8 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::BorderOverlay,   "BorderOverlay"},
     {StyleProperty::Padding,         "Padding"},
     {StyleProperty::Margin,          "Margin"},
+    {StyleProperty::Spacing,         "Spacing"},
+    {StyleProperty::Overlap,         "Overlap"},
     {StyleProperty::IconSize,        "IconSize"},
     {StyleProperty::IconSpacing,     "IconSpacing"},
     {StyleProperty::FontSize,        "FontSize"},
@@ -203,7 +205,6 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::Overlay,         "Overlay"},
     {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
     {StyleProperty::InnerShadow,     "InnerShadow"},
-    {StyleProperty::TickColor,       "TickColor"},
     {StyleProperty::MenuWidth,       "MenuWidth"},
     {StyleProperty::IconColor,       "IconColor"},
 };
