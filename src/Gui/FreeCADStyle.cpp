@@ -39,10 +39,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QTextEdit>
-#include <QLinearGradient>
 #include <QPainterPath>
-#include <QStyleOption>
-#include <QRadialGradient>
 #include <QStyleOption>
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -62,7 +59,6 @@
 #include "ThemeReloadEvent.h"
 #include "Utilities.h"
 #include "StyleParameters/Corners.h"
-#include "StyleParameters/Gradient.h"
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
@@ -317,80 +313,6 @@ std::optional<Qt::Orientation> toolbarOrientationOf(const QWidget* widget)
 }
 
 
-/**
- * @brief Applies the standard 4-way edge rotation to an array of values.
- *
- * Canonical (North) order: (left/topLeft, top/topRight, right/bottomRight, bottom/bottomLeft).
- * South swaps opposite pairs; East/West rotate by one step in either direction.
- */
-template<typename T>
-std::array<T, 4> rotate4(std::array<T, 4> values, Position position)
-{
-    // clang-format off
-    switch (position) {
-        case Position::South: return {values[2], values[3], values[0], values[1]};
-        case Position::East:  return {values[3], values[0], values[1], values[2]};
-        case Position::West:  return {values[1], values[2], values[3], values[0]};
-        default:              return values;
-    }
-    // clang-format on
-}
-
-/** @brief Rotates canonical (North) margins to the given position. */
-QMarginsF rotated(const QMarginsF& margins, Position position)
-{
-    const auto [left, top, right, bottom] = rotate4(
-        std::to_array({margins.left(), margins.top(), margins.right(), margins.bottom()}),
-        position
-    );
-    return {left, top, right, bottom};
-}
-
-/** @brief Rotates canonical (North) corner radii to the given position. */
-FreeCADStyle::CornerRadii rotated(const FreeCADStyle::CornerRadii& corners, Position position)
-{
-    const auto [topLeft, topRight, bottomRight, bottomLeft] = rotate4(
-        std::to_array({corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft}),
-        position
-    );
-    return {.topLeft = topLeft, .topRight = topRight, .bottomRight = bottomRight, .bottomLeft = bottomLeft};
-}
-
-/**
- * @brief Rotates a canonical (North, top→bottom) linear gradient brush to the given position.
- *
- * Point transform: North=(px,py), South=(px,1-py), East=(1-py,px), West=(py,1-px).
- * Non-linear-gradient brushes are returned unchanged.
- */
-// clang-format off
-QBrush rotated(const QBrush& brush, Position position)
-{
-    if (position == Position::North) {
-        return brush;
-    }
-    const QGradient* gradient = brush.gradient();
-    if (!gradient || gradient->type() != QGradient::LinearGradient) {
-        return brush;
-    }
-    const auto* linear = static_cast<const QLinearGradient*>(gradient);
-    const auto rotatePoint = [position](const QPointF& p) -> QPointF {
-        switch (position) {
-            case Position::South: return {p.x(),       1.0 - p.y()};
-            case Position::East:  return {1.0 - p.y(), p.x()      };
-            case Position::West:  return {p.y(),       1.0 - p.x()};
-            default:              return p;
-        }
-    };
-
-    QLinearGradient result(rotatePoint(linear->start()), rotatePoint(linear->finalStop()));
-    result.setStops(linear->stops());
-    result.setCoordinateMode(linear->coordinateMode());
-    result.setSpread(linear->spread());
-
-    return result;
-}
-// clang-format on
-
 // ─── Icon helpers ────────────────────────────────────────────────────────────
 
 // QIcon::Mode from option state — full check including AutoRaise → Active.
@@ -605,10 +527,8 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         // TabBarTabCheckedPadding).
         case PM_TabBarTabHSpace:
         case PM_TabBarTabVSpace: {
-            StyleContext northContext = element(StyleComponentElement::Tab);
-            northContext.variant.set(VariantSlot::Position, Position::North);
-
-            if (const auto padding = resolve<Insets>(northContext, Padding)) {
+            const StyleContext tabContext = withNorthPosition(element(StyleComponentElement::Tab));
+            if (const auto padding = resolve<Insets>(tabContext, Padding)) {
                 return static_cast<int>(
                     metric == PM_TabBarTabHSpace ? padding->horizontal() : padding->vertical()
                 );
@@ -876,9 +796,9 @@ QSize FreeCADStyle::tabBarTabSizeFromContents(
 
     const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
     if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
-        StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
-        geometryContext.variant.set(VariantSlot::Position, Position::North);
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(
+            withNorthPosition(contextOf(widget, option, StyleComponentElement::Tab))
+        );
         result.rwidth() += geometry.iconGapDelta();
     }
 
@@ -1742,32 +1662,15 @@ void FreeCADStyle::drawComboBoxLabel(
 void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const
 {
     const Position position = tabPositionOf(option->shape);
-
-    // Position context: visual tokens resolved with actual position (supports per-position overrides).
     const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Tab);
-
-    // North context: geometric tokens always resolved canonical, then rotated.
-    StyleContext northContext = positionContext;
-    northContext.variant.set(VariantSlot::Position, Position::North);
-
-    BoxStyleDefinition style = resolveBoxStyle(positionContext);
-
-    if (const auto corners = resolve<Corners>(northContext, StyleProperty::BorderRadius)) {
-        style.borderRadius = rotated(Base::convertTo<CornerRadii>(*corners), position);
-    }
-    if (const auto thickness = resolve<Insets>(northContext, StyleProperty::BorderThickness)) {
-        style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
-    }
-
-    // Apply trailing-edge spacing to the paint rect (positive = extend to hide shared border;
-    // negative = shrink to create visible gap between tabs). The tab rect itself is made wider
-    // in sizeFromContents by |tabOverlap| for the gap case, so shrinking here restores the
-    // correct visual size while keeping symmetric content padding.
     const int tabOverlap = tabOverlapOf(option, widget);
     const bool isVertical = (position == Position::East || position == Position::West);
 
-    const QRect drawRect = tabVisualRect(option->rect, tabOverlap, isVertical);
-    drawBoxBackground(painter, drawRect, style);
+    drawBoxBackground(
+        painter,
+        tabVisualRect(option->rect, tabOverlap, isVertical),
+        resolveBoxStyle(positionContext)
+    );
 }
 
 void FreeCADStyle::drawTabBarTabLabel(
@@ -1804,9 +1707,7 @@ void FreeCADStyle::drawTabBarTabLabel(
 
     // Geometry is always resolved in the canonical North context (PM_TabBarTabHSpace/VSpace does
     // the same: the tab size is computed in North space and transposed by QTabBar for East/West).
-    StyleContext geometryContext = tabContext;
-    geometryContext.variant.set(VariantSlot::Position, Position::North);
-    const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(withNorthPosition(tabContext));
 
     const QRect contentRect = geometry.contentRect(visualRect);
 
@@ -1848,29 +1749,6 @@ void FreeCADStyle::drawTabBarTabLabel(
     painter->restore();
 }
 
-FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBaseStripStyle(
-    const StyleContext& positionContext
-) const
-{
-    const auto position = static_cast<Position>(positionContext.variant.get(VariantSlot::Position));
-
-    StyleContext northContext = positionContext;
-    northContext.variant.set(VariantSlot::Position, Position::North);
-
-    // Visual tokens (BorderColor, Overlay, etc.) from position context; background and geometric
-    // tokens from North canonical and rotated — treated uniformly since the gradient is directional.
-    BoxStyleDefinition style = resolveBoxStyle(positionContext);
-
-    if (const auto background = resolve(northContext, StyleProperty::Background)) {
-        style.background = rotated(Base::convertTo<QBrush>(*background), position);
-    }
-    if (const auto thickness = resolve<Insets>(northContext, StyleProperty::BorderThickness)) {
-        style.borderThickness = rotated(Base::convertTo<QMarginsF>(*thickness), position);
-    }
-
-    return style;
-}
-
 void FreeCADStyle::drawTabBarBase(
     QPainter* painter,
     const QStyleOptionTabBarBase* option,
@@ -1878,7 +1756,7 @@ void FreeCADStyle::drawTabBarBase(
 ) const
 {
     const StyleContext positionContext = contextOf(widget, option, StyleComponentElement::Base);
-    drawBoxBackground(painter, option->rect, resolveBaseStripStyle(positionContext));
+    drawBoxBackground(painter, option->rect, resolveBoxStyle(positionContext));
 }
 
 void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const
@@ -1899,13 +1777,7 @@ void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWi
     stripContext.element = StyleComponentElement::Base;
     stripContext.variant.set(VariantSlot::Position, position);
 
-    const int stripHeight = [&]() -> int {
-        if (const auto height = resolve<Numeric>(stripContext, StyleProperty::Height)) {
-            return static_cast<int>(*height);
-        }
-        return 0;
-    }();
-
+    const int stripHeight = resolve<int>(stripContext, StyleProperty::Height).value_or(0);
     if (stripHeight == 0) {
         return;
     }
@@ -1922,7 +1794,7 @@ void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWi
     }();
     // clang-format on
 
-    BoxStyleDefinition stripStyle = resolveBaseStripStyle(stripContext);
+    BoxStyleDefinition stripStyle = resolveBoxStyle(stripContext);
     // The pane box already draws the border; suppress the strip's own border to avoid doubling.
     stripStyle.borderColor = std::nullopt;
     stripStyle.borderThickness = std::nullopt;

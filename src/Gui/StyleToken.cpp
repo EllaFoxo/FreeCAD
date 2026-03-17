@@ -48,6 +48,7 @@
 #include "StyleParameters/Insets.h"
 #include "Utilities.h"
 
+#include <QLinearGradient>
 #include <QToolBar>
 
 using namespace Gui;
@@ -70,6 +71,82 @@ FreeCADStyle::InnerShadow convertTo<FreeCADStyle::InnerShadow, StyleParameters::
 
 namespace
 {
+
+// ─── Directional rotation helpers ───────────────────────────────────────────
+
+/**
+ * @brief Applies the standard 4-way edge rotation to an array of values.
+ *
+ * Canonical (North) order: (left/topLeft, top/topRight, right/bottomRight, bottom/bottomLeft).
+ * South swaps opposite pairs; East/West rotate by one step in either direction.
+ */
+template<typename T>
+std::array<T, 4> rotate4(std::array<T, 4> values, Position position)
+{
+    // clang-format off
+    switch (position) {
+        case Position::South: return {values[2], values[3], values[0], values[1]};
+        case Position::East:  return {values[3], values[0], values[1], values[2]};
+        case Position::West:  return {values[1], values[2], values[3], values[0]};
+        default:              return values;
+    }
+    // clang-format on
+}
+
+/** @brief Rotates canonical (North) margins to the given position. */
+QMarginsF rotated(const QMarginsF& margins, Position position)
+{
+    const auto [left, top, right, bottom] = rotate4(
+        std::to_array({margins.left(), margins.top(), margins.right(), margins.bottom()}),
+        position
+    );
+    return {left, top, right, bottom};
+}
+
+/** @brief Rotates canonical (North) corner radii to the given position. */
+FreeCADStyle::CornerRadii rotated(const FreeCADStyle::CornerRadii& corners, Position position)
+{
+    const auto [topLeft, topRight, bottomRight, bottomLeft] = rotate4(
+        std::to_array({corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft}),
+        position
+    );
+    return {.topLeft = topLeft, .topRight = topRight, .bottomRight = bottomRight, .bottomLeft = bottomLeft};
+}
+
+/**
+ * @brief Rotates a canonical (North, top→bottom) linear gradient brush to the given position.
+ *
+ * Point transform: North=(px,py), South=(px,1-py), East=(1-py,px), West=(py,1-px).
+ * Non-linear-gradient brushes are returned unchanged.
+ */
+// clang-format off
+QBrush rotated(const QBrush& brush, Position position)
+{
+    if (position == Position::North) {
+        return brush;
+    }
+    const QGradient* gradient = brush.gradient();
+    if (!gradient || gradient->type() != QGradient::LinearGradient) {
+        return brush;
+    }
+    const auto* linear = static_cast<const QLinearGradient*>(gradient);
+    const auto rotatePoint = [position](const QPointF& pointF) -> QPointF {
+        switch (position) {
+            case Position::South: return {pointF.x(),       1.0 - pointF.y()};
+            case Position::East:  return {1.0 - pointF.y(), pointF.x()      };
+            case Position::West:  return {pointF.y(),       1.0 - pointF.x()};
+            default:              return pointF;
+        }
+    };
+
+    QLinearGradient result(rotatePoint(linear->start()), rotatePoint(linear->finalStop()));
+    result.setStops(linear->stops());
+    result.setCoordinateMode(linear->coordinateMode());
+    result.setSpread(linear->spread());
+
+    return result;
+}
+// clang-format on
 
 // ─── StyleToken string tables ──────────────────────────────────────────────
 // All tables use std::map so entries are self-documenting and order-independent.
@@ -559,34 +636,35 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
         return *cached;
     }
 
+    const auto position = static_cast<Position>(context.variant.get(VariantSlot::Position));
+    const StyleContext northContext = withNorthPosition(context);
+
     BoxStyleDefinition result;
 
-    if (const auto backgroundValue = resolve(context, StyleProperty::Background)) {
-        result.background = Base::convertTo<QBrush>(*backgroundValue);
+    // Directional tokens: resolved from canonical North, rotated to actual position.
+    // rotated(x, North) is the identity — safe to call unconditionally for all components.
+    if (const auto background = resolve(northContext, StyleProperty::Background)) {
+        result.background = rotated(Base::convertTo<QBrush>(*background), position);
+    }
+    if (const auto borderRadius
+        = resolve<StyleParameters::Corners>(northContext, StyleProperty::BorderRadius)) {
+        result.borderRadius = rotated(Base::convertTo<CornerRadii>(*borderRadius), position);
+    }
+    if (const auto borderThickness
+        = resolve<StyleParameters::Insets>(northContext, StyleProperty::BorderThickness)) {
+        result.borderThickness = rotated(Base::convertTo<QMarginsF>(*borderThickness), position);
     }
 
+    // Non-directional visual tokens resolved from the actual context.
     if (const auto overlay = resolve<Base::Color>(context, StyleProperty::Overlay)) {
         result.overlay = overlay->asValue<QColor>();
     }
-
     if (const auto borderColor = resolve<Base::Color>(context, StyleProperty::BorderColor)) {
         result.borderColor = borderColor->asValue<QColor>();
     }
-
     if (const auto borderOverlay = resolve<Base::Color>(context, StyleProperty::BorderOverlay)) {
         result.borderOverlay = borderOverlay->asValue<QColor>();
     }
-
-    if (const auto borderThickness
-        = resolve<StyleParameters::Insets>(context, StyleProperty::BorderThickness)) {
-        result.borderThickness = Base::convertTo<QMarginsF>(*borderThickness);
-    }
-
-    if (const auto borderRadius
-        = resolve<StyleParameters::Corners>(context, StyleProperty::BorderRadius)) {
-        result.borderRadius = Base::convertTo<CornerRadii>(*borderRadius);
-    }
-
     if (const auto innerShadow
         = resolve<StyleParameters::InnerShadow>(context, StyleProperty::InnerShadow)) {
         result.innerShadow = Base::convertTo<InnerShadow>(*innerShadow);
@@ -665,4 +743,11 @@ void FreeCADStyle::clearTokenCache()
     boxGeometryCache.clear();
     componentOverrideIds.clear();
     nextComponentOverrideId = 1;
+}
+
+StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)
+{
+    StyleContext north = context;
+    north.variant.set(VariantSlot::Position, Position::North);
+    return north;
 }

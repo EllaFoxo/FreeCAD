@@ -452,6 +452,9 @@ private:
     /** @brief Maps a QTabBar::Shape to the canonical Position enum. */
     static Position tabPositionOf(QTabBar::Shape shape);
 
+    /** @brief Returns a copy of @p context with Position forced to North (canonical). */
+    static StyleContext withNorthPosition(const StyleContext& context);
+
     /**
      * @brief Returns the trailing-edge overlap for a tab, or 0 for the last/only tab.
      *
@@ -491,16 +494,6 @@ private:
     void drawTabBarTabLabel(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
     /**
-     * @brief Resolves a BoxStyleDefinition for the tab bar base strip from a position context.
-     *
-     * The background and border thickness are resolved from the canonical North position
-     * and rotated to the actual position (via rotated()), while all other visual tokens
-     * (BorderColor, Overlay, etc.) are resolved directly from the position context so that
-     * per-position colour overrides work naturally.
-     */
-    BoxStyleDefinition resolveBaseStripStyle(const StyleContext& positionContext) const;
-
-    /**
      * @brief Paints the decorative base strip between the tab bar and the page content area.
      *
      * Renders a 4px-tall strip at the attachment edge using a transparent→shadow gradient
@@ -520,7 +513,7 @@ private:
      *
      * QTabWidget sets drawBase(false) on its internal QTabBar, suppressing PE_FrameTabBarBase.
      * This method replicates the same shadow strip by clipping the frame rect to the attachment
-     * edge and drawing via resolveBaseStripStyle(). Called before falling through to the parent
+     * edge and drawing via resolveBoxStyle(). Called before falling through to the parent
      * style which draws the frame border.
      */
     void drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const;
