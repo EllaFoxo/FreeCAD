@@ -424,13 +424,23 @@ std::optional<T> valueAs(const std::optional<Value>& value)
 }
 
 template<typename T>
-    requires(!std::is_constructible_v<T, const Value&>)
+    requires(!std::is_constructible_v<T, const Value&>) && (!std::is_arithmetic_v<T>)
 std::optional<T> valueAs(const std::optional<Value>& value)
 {
     if (!value || !value->holds<T>()) {
         return std::nullopt;
     }
     return value->get<T>();
+}
+
+template<typename T>
+    requires std::is_arithmetic_v<T>
+std::optional<T> valueAs(const std::optional<Value>& value)
+{
+    if (const auto numeric = valueAs<Numeric>(value)) {
+        return static_cast<T>(*numeric);
+    }
+    return std::nullopt;
 }
 
 }  // namespace Gui::StyleParameters
