@@ -1124,25 +1124,18 @@ QRect FreeCADStyle::subControlRect(
         if (spinOption) {
             const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
             const QRect outerRect = option->rect;
-            const QRect paddedRect = geometry.contentRect(outerRect);
-
-            // If the available height is less than what the style requests (e.g. a
-            // tree-view editor constrained to the row height), skip vertical padding so
-            // the edit field fills the available height instead.
-            const QSize preferredSize
-                = proxy()->sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
-
-            const QRect contentRect = outerRect.height() < preferredSize.height() ? outerRect
-                                                                                  : paddedRect;
+            const QSize preferredSize = sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
+            const QRect contentRect = geometry.contentRect(outerRect, preferredSize);
 
             // Borrow the button width from the base style; only the position changes.
             const bool hasButtons = spinOption->buttonSymbols != QAbstractSpinBox::NoButtons;
-            const int buttonWidth = hasButtons
-                ? QProxyStyle::subControlRect(complexControl, option, SC_SpinBoxUp, widget).width()
-                : 0;
+            const QSize buttonSize = hasButtons
+                ? QProxyStyle::subControlRect(complexControl, option, SC_SpinBoxUp, widget).size()
+                : QSize(0, 0);
 
-            const int buttonLeft = contentRect.right() - buttonWidth + 1;
+            const int buttonLeft = contentRect.right() - buttonSize.width() + 1;
             const int editRight = hasButtons ? buttonLeft - 1 : contentRect.right();
+            const int centerY = contentRect.center().y();
 
             switch (subControl) {
                 case SC_SpinBoxFrame:
@@ -1158,20 +1151,18 @@ QRect FreeCADStyle::subControlRect(
                     if (!hasButtons) {
                         return {};
                     }
-                    const int halfHeight = contentRect.height() / 2;
-                    return QRect(buttonLeft, contentRect.top(), buttonWidth, halfHeight);
+                    return {
+                        buttonLeft,
+                        centerY - buttonSize.height() + 1,
+                        buttonSize.width(),
+                        buttonSize.height()
+                    };
                 }
                 case SC_SpinBoxDown: {
                     if (!hasButtons) {
                         return {};
                     }
-                    const int halfHeight = contentRect.height() / 2;
-                    return QRect(
-                        buttonLeft,
-                        contentRect.top() + halfHeight,
-                        buttonWidth,
-                        contentRect.height() - halfHeight
-                    );
+                    return {buttonLeft, centerY + 1, buttonSize.width(), buttonSize.height()};
                 }
                 default:
                     break;

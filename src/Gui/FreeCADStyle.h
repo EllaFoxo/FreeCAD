@@ -163,6 +163,31 @@ public:
         {
             return rect.marginsRemoved(padding.toMargins());
         }
+
+        /** @brief Returns @p rect inset by this geometry's padding. */
+        [[nodiscard]] QRect contentRect(const QRect& rect, const QSize& size) const
+        {
+            if (rect.width() <= size.width() && rect.height() <= size.height()) {
+                return rect;
+            }
+
+            int availableWidth = rect.width() - size.width();
+            int availableHeight = rect.height() - size.height();
+
+            if (availableWidth > paddingH() && availableHeight > paddingV()) {
+                return contentRect(rect);
+            }
+
+            double scaleHorizontal = qMin(static_cast<double>(availableWidth) / paddingH(), 1.0);
+            double scaleVertical = qMin(static_cast<double>(availableHeight) / paddingV(), 1.0);
+
+            return rect.adjusted(
+                static_cast<int>(padding.left() * scaleHorizontal),
+                static_cast<int>(padding.top() * scaleVertical),
+                -static_cast<int>(padding.right() * scaleHorizontal),
+                -static_cast<int>(padding.bottom() * scaleVertical)
+            );
+        }
     };
 
     void polish(QPalette& palette) override;
