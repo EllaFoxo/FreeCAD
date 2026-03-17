@@ -121,6 +121,22 @@ private:
     void ensureEqualUnits(const Numeric& rhs) const;
 };
 
+/**
+ * @brief Represents an explicitly-reset (absent) parameter value.
+ *
+ * When a token is defined as `reset()` in a higher-priority source, the resolved
+ * value carries `None` as its type. `ParameterManager::resolve()` converts this
+ * back to `std::nullopt`, effectively removing any inherited value from lower-priority
+ * sources — even though a definition exists in the higher-priority source.
+ *
+ * This allows a theme override or component override to explicitly unset an optional
+ * token that would otherwise fall back to a parent value.
+ */
+struct GuiExport None
+{
+    bool operator==(const None&) const = default;
+};
+
 // Forward declaration: Tuple::Element uses shared_ptr<const Value> to break the
 // circular dependency (Value contains Tuple, Tuple elements contain Value).
 struct Value;
@@ -234,9 +250,9 @@ struct GuiExport Tuple
  *
  * As a rule, operations can be only performed over values of the same type.
  */
-struct GuiExport Value: std::variant<Numeric, Base::Color, std::string, Tuple>
+struct GuiExport Value: std::variant<Numeric, Base::Color, std::string, Tuple, None>
 {
-    using std::variant<Numeric, Base::Color, std::string, Tuple>::variant;
+    using std::variant<Numeric, Base::Color, std::string, Tuple, None>::variant;
 
     /**
      * Converts the object into its string representation.
@@ -300,6 +316,9 @@ constexpr const char* valueTypeName()
     }
     else if constexpr (std::is_same_v<T, Tuple>) {
         return "tuple";
+    }
+    else if constexpr (std::is_same_v<T, None>) {
+        return "none";
     }
 
     return "<unknown>";

@@ -127,6 +127,10 @@ std::string Value::toString() const
         return fmt::format("({})", fmt::join(parts, ", "));
     }
 
+    if (holds<None>()) {
+        return "reset()";
+    }
+
     return get<std::string>();
 }
 
