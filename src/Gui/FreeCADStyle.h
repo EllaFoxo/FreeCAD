@@ -615,6 +615,66 @@ private:
      */
     void drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const;
 
+    /**
+     * @brief Paints a QSpinBox: outer frame + up/down button arrows.
+     *
+     * Does not delegate to the base style at all — the base style would repaint its own
+     * frame and button backgrounds on top of ours.
+     */
+    void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
+
+    /**
+     * @brief Paints a QComboBox: background box + dropdown arrow indicator.
+     */
+    void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
+
+    /**
+     * @brief Paints a QToolButton: main area, optional menu strip, and label.
+     *
+     * Handles both plain and MenuButtonPopup variants, including the seamed
+     * border treatment where the two halves share an edge.
+     */
+    void drawToolButton(
+        const QStyleOptionToolButton* option,
+        QPainter* painter,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Returns subcontrol rects for CC_ComboBox.
+     *
+     * Handles SC_ComboBoxFrame, SC_ComboBoxEditField, SC_ComboBoxArrow;
+     * delegates to QProxyStyle for any other subcontrol.
+     */
+    QRect comboBoxSubControlRect(
+        const QStyleOptionComboBox* option,
+        SubControl subControl,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Returns subcontrol rects for CC_SpinBox.
+     *
+     * Handles SC_SpinBoxFrame, SC_SpinBoxEditField, SC_SpinBoxUp, SC_SpinBoxDown;
+     * delegates to QProxyStyle for any other subcontrol.
+     */
+    QRect spinBoxSubControlRect(
+        const QStyleOptionSpinBox* option,
+        SubControl subControl,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Returns subcontrol rects for CC_ToolButton.
+     *
+     * Only overrides layout for MenuButtonPopup buttons; delegates to QProxyStyle otherwise.
+     */
+    QRect toolButtonSubControlRect(
+        const QStyleOptionToolButton* option,
+        SubControl subControl,
+        const QWidget* widget
+    ) const;
+
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 

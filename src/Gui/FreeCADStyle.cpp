@@ -1081,6 +1081,126 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
     return QProxyStyle::subElementRect(element, option, widget);
 }
 
+QRect FreeCADStyle::comboBoxSubControlRect(
+    const QStyleOptionComboBox* option,
+    SubControl subControl,
+    const QWidget* widget
+) const
+{
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
+    const QRect outerRect = option->rect;
+    const QRect contentRect = geometry.contentRect(outerRect);
+    const int arrowWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+
+    const int arrowLeft = contentRect.right() - arrowWidth + 1;
+    const int editRight = arrowLeft - 1;
+
+    switch (subControl) {
+        case SC_ComboBoxFrame:
+            return outerRect;
+        case SC_ComboBoxEditField:
+            return QRect(
+                contentRect.left(),
+                contentRect.top(),
+                editRight - contentRect.left() + 1,
+                contentRect.height()
+            );
+        case SC_ComboBoxArrow:
+            return QRect(arrowLeft, contentRect.top(), arrowWidth, contentRect.height());
+        default:
+            return QProxyStyle::subControlRect(CC_ComboBox, option, subControl, widget);
+    }
+}
+
+QRect FreeCADStyle::spinBoxSubControlRect(
+    const QStyleOptionSpinBox* option,
+    SubControl subControl,
+    const QWidget* widget
+) const
+{
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
+    const QRect outerRect = option->rect;
+    const QSize preferredSize = sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
+    const QRect contentRect = geometry.contentRect(outerRect, preferredSize);
+
+    // Borrow the button width from the base style; only the position changes.
+    const bool hasButtons = option->buttonSymbols != QAbstractSpinBox::NoButtons;
+    const QSize buttonSize = hasButtons
+        ? QProxyStyle::subControlRect(CC_SpinBox, option, SC_SpinBoxUp, widget).size()
+        : QSize(0, 0);
+
+    const int buttonLeft = contentRect.right() - buttonSize.width() + 1;
+    const int editRight = hasButtons ? buttonLeft - 1 : contentRect.right();
+    const int centerY = contentRect.center().y();
+
+    switch (subControl) {
+        case SC_SpinBoxFrame:
+            return outerRect;
+        case SC_SpinBoxEditField:
+            return QRect(
+                contentRect.left(),
+                contentRect.top(),
+                editRight - contentRect.left() + 1,
+                contentRect.height()
+            );
+        case SC_SpinBoxUp: {
+            if (!hasButtons) {
+                return {};
+            }
+            return {
+                buttonLeft,
+                centerY - buttonSize.height() + 1,
+                buttonSize.width(),
+                buttonSize.height()
+            };
+        }
+        case SC_SpinBoxDown: {
+            if (!hasButtons) {
+                return {};
+            }
+            return {buttonLeft, centerY + 1, buttonSize.width(), buttonSize.height()};
+        }
+        default:
+            return QProxyStyle::subControlRect(CC_SpinBox, option, subControl, widget);
+    }
+}
+
+QRect FreeCADStyle::toolButtonSubControlRect(
+    const QStyleOptionToolButton* option,
+    SubControl subControl,
+    const QWidget* widget
+) const
+{
+    if (!(option->features & QStyleOptionToolButton::MenuButtonPopup)) {
+        return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
+    }
+
+    const StyleContext context = contextOf(widget, option);
+    const QRect rect = option->rect;
+
+    int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+    if (const auto token = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
+        menuWidth = static_cast<int>(*token);
+    }
+
+    const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
+
+    switch (subControl) {
+        case SC_ToolButton:
+            if (isVertical) {
+                return {rect.left(), rect.top(), rect.width(), rect.height() - menuWidth};
+            }
+            return {rect.left(), rect.top(), rect.width() - menuWidth, rect.height()};
+        case SC_ToolButtonMenu:
+            if (isVertical) {
+                return {rect.left(), rect.bottom() - menuWidth + 1, rect.width(), menuWidth};
+            }
+            return {rect.right() - menuWidth + 1, rect.top(), menuWidth, rect.height()};
+        default:
+            return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
+    }
+}
+
 QRect FreeCADStyle::subControlRect(
     ComplexControl complexControl,
     const QStyleOptionComplex* option,
@@ -1089,123 +1209,184 @@ QRect FreeCADStyle::subControlRect(
 ) const
 {
     if (complexControl == CC_ComboBox) {
-        const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option);
-        if (comboOption) {
-            const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
-            const QRect outerRect = option->rect;
-            const QRect contentRect = geometry.contentRect(outerRect);
-            const int arrowWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-
-            const int arrowLeft = contentRect.right() - arrowWidth + 1;
-            const int editRight = arrowLeft - 1;
-
-            switch (subControl) {
-                case SC_ComboBoxFrame:
-                    return outerRect;
-                case SC_ComboBoxEditField:
-                    return QRect(
-                        contentRect.left(),
-                        contentRect.top(),
-                        editRight - contentRect.left() + 1,
-                        contentRect.height()
-                    );
-                case SC_ComboBoxArrow:
-                    return QRect(arrowLeft, contentRect.top(), arrowWidth, contentRect.height());
-                default:
-                    break;
-            }
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
+            return comboBoxSubControlRect(opt, subControl, widget);
         }
     }
-
     if (complexControl == CC_SpinBox) {
-        const auto* spinOption = qstyleoption_cast<const QStyleOptionSpinBox*>(option);
-        if (spinOption) {
-            const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
-            const QRect outerRect = option->rect;
-            const QSize preferredSize = sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
-            const QRect contentRect = geometry.contentRect(outerRect, preferredSize);
-
-            // Borrow the button width from the base style; only the position changes.
-            const bool hasButtons = spinOption->buttonSymbols != QAbstractSpinBox::NoButtons;
-            const QSize buttonSize = hasButtons
-                ? QProxyStyle::subControlRect(complexControl, option, SC_SpinBoxUp, widget).size()
-                : QSize(0, 0);
-
-            const int buttonLeft = contentRect.right() - buttonSize.width() + 1;
-            const int editRight = hasButtons ? buttonLeft - 1 : contentRect.right();
-            const int centerY = contentRect.center().y();
-
-            switch (subControl) {
-                case SC_SpinBoxFrame:
-                    return outerRect;
-                case SC_SpinBoxEditField:
-                    return QRect(
-                        contentRect.left(),
-                        contentRect.top(),
-                        editRight - contentRect.left() + 1,
-                        contentRect.height()
-                    );
-                case SC_SpinBoxUp: {
-                    if (!hasButtons) {
-                        return {};
-                    }
-                    return {
-                        buttonLeft,
-                        centerY - buttonSize.height() + 1,
-                        buttonSize.width(),
-                        buttonSize.height()
-                    };
-                }
-                case SC_SpinBoxDown: {
-                    if (!hasButtons) {
-                        return {};
-                    }
-                    return {buttonLeft, centerY + 1, buttonSize.width(), buttonSize.height()};
-                }
-                default:
-                    break;
-            }
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) {
+            return spinBoxSubControlRect(opt, subControl, widget);
         }
     }
-
     if (complexControl == CC_ToolButton) {
-        if (const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
-            if (tbOption->features & QStyleOptionToolButton::MenuButtonPopup) {
-                const StyleContext context = contextOf(widget, option);
-                const QRect rect = option->rect;
-
-                int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-                if (const auto token
-                    = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
-                    menuWidth = static_cast<int>(token->value);
-                }
-
-                const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
-
-                switch (subControl) {
-                    case SC_ToolButton:
-                        if (isVertical) {
-                            return {rect.left(), rect.top(), rect.width(), rect.height() - menuWidth};
-                        }
-                        return {rect.left(), rect.top(), rect.width() - menuWidth, rect.height()};
-                    case SC_ToolButtonMenu:
-                        if (isVertical) {
-                            return {
-                                rect.left(),
-                                rect.bottom() - menuWidth + 1,
-                                rect.width(),
-                                menuWidth,
-                            };
-                        }
-                        return {rect.right() - menuWidth + 1, rect.top(), menuWidth, rect.height()};
-                    default:
-                        break;
-                }
-            }
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            return toolButtonSubControlRect(opt, subControl, widget);
         }
     }
-
     return QProxyStyle::subControlRect(complexControl, option, subControl, widget);
+}
+
+void FreeCADStyle::drawSpinBox(
+    const QStyleOptionSpinBox* option,
+    QPainter* painter,
+    const QWidget* widget
+) const
+{
+    if (option->frame && (option->subControls & SC_SpinBoxFrame)) {
+        const QRect frameRect = proxy()->subControlRect(CC_SpinBox, option, SC_SpinBoxFrame, widget);
+        drawComponent(painter, frameRect, widget, option);
+    }
+
+    // Draw spin button arrows on a transparent background (Breeze-style: no
+    // separate button fill). We do not delegate to the base style at all — it
+    // would re-draw its own frame and button backgrounds on top of ours.
+    if (option->buttonSymbols != QAbstractSpinBox::NoButtons) {
+        const bool isPlusMinus = option->buttonSymbols == QAbstractSpinBox::PlusMinus;
+
+        const auto drawSpinButton = [&](SubControl subControl,
+                                        PrimitiveElement arrowIndicator,
+                                        PrimitiveElement plusMinusIndicator) {
+            if (!(option->subControls & subControl)) {
+                return;
+            }
+            QStyleOptionSpinBox buttonOption = *option;
+            buttonOption.rect = proxy()->subControlRect(CC_SpinBox, option, subControl, widget);
+            // Clear the sunken flag unless this specific button is active.
+            if (!(option->activeSubControls & subControl)) {
+                buttonOption.state &= ~State_Sunken;
+            }
+            proxy()->drawPrimitive(
+                isPlusMinus ? plusMinusIndicator : arrowIndicator,
+                &buttonOption,
+                painter,
+                widget
+            );
+        };
+
+        drawSpinButton(SC_SpinBoxUp, PE_IndicatorArrowUp, PE_IndicatorSpinPlus);
+        drawSpinButton(SC_SpinBoxDown, PE_IndicatorArrowDown, PE_IndicatorSpinMinus);
+    }
+}
+
+void FreeCADStyle::drawComboBox(
+    const QStyleOptionComboBox* option,
+    QPainter* painter,
+    const QWidget* widget
+) const
+{
+    drawComponent(painter, option->rect, widget, option);
+
+    // QComboBox::paintEvent draws CE_ComboBoxLabel separately; it uses our
+    // subControlRect(SC_ComboBoxEditField) for the text area.
+    if (option->subControls & SC_ComboBoxArrow) {
+        QStyleOptionComboBox arrowOption = *option;
+        arrowOption.rect = proxy()->subControlRect(CC_ComboBox, option, SC_ComboBoxArrow, widget);
+        proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+    }
+}
+
+void FreeCADStyle::drawToolButton(
+    const QStyleOptionToolButton* option,
+    QPainter* painter,
+    const QWidget* widget
+) const
+{
+    const bool hasMenuButton = option->features & QStyleOptionToolButton::MenuButtonPopup;
+    const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
+
+    // Resolves a BoxStyleDefinition and, for MenuButtonPopup buttons, zeroes the
+    // border thickness and corner radii on the edge that joins the two halves.
+    // This prevents a double border at the seam and keeps corners square where
+    // the main button and the menu strip meet.
+    // isTrailing = true  → main button (join is on its trailing/right or bottom edge)
+    // isTrailing = false → menu strip  (join is on its leading/left or top edge)
+    const auto seamed = [&](const StyleContext& context, bool isTrailing) -> BoxStyleDefinition {
+        BoxStyleDefinition style = resolveBoxStyle(context);
+        if (!hasMenuButton) {
+            return style;
+        }
+
+        // The main button (isTrailing) keeps its border on the joining edge — it acts as
+        // the visible separator between the two halves. The menu strip removes its border
+        // on that same edge to avoid a double border.
+        if (!isTrailing && style.borderThickness.has_value()) {
+            if (isVertical) {
+                style.borderThickness->setTop(0);
+            }
+            else {
+                style.borderThickness->setLeft(0);
+            }
+        }
+
+        // Both halves need square corners at the seam.
+        if (isVertical) {
+            if (isTrailing) {
+                style.borderRadius.setBottom(0);
+            }
+            else {
+                style.borderRadius.setTop(0);
+            }
+        }
+        else {
+            if (isTrailing) {
+                style.borderRadius.setRight(0);
+            }
+            else {
+                style.borderRadius.setLeft(0);
+            }
+        }
+        return style;
+    };
+
+    // Draw the main button area. Strip State_Sunken when only the menu strip is the
+    // active subcontrol so that clicking the dropdown does not depress the main area.
+    // When the menu strip is being pressed Qt may clear State_MouseOver from the overall
+    // state. Use activeSubControls instead: it is non-zero whenever the mouse is over
+    // any part of the split button, so the main half keeps its hover look.
+    const QRect mainRect = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButton, widget);
+    QStyleOptionToolButton mainOption = *option;
+    if (!(option->activeSubControls & SC_ToolButton)) {
+        mainOption.state &= ~State_Sunken;
+    }
+    if (hasMenuButton && option->activeSubControls) {
+        mainOption.state |= State_MouseOver;
+    }
+    drawBoxBackground(painter, mainRect, seamed(contextOf(widget, &mainOption), true));
+
+    if (hasMenuButton) {
+        // Draw the dropdown arrow strip with its own interactive state.
+        const QRect menuRect
+            = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButtonMenu, widget);
+        QStyleOptionToolButton menuOption = *option;
+        if (!(option->activeSubControls & SC_ToolButtonMenu)) {
+            menuOption.state &= ~State_Sunken;
+        }
+        drawBoxBackground(painter, menuRect, seamed(contextOf(widget, &menuOption), false));
+
+        QStyleOptionToolButton arrowOption = *option;
+        arrowOption.rect = menuRect;
+        proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+    }
+    else if (option->features & QStyleOptionToolButton::HasMenu) {
+        // Instant/delayed popup: draw a small arrow indicator in the bottom-right corner.
+        const int arrowSize = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+        QStyleOptionToolButton arrowOption = *option;
+        arrowOption.rect = QRect(
+            option->rect.right() - arrowSize + 1,
+            option->rect.bottom() - arrowSize + 1,
+            arrowSize,
+            arrowSize
+        );
+        proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+    }
+
+    // Draw label (icon + text). Restrict to SC_ToolButton so it does not bleed into
+    // the menu strip. Also clear SC_ToolButtonMenu so QCommonStyle::CE_ToolButtonLabel
+    // does not draw its own menu indicator arrow on top of ours.
+    QStyleOptionToolButton labelOption = *option;
+    labelOption.rect = mainRect;
+    labelOption.subControls &= ~SC_ToolButtonMenu;
+    proxy()->drawControl(CE_ToolButtonLabel, &labelOption, painter, widget);
 }
 
 void FreeCADStyle::drawComplexControl(
@@ -1216,169 +1397,23 @@ void FreeCADStyle::drawComplexControl(
 ) const
 {
     if (control == CC_SpinBox) {
-        if (const auto* spinOption = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) {
-            if (spinOption->frame && (spinOption->subControls & SC_SpinBoxFrame)) {
-                const QRect frameRect
-                    = proxy()->subControlRect(CC_SpinBox, option, SC_SpinBoxFrame, widget);
-                drawComponent(painter, frameRect, widget, option);
-            }
-
-            // Draw spin button arrows on a transparent background (Breeze-style: no
-            // separate button fill). We do not delegate to the base style at all — it
-            // would re-draw its own frame and button backgrounds on top of ours.
-            if (spinOption->buttonSymbols != QAbstractSpinBox::NoButtons) {
-                const bool isPlusMinus = spinOption->buttonSymbols == QAbstractSpinBox::PlusMinus;
-
-                const auto drawSpinButton = [&](SubControl subControl,
-                                                PrimitiveElement arrowIndicator,
-                                                PrimitiveElement plusMinusIndicator) {
-                    if (!(spinOption->subControls & subControl)) {
-                        return;
-                    }
-                    QStyleOptionSpinBox buttonOption = *spinOption;
-                    buttonOption.rect = proxy()->subControlRect(CC_SpinBox, option, subControl, widget);
-                    // Clear the sunken flag unless this specific button is active.
-                    if (!(spinOption->activeSubControls & subControl)) {
-                        buttonOption.state &= ~State_Sunken;
-                    }
-                    proxy()->drawPrimitive(
-                        isPlusMinus ? plusMinusIndicator : arrowIndicator,
-                        &buttonOption,
-                        painter,
-                        widget
-                    );
-                };
-
-                drawSpinButton(SC_SpinBoxUp, PE_IndicatorArrowUp, PE_IndicatorSpinPlus);
-                drawSpinButton(SC_SpinBoxDown, PE_IndicatorArrowDown, PE_IndicatorSpinMinus);
-            }
-
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionSpinBox*>(option)) {
+            drawSpinBox(opt, painter, widget);
             return;
         }
     }
-
     if (control == CC_ComboBox) {
-        if (const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
-            drawComponent(painter, option->rect, widget, option);
-
-            // QComboBox::paintEvent draws CE_ComboBoxLabel separately; it uses our
-            // subControlRect(SC_ComboBoxEditField) for the text area.
-            if (comboOption->subControls & SC_ComboBoxArrow) {
-                QStyleOptionComboBox arrowOption = *comboOption;
-                arrowOption.rect
-                    = proxy()->subControlRect(CC_ComboBox, option, SC_ComboBoxArrow, widget);
-                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
-            }
-
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionComboBox*>(option)) {
+            drawComboBox(opt, painter, widget);
             return;
         }
     }
-
     if (control == CC_ToolButton) {
-        if (const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
-            const bool hasMenuButton = tbOption->features & QStyleOptionToolButton::MenuButtonPopup;
-            const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
-
-            // Resolves a BoxStyleDefinition and, for MenuButtonPopup buttons, zeroes the
-            // border thickness and corner radii on the edge that joins the two halves.
-            // This prevents a double border at the seam and keeps corners square where
-            // the main button and the menu strip meet.
-            // isTrailing = true  → main button (join is on its trailing/right or bottom edge)
-            // isTrailing = false → menu strip  (join is on its leading/left or top edge)
-            const auto seamed = [&](const StyleContext& context,
-                                    bool isTrailing) -> BoxStyleDefinition {
-                BoxStyleDefinition style = resolveBoxStyle(context);
-                if (!hasMenuButton) {
-                    return style;
-                }
-
-                // The main button (isTrailing) keeps its border on the joining edge — it acts as
-                // the visible separator between the two halves. The menu strip removes its border
-                // on that same edge to avoid a double border.
-                if (!isTrailing && style.borderThickness.has_value()) {
-                    if (isVertical) {
-                        style.borderThickness->setTop(0);
-                    }
-                    else {
-                        style.borderThickness->setLeft(0);
-                    }
-                }
-
-                // Both halves need square corners at the seam.
-                if (isVertical) {
-                    if (isTrailing) {
-                        style.borderRadius.setBottom(0);
-                    }
-                    else {
-                        style.borderRadius.setTop(0);
-                    }
-                }
-                else {
-                    if (isTrailing) {
-                        style.borderRadius.setRight(0);
-                    }
-                    else {
-                        style.borderRadius.setLeft(0);
-                    }
-                }
-                return style;
-            };
-
-            // Draw the main button area. Strip State_Sunken when only the menu strip is the
-            // active subcontrol so that clicking the dropdown does not depress the main area.
-            // When the menu strip is being pressed Qt may clear State_MouseOver from the overall
-            // state. Use activeSubControls instead: it is non-zero whenever the mouse is over
-            // any part of the split button, so the main half keeps its hover look.
-            const QRect mainRect
-                = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButton, widget);
-            QStyleOptionToolButton mainOption = *tbOption;
-            if (!(tbOption->activeSubControls & SC_ToolButton)) {
-                mainOption.state &= ~State_Sunken;
-            }
-            if (hasMenuButton && tbOption->activeSubControls) {
-                mainOption.state |= State_MouseOver;
-            }
-            drawBoxBackground(painter, mainRect, seamed(contextOf(widget, &mainOption), true));
-
-            if (hasMenuButton) {
-                // Draw the dropdown arrow strip with its own interactive state.
-                const QRect menuRect
-                    = proxy()->subControlRect(CC_ToolButton, option, SC_ToolButtonMenu, widget);
-                QStyleOptionToolButton menuOption = *tbOption;
-                if (!(tbOption->activeSubControls & SC_ToolButtonMenu)) {
-                    menuOption.state &= ~State_Sunken;
-                }
-                drawBoxBackground(painter, menuRect, seamed(contextOf(widget, &menuOption), false));
-
-                QStyleOptionToolButton arrowOption = *tbOption;
-                arrowOption.rect = menuRect;
-                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
-            }
-            else if (tbOption->features & QStyleOptionToolButton::HasMenu) {
-                // Instant/delayed popup: draw a small arrow indicator in the bottom-right corner.
-                const int arrowSize = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-                QStyleOptionToolButton arrowOption = *tbOption;
-                arrowOption.rect = QRect(
-                    option->rect.right() - arrowSize + 1,
-                    option->rect.bottom() - arrowSize + 1,
-                    arrowSize,
-                    arrowSize
-                );
-                proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
-            }
-
-            // Draw label (icon + text). Restrict to SC_ToolButton so it does not bleed into
-            // the menu strip. Also clear SC_ToolButtonMenu so QCommonStyle::CE_ToolButtonLabel
-            // does not draw its own menu indicator arrow on top of ours.
-            QStyleOptionToolButton labelOption = *tbOption;
-            labelOption.rect = mainRect;
-            labelOption.subControls &= ~SC_ToolButtonMenu;
-            proxy()->drawControl(CE_ToolButtonLabel, &labelOption, painter, widget);
-
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            drawToolButton(opt, painter, widget);
             return;
         }
     }
-
     QProxyStyle::drawComplexControl(control, option, painter, widget);
 }
 
