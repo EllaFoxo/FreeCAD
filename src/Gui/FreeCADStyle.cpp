@@ -704,6 +704,96 @@ int FreeCADStyle::styleHint(
     return QProxyStyle::styleHint(hint, option, widget, returnData);
 }
 
+void FreeCADStyle::drawRadioButtonDot(
+    QPainter* painter,
+    const QRect& rect,
+    const StyleContext& context,
+    const QPalette& palette
+) const
+{
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setPen(Qt::NoPen);
+
+    constexpr qreal dotPaddingRatio = 0.2;  // fallback: fraction of indicator width
+    qreal padding = static_cast<qreal>(rect.width()) * dotPaddingRatio;
+    if (const auto paddings = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
+        padding = paddings->left().value;
+    }
+
+    painter->setBrush(resolveIconColor(context, palette));
+    painter->drawEllipse(QRectF(rect).adjusted(padding, padding, -padding, -padding));
+    painter->restore();
+}
+
+void FreeCADStyle::drawCheckMark(
+    QPainter* painter,
+    const QRect& rect,
+    const StyleContext& context,
+    const QPalette& palette
+) const
+{
+    constexpr qreal checkPaddingRatio = 0.2;    // fallback: fraction of box width
+    constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
+    constexpr qreal checkMinPenWidth = 1.5;     // minimum stroke width in pixels
+
+    qreal padding = static_cast<qreal>(rect.width()) * checkPaddingRatio;
+    if (const auto paddings = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
+        padding = paddings->left().value;
+    }
+
+    const QRectF innerRect = QRectF(rect).adjusted(padding, padding, -padding, -padding);
+    const qreal penWidth = qMax(checkMinPenWidth, innerRect.width() * checkPenWidthRatio);
+
+    // Proportional anchor points for the check mark path (relative to inner rect).
+    constexpr qreal checkMidY = 0.5;   // vertical mid-point of the left arm
+    constexpr qreal checkKneeX = 0.4;  // horizontal position of the knee (valley)
+
+    QPainterPath checkPath;
+    checkPath.moveTo(innerRect.left(), innerRect.top() + (innerRect.height() * checkMidY));
+    checkPath.lineTo(innerRect.left() + (innerRect.width() * checkKneeX), innerRect.bottom());
+    checkPath.lineTo(innerRect.right(), innerRect.top());
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setPen(Qt::NoPen);
+    painter->strokePath(
+        checkPath,
+        QPen(resolveIconColor(context, palette), penWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
+    );
+    painter->restore();
+}
+
+void FreeCADStyle::drawIndeterminateMark(
+    QPainter* painter,
+    const QRect& rect,
+    const StyleContext& context,
+    const QPalette& palette
+) const
+{
+    constexpr qreal checkPaddingRatio = 0.2;    // fallback: fraction of box width
+    constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
+    constexpr qreal checkMinPenWidth = 1.5;     // minimum stroke width in pixels
+
+    qreal padding = static_cast<qreal>(rect.width()) * checkPaddingRatio;
+    if (const auto paddings = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
+        padding = paddings->left().value;
+    }
+
+    const QRectF innerRect = QRectF(rect).adjusted(padding, padding, -padding, -padding);
+    const qreal penWidth = qMax(checkMinPenWidth, innerRect.width() * checkPenWidthRatio);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setPen(Qt::NoPen);
+    painter->setPen(QPen(resolveIconColor(context, palette), penWidth, Qt::SolidLine, Qt::RoundCap));
+    painter->drawLine(
+        QPointF(innerRect.left(), innerRect.center().y()),
+        QPointF(innerRect.right(), innerRect.center().y())
+    );
+    painter->restore();
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,
@@ -754,24 +844,8 @@ void FreeCADStyle::drawPrimitive(
     if (element == PE_IndicatorRadioButton) {
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
         drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
-
         if (option->state & QStyle::State_On) {
-            painter->save();
-            painter->setRenderHint(QPainter::Antialiasing);
-            painter->setPen(Qt::NoPen);
-
-            QColor dotColor = resolveIconColor(context, option->palette);
-
-            constexpr qreal dotPaddingRatio = 0.2;  // fallback: fraction of indicator width
-            qreal padding = static_cast<qreal>(option->rect.width()) * dotPaddingRatio;
-            if (const auto paddings
-                = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
-                padding = paddings->left().value;
-            }
-
-            painter->setBrush(dotColor);
-            painter->drawEllipse(QRectF(option->rect).adjusted(padding, padding, -padding, -padding));
-            painter->restore();
+            drawRadioButtonDot(painter, option->rect, context, option->palette);
         }
         return;
     }
@@ -779,58 +853,11 @@ void FreeCADStyle::drawPrimitive(
     if (element == PE_IndicatorCheckBox) {
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
         drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
-
-        const bool isChecked = option->state & QStyle::State_On;
-        const bool isPartial = option->state & QStyle::State_NoChange;
-
-        if (isChecked || isPartial) {
-            painter->save();
-            painter->setRenderHint(QPainter::Antialiasing);
-            painter->setPen(Qt::NoPen);
-
-            QColor markColor = resolveIconColor(context, option->palette);
-
-            constexpr qreal checkPaddingRatio = 0.2;  // fallback: fraction of box width
-            constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
-            constexpr qreal checkMinPenWidth = 1.5;     // minimum stroke width in pixels
-
-            qreal padding = static_cast<qreal>(option->rect.width()) * checkPaddingRatio;
-            if (const auto paddings
-                = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
-                padding = paddings->left().value;
-            }
-
-            const QRectF innerRect
-                = QRectF(option->rect).adjusted(padding, padding, -padding, -padding);
-            const qreal penWidth = qMax(checkMinPenWidth, innerRect.width() * checkPenWidthRatio);
-
-            if (isChecked) {
-                // Proportional anchor points for the check mark path (relative to inner rect).
-                constexpr qreal checkMidY = 0.5;   // vertical mid-point of the left arm
-                constexpr qreal checkKneeX = 0.4;  // horizontal position of the knee (valley)
-
-                QPainterPath checkPath;
-                checkPath.moveTo(innerRect.left(), innerRect.top() + (innerRect.height() * checkMidY));
-                checkPath.lineTo(
-                    innerRect.left() + (innerRect.width() * checkKneeX),
-                    innerRect.bottom()
-                );
-                checkPath.lineTo(innerRect.right(), innerRect.top());
-                painter->strokePath(
-                    checkPath,
-                    QPen(markColor, penWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
-                );
-            }
-            else {
-                // Partial check: horizontal dash
-                painter->setPen(QPen(markColor, penWidth, Qt::SolidLine, Qt::RoundCap));
-                painter->drawLine(
-                    QPointF(innerRect.left(), innerRect.center().y()),
-                    QPointF(innerRect.right(), innerRect.center().y())
-                );
-            }
-
-            painter->restore();
+        if (option->state & QStyle::State_On) {
+            drawCheckMark(painter, option->rect, context, option->palette);
+        }
+        else if (option->state & QStyle::State_NoChange) {
+            drawIndeterminateMark(painter, option->rect, context, option->palette);
         }
         return;
     }

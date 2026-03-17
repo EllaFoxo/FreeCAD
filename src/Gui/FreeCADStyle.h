@@ -512,6 +512,45 @@ private:
     void drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const;
 
     /**
+     * @brief Draws the filled dot inside a checked radio button indicator.
+     *
+     * Resolves padding from the StyleProperty::Padding token; falls back to 20 % of
+     * the rect width. Caller is responsible for having already painted the box background.
+     */
+    void drawRadioButtonDot(
+        QPainter* painter,
+        const QRect& rect,
+        const StyleContext& context,
+        const QPalette& palette
+    ) const;
+
+    /**
+     * @brief Draws the check mark stroke inside a fully-checked checkbox indicator.
+     *
+     * Padding and pen width are resolved from design tokens. Caller is responsible for
+     * having already painted the box background.
+     */
+    void drawCheckMark(
+        QPainter* painter,
+        const QRect& rect,
+        const StyleContext& context,
+        const QPalette& palette
+    ) const;
+
+    /**
+     * @brief Draws the horizontal dash for an indeterminate checkbox indicator.
+     *
+     * Padding and pen width are resolved from design tokens. Caller is responsible for
+     * having already painted the box background.
+     */
+    void drawIndeterminateMark(
+        QPainter* painter,
+        const QRect& rect,
+        const StyleContext& context,
+        const QPalette& palette
+    ) const;
+
+    /**
      * @brief Paints the label (icon + text) of a push button.
      *
      * Overrides CE_PushButtonLabel to apply the ButtonIconSpacing token as the
