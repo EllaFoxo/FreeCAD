@@ -1763,10 +1763,7 @@ void FreeCADStyle::drawTabBarTab(QPainter* painter, const QStyleOptionTab* optio
     // negative = shrink to create visible gap between tabs). The tab rect itself is made wider
     // in sizeFromContents by |tabOverlap| for the gap case, so shrinking here restores the
     // correct visual size while keeping symmetric content padding.
-    const bool isLastOrOnly = option->position == QStyleOptionTab::End
-        || option->position == QStyleOptionTab::OnlyOneTab;
-    const int tabOverlap = isLastOrOnly ? 0
-                                        : proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
+    const int tabOverlap = tabOverlapOf(option, widget);
     const bool isVertical = (position == Position::East || position == Position::West);
 
     const QRect drawRect = tabVisualRect(option->rect, tabOverlap, isVertical);
@@ -1790,11 +1787,7 @@ void FreeCADStyle::drawTabBarTabLabel(
     // The background is drawn on a rect shrunk by |tabOverlap| on the trailing edge (see
     // drawTabBarTab). To keep content padding symmetric relative to the visible background,
     // base all content geometry on the same visual rect.
-    const bool isLastOrOnly = option->position == QStyleOptionTab::End
-        || option->position == QStyleOptionTab::OnlyOneTab;
-    const int tabOverlap = isLastOrOnly ? 0
-                                        : proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
-    const QRect visualRect = tabVisualRect(option->rect, tabOverlap, isVertical);
+    const QRect visualRect = tabVisualRect(option->rect, tabOverlapOf(option, widget), isVertical);
 
     // For vertical tabs or non-icon+text tabs, delegate to parent. Apply token text color by
     // setting palette ButtonText so Qt's draw path picks it up automatically. Use visualRect so
@@ -2043,6 +2036,13 @@ QRect FreeCADStyle::applyButtonShift(
         proxy()->pixelMetric(PM_ButtonShiftVertical, option, widget)
     );
     return shifted;
+}
+
+int FreeCADStyle::tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const
+{
+    const bool isLastOrOnly = option->position == QStyleOptionTab::End
+        || option->position == QStyleOptionTab::OnlyOneTab;
+    return isLastOrOnly ? 0 : proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
 }
 
 QRect FreeCADStyle::tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical)

@@ -453,6 +453,14 @@ private:
     static Position tabPositionOf(QTabBar::Shape shape);
 
     /**
+     * @brief Returns the trailing-edge overlap for a tab, or 0 for the last/only tab.
+     *
+     * Last and only tabs must not be extended or shrunk on their trailing edge because
+     * there is no adjacent tab to overlap or gap with.
+     */
+    int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
+
+    /**
      * @brief Adjusts the trailing edge of a tab rect by the tab overlap amount.
      *
      * Both drawTabBarTab and drawTabBarTabLabel compute this identically: extend
