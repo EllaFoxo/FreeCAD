@@ -70,6 +70,7 @@ enum class StyleComponentElement : uint8_t
     Indicator,  // Checkbox for items
     Tab,        // Individual tab of a TabBar
     Base,       // Base strip of a TabBar (PE_FrameTabBarBase)
+    Menu,       // Dropdown menu strip of a MenuButtonPopup ToolButton
     // Add new components before COUNT
     COUNT,
 };
@@ -173,7 +174,6 @@ enum class StyleProperty : uint8_t
     Overlay,
     OverlayOpacity,
     InnerShadow,
-    MenuWidth,
     IconColor,
     // Add new properties before COUNT
     COUNT,

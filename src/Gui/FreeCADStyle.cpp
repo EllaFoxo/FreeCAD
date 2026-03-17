@@ -500,7 +500,7 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         {PM_IndicatorHeight, {StyleComponentElement::Indicator, Height}},
         {PM_CheckBoxLabelSpacing, {StyleComponentElement::Indicator, Spacing}},
         {PM_RadioButtonLabelSpacing, {StyleComponentElement::Indicator, Spacing}},
-        {PM_MenuButtonIndicator, {StyleComponentElement::Root, MenuWidth}},
+        {PM_MenuButtonIndicator, {StyleComponentElement::Menu, Width}},
         {PM_ToolBarItemMargin, {StyleComponentElement::Item, Margin}},
         {PM_ToolBarItemSpacing, {StyleComponentElement::Item, Spacing}},
     };
@@ -1025,14 +1025,14 @@ QRect FreeCADStyle::spinBoxSubControlRect(
 {
     const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
     const QRect outerRect = option->rect;
-    const QSize preferredSize = sizeFromContents(CT_SpinBox, option, QSize(0, 0), widget);
+    const QSize preferredSize = sizeFromContents(CT_SpinBox, option, {}, widget);
     const QRect contentRect = geometry.contentRect(outerRect, preferredSize);
 
     // Borrow the button width from the base style; only the position changes.
     const bool hasButtons = option->buttonSymbols != QAbstractSpinBox::NoButtons;
     const QSize buttonSize = hasButtons
         ? QProxyStyle::subControlRect(CC_SpinBox, option, SC_SpinBoxUp, widget).size()
-        : QSize(0, 0);
+        : QSize {};
 
     const int buttonLeft = contentRect.right() - buttonSize.width() + 1;
     const int editRight = hasButtons ? buttonLeft - 1 : contentRect.right();
@@ -1042,12 +1042,12 @@ QRect FreeCADStyle::spinBoxSubControlRect(
         case SC_SpinBoxFrame:
             return outerRect;
         case SC_SpinBoxEditField:
-            return QRect(
+            return {
                 contentRect.left(),
                 contentRect.top(),
                 editRight - contentRect.left() + 1,
                 contentRect.height()
-            );
+            };
         case SC_SpinBoxUp: {
             if (!hasButtons) {
                 return {};
@@ -1080,14 +1080,8 @@ QRect FreeCADStyle::toolButtonSubControlRect(
         return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
     }
 
-    const StyleContext context = contextOf(widget, option);
     const QRect rect = option->rect;
-
-    int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-    if (const auto token = resolve<Numeric>(context, StyleProperty::MenuWidth)) {
-        menuWidth = static_cast<int>(*token);
-    }
-
+    const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
     const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
 
     switch (subControl) {
@@ -1203,13 +1197,16 @@ void FreeCADStyle::drawToolButton(
     // border thickness and corner radii on the edge that joins the two halves.
     // This prevents a double border at the seam and keeps corners square where
     // the main button and the menu strip meet.
-    // isTrailing = true  → main button (join is on its trailing/right or bottom edge)
-    // isTrailing = false → menu strip  (join is on its leading/left or top edge)
-    const auto seamed = [&](const StyleContext& context, bool isTrailing) -> BoxStyleDefinition {
-        BoxStyleDefinition style = resolveBoxStyle(context);
+    // element = Root  → main button (join is on its trailing/right or bottom edge)
+    // element = Menu  → menu strip  (join is on its leading/left or top edge)
+    const auto seamed = [&](const StyleContext& ctx,
+                            StyleComponentElement element) -> BoxStyleDefinition {
+        BoxStyleDefinition style = resolveBoxStyle(ctx);
         if (!hasMenuButton) {
             return style;
         }
+
+        const bool isTrailing = (element != StyleComponentElement::Menu);
 
         // The main button (isTrailing) keeps its border on the joining edge — it acts as
         // the visible separator between the two halves. The menu strip removes its border
@@ -1256,7 +1253,11 @@ void FreeCADStyle::drawToolButton(
     if (hasMenuButton && option->activeSubControls) {
         mainOption.state |= State_MouseOver;
     }
-    drawBoxBackground(painter, mainRect, seamed(contextOf(widget, &mainOption), true));
+    drawBoxBackground(
+        painter,
+        mainRect,
+        seamed(contextOf(widget, &mainOption), StyleComponentElement::Root)
+    );
 
     if (hasMenuButton) {
         // Draw the dropdown arrow strip with its own interactive state.
@@ -1266,7 +1267,11 @@ void FreeCADStyle::drawToolButton(
         if (!(option->activeSubControls & SC_ToolButtonMenu)) {
             menuOption.state &= ~State_Sunken;
         }
-        drawBoxBackground(painter, menuRect, seamed(contextOf(widget, &menuOption), false));
+        drawBoxBackground(
+            painter,
+            menuRect,
+            seamed(contextOf(widget, &menuOption), StyleComponentElement::Menu)
+        );
 
         QStyleOptionToolButton arrowOption = *option;
         arrowOption.rect = menuRect;

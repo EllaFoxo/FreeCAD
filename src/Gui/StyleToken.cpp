@@ -199,6 +199,7 @@ const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Indicator, "Indicator"},
     {StyleComponentElement::Tab,       "Tab"},
     {StyleComponentElement::Base,      "Base"},
+    {StyleComponentElement::Menu,      "Menu"},
 };
 // clang-format on
 
@@ -286,7 +287,6 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::Overlay,         "Overlay"},
     {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
     {StyleProperty::InnerShadow,     "InnerShadow"},
-    {StyleProperty::MenuWidth,       "MenuWidth"},
     {StyleProperty::IconColor,       "IconColor"},
 };
 // clang-format on
