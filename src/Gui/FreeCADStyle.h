@@ -254,6 +254,12 @@ public:
         const QWidget* widget = nullptr
     ) const override;
 
+    std::optional<int> resolvePixelMetric(
+        PixelMetric metric,
+        const QStyleOption* option,
+        const QWidget* widget
+    ) const;
+
     int styleHint(
         StyleHint hint,
         const QStyleOption* option,

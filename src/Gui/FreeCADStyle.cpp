@@ -560,133 +560,110 @@ void FreeCADStyle::polish(QPalette& palette)
     setDisabled(QPalette::HighlightedText, "BaseDisabledTextColor");
 }
 
+std::optional<int> FreeCADStyle::resolvePixelMetric(
+    PixelMetric metric,
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    using enum StyleProperty;
+
+    const auto element = [&widget, &option](StyleComponentElement element) {
+        return contextOf(widget, option, element);
+    };
+
+    const StyleContext context = element(StyleComponentElement::Root);
+
+    const std::map<PixelMetric, std::pair<StyleComponentElement, StyleProperty>> metrics = {
+        {PM_ExclusiveIndicatorWidth, {StyleComponentElement::Indicator, Width}},
+        {PM_ExclusiveIndicatorHeight, {StyleComponentElement::Indicator, Height}},
+        {PM_IndicatorWidth, {StyleComponentElement::Indicator, Width}},
+        {PM_IndicatorHeight, {StyleComponentElement::Indicator, Height}},
+        {PM_CheckBoxLabelSpacing, {StyleComponentElement::Indicator, Spacing}},
+        {PM_RadioButtonLabelSpacing, {StyleComponentElement::Indicator, Spacing}},
+        {PM_MenuButtonIndicator, {StyleComponentElement::Root, MenuWidth}},
+        {PM_ToolBarItemMargin, {StyleComponentElement::Item, Margin}},
+        {PM_ToolBarItemSpacing, {StyleComponentElement::Item, Spacing}},
+    };
+
+    switch (metric) {
+        // PM_TabBarTabOverlap is a pure painting hint: it tells CE_TabBarTabShape how many pixels
+        // to extend (positive) or shrink (negative) the trailing edge of each non-last tab's paint
+        // rect. QTabBar's layoutTabs() does NOT query this metric; the visual spacing is achieved
+        // entirely by adjusting the paint rect in drawTabBarTab.
+        //
+        // TabBarTabSpacing uses gap semantics (positive = gap, negative = overlap), so
+        // overlap = -spacing. Default -1px → overlap 1 → 1px trailing extension hides shared border.
+        case PM_TabBarTabOverlap:
+            if (const auto spacing = resolve<int>(element(StyleComponentElement::Tab), Spacing)) {
+                return -*spacing;
+            }
+            return {};
+
+        // PM_TabBarTabHSpace / PM_TabBarTabVSpace feed into
+        // QCommonStyle::sizeFromContents(CT_TabBarTab). Driving padding through these metrics
+        // preserves Qt's close-button width, minimum-size constraints, and all other CT_TabBarTab
+        // logic. North position is used because QTabBar::tabSizeHint() transposes the returned size
+        // for East/West tabs itself. State is preserved (e.g. checked tabs use
+        // TabBarTabCheckedPadding).
+        case PM_TabBarTabHSpace:
+        case PM_TabBarTabVSpace: {
+            StyleContext northContext = element(StyleComponentElement::Tab);
+            northContext.variant.set(VariantSlot::Position, Position::North);
+
+            if (const auto padding = resolve<StyleParameters::Insets>(northContext, Padding)) {
+                return static_cast<int>(
+                    metric == PM_TabBarTabHSpace ? padding->horizontal() : padding->vertical()
+                );
+            }
+            return {};
+        }
+
+        // PM_TabBarBaseHeight / PM_TabBarBaseOverlap are only meaningful for a standalone QTabBar
+        // that actually draws its base strip (PE_FrameTabBarBase). QCommonStyle also queries
+        // PM_TabBarBaseOverlap via SE_TabWidgetTabPane with widget = QTabWidget to compute the
+        // pane inset — returning our large overlap there would push the frame into the tab row.
+        // Guard on widget being a QTabBar so the QTabWidget pane calculation gets 0 (flush).
+        case PM_TabBarBaseHeight:
+        case PM_TabBarBaseOverlap:
+            if (qobject_cast<const QTabBar*>(widget)) {
+                const StyleContext baseContext = element(StyleComponentElement::Base);
+                const auto height = resolve<int>(baseContext, Height);
+                const auto overlap = resolve<int>(baseContext, Overlap);
+
+                if (metric == PM_TabBarBaseHeight && height) {
+                    return *height + overlap.value_or(0);
+                }
+                if (metric == PM_TabBarBaseOverlap && overlap) {
+                    return overlap;
+                }
+
+                return {};
+            }
+
+            if (metric == PM_TabBarBaseOverlap) {
+                return 1;
+            }
+
+            return {};
+
+        default: {
+            if (const auto it = metrics.find(metric); it != metrics.end()) {
+                const auto& [el, prop] = it->second;
+
+                return resolve<int>(element(el), prop);
+            }
+
+            return {};
+        }
+    }
+}
+
 int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
 {
-    if (qobject_cast<const QRadioButton*>(widget)) {
-        const StyleContext context = contextOf(widget, option);
-
-        if (metric == PM_ExclusiveIndicatorWidth) {
-            if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
-                return static_cast<int>(*width);
-            }
-        }
-
-        if (metric == PM_ExclusiveIndicatorHeight) {
-            if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
-                return static_cast<int>(*height);
-            }
-        }
-
-        if (metric == PM_CheckBoxLabelSpacing) {
-            if (const auto spacing
-                = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
-                return static_cast<int>(*spacing);
-            }
-        }
+    if (const auto value = resolvePixelMetric(metric, option, widget)) {
+        return *value;
     }
-
-    if (qobject_cast<const QCheckBox*>(widget)) {
-        const StyleContext context = contextOf(widget, option);
-
-        if (metric == PM_IndicatorWidth) {
-            if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
-                return static_cast<int>(*width);
-            }
-        }
-
-        if (metric == PM_IndicatorHeight) {
-            if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
-                return static_cast<int>(*height);
-            }
-        }
-
-        if (metric == PM_CheckBoxLabelSpacing) {
-            if (const auto spacing
-                = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
-                return static_cast<int>(*spacing);
-            }
-        }
-    }
-
-    if (qobject_cast<const QToolButton*>(widget) && metric == PM_MenuButtonIndicator) {
-        const StyleContext context = contextOf(widget, option);
-        if (const auto token = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
-            return static_cast<int>(*token);
-        }
-    }
-
-    if (metric == PM_ToolBarItemSpacing) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
-            return static_cast<int>(*spacing);
-        }
-    }
-
-    if (metric == PM_ToolBarItemMargin) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Margin)) {
-            return static_cast<int>(*spacing);
-        }
-    }
-
-    // PM_TabBarTabOverlap is a pure painting hint: it tells CE_TabBarTabShape how many pixels
-    // to extend (positive) or shrink (negative) the trailing edge of each non-last tab's paint
-    // rect. QTabBar's layoutTabs() does NOT query this metric; the visual spacing is achieved
-    // entirely by adjusting the paint rect in drawTabBarTab.
-    //
-    // TabBarTabSpacing uses gap semantics (positive = gap, negative = overlap), so
-    // overlap = -spacing. Default -1px → overlap 1 → 1px trailing extension hides shared border.
-    if (metric == PM_TabBarTabOverlap) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Tab);
-        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
-            return -static_cast<int>(*spacing);
-        }
-    }
-
-    // PM_TabBarTabHSpace / PM_TabBarTabVSpace feed into
-    // QCommonStyle::sizeFromContents(CT_TabBarTab). Driving padding through these metrics preserves
-    // Qt's close-button width, minimum-size constraints, and all other CT_TabBarTab logic. North
-    // position is used because QTabBar::tabSizeHint() transposes the returned size for East/West
-    // tabs itself. State is preserved (e.g. checked tabs use TabBarTabCheckedPadding).
-    if (metric == PM_TabBarTabHSpace || metric == PM_TabBarTabVSpace) {
-        StyleContext context = contextOf(widget, option, StyleComponentElement::Tab);
-        context.variant.set(VariantSlot::Position, Position::North);
-        if (const auto padding = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
-            const QMarginsF margins = Base::convertTo<QMarginsF>(*padding);
-            if (metric == PM_TabBarTabHSpace) {
-                return static_cast<int>(margins.left() + margins.right());
-            }
-            return static_cast<int>(margins.top() + margins.bottom());
-        }
-    }
-
-    // PM_TabBarBaseHeight / PM_TabBarBaseOverlap are only meaningful for a standalone QTabBar
-    // that actually draws its base strip (PE_FrameTabBarBase). QCommonStyle also queries
-    // PM_TabBarBaseOverlap via SE_TabWidgetTabPane with widget = QTabWidget to compute the
-    // pane inset — returning our large overlap there would push the frame into the tab row.
-    // Guard on widget being a QTabBar so the QTabWidget pane calculation gets 0 (flush).
-    if (qobject_cast<const QTabBar*>(widget)) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Base);
-
-        const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height);
-        const auto overlap = resolve<StyleParameters::Numeric>(context, StyleProperty::Overlap);
-
-        if (metric == PM_TabBarBaseHeight) {
-            if (height) {
-                const int overlapPx = overlap ? static_cast<int>(*overlap) : 0;
-                return static_cast<int>(*height) + overlapPx;
-            }
-        }
-        if (metric == PM_TabBarBaseOverlap) {
-            if (overlap) {
-                return static_cast<int>(*overlap);
-            }
-        }
-    }
-    else if (metric == PM_TabBarBaseOverlap) {
-        return 1;
-    }
-
     return QProxyStyle::pixelMetric(metric, option, widget);
 }
 
