@@ -765,10 +765,42 @@ private:
      */
     QRect applyButtonShift(const QRect& rect, const QStyleOption* option, const QWidget* widget) const;
 
-    // Cache for resolve(StyleContext, StyleProperty). Key is a bit-packed uint32_t;
-    // value is the resolved result including nullopt for confirmed misses.
+    // ── Cache helpers ─────────────────────────────────────────────────────────
+    //
+    // StyleContextCache<T> wraps an unordered_map<uint64_t, T> so all three caches
+    // (token, box-style, box-geometry) share the same find/store/clear API.
+    // All operations are const-qualified so they can be used from const draw methods.
+    template<typename T>
+    class StyleContextCache
+    {
+        mutable std::unordered_map<uint64_t, T> entries;
+
+    public:
+        const T* find(uint64_t key) const
+        {
+            const auto found = entries.find(key);
+            return found != entries.end() ? &found->second : nullptr;
+        }
+
+        void store(uint64_t key, T value) const
+        {
+            entries.emplace(key, std::move(value));
+        }
+
+        void clear()
+        {
+            entries.clear();
+        }
+    };
+
+    // tokenCache: key is a bit-packed uint64_t; value includes nullopt for confirmed misses.
     // Mutable so const draw methods can populate the cache.
-    mutable std::unordered_map<uint32_t, std::optional<StyleParameters::Value>> tokenCache;
+    mutable StyleContextCache<std::optional<StyleParameters::Value>> tokenCache;
+
+    // Aggregate caches for resolveBoxStyle / resolveBoxGeometry.
+    // Keyed by context-only uint64_t (property bits left zero).
+    mutable StyleContextCache<BoxStyleDefinition> boxStyleCache;
+    mutable StyleContextCache<BoxGeometryDefinition> boxGeometryCache;
 
     /**
      * @brief Interns a component override string and returns its stable uint8_t id.
@@ -781,6 +813,12 @@ private:
      * The intern table is cleared together with tokenCache in clearTokenCache().
      */
     uint8_t internComponentOverride(const std::string& name) const;
+
+    /** @brief Packs a context-only 64-bit cache key (property bits left zero). */
+    uint64_t packContextKey(const StyleContext& context) const;
+
+    /** @brief Packs a full 64-bit cache key including the property dimension. */
+    uint64_t packCacheKey(const StyleContext& context, StyleProperty property) const;
 
     mutable std::unordered_map<std::string, uint8_t> componentOverrideIds;
     mutable uint8_t nextComponentOverrideId = 1;

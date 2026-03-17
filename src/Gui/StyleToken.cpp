@@ -287,45 +287,58 @@ std::vector<std::string> buildPrefixes(const StyleContext& context)
 
 // ─── Cache key packing ─────────────────────────────────────────────────────
 //
-//   bits  0– 3 : StyleComponent        (4 bits, up to 16 values)
-//   bits  4– 5 : StyleComponentElement (2 bits, up to 4 values)
-//   bits  6–10 : StyleState            (5-bit bitmask)
-//   bits 11–15 : StyleProperty         (5 bits, up to 32 values)
-//   bits 16–24 : VariantSlots          (3 bits each × 3 slots, starting at bit 16)
-//   bits 25–31 : componentOverrideId   (7 bits; 0 = no override, 1–127 interned)
+//   bits  0– 7 : StyleComponent        (8 bits → 256 values)
+//   bits  8–11 : StyleComponentElement (4 bits → 16 values)
+//   bits 12–16 : StyleState            (5-bit bitmask, unchanged)
+//   bits 17–23 : StyleProperty         (7 bits → 128 values; 0 for context-only keys)
+//   bits 24–31 : componentOverrideId   (8 bits → 256 IDs, up from 64)
+//   bits 32–47 : VariantSlots          (4 bits/slot × 4 slots; moved to high bits)
+//   bits 48–63 : reserved
 
-uint32_t packVariant(const VariantKey& variant)
+uint64_t packVariant(const VariantKey& variant)
 {
-    uint32_t packed = 0;
+    uint64_t packed = 0;
     for (size_t index = 0; index < variant.slots.size(); ++index) {
-        packed |= static_cast<uint32_t>(variant.slots.at(index)) << (index * 3);
+        packed |= static_cast<uint64_t>(variant.slots.at(index)) << (index * 4);
     }
     return packed;
 }
 
 // clang-format off
-// Bit offsets within the packed cache key.
-constexpr uint32_t componentBitOffset = 0;
-constexpr uint32_t elementBitOffset   = 4;   // component (4 bits) ends at bit 3
-constexpr uint32_t stateBitOffset     = 7;   // element (3 bits) ends at bit 6
-constexpr uint32_t propertyBitOffset  = 12;  // state (5-bit bitmask) ends at bit 11
-constexpr uint32_t variantBitOffset   = 17;  // property (5 bits) ends at bit 16
-constexpr uint32_t overrideBitOffset  = 26;  // variant slots (3 × 3 bits) end at bit 25
+// Bit offsets within the packed 64-bit cache key.
+constexpr uint64_t componentBitOffset = 0;
+constexpr uint64_t elementBitOffset   = 8;   // component (8 bits) ends at bit 7
+constexpr uint64_t stateBitOffset     = 12;  // element (4 bits) ends at bit 11
+constexpr uint64_t propertyBitOffset  = 17;  // state (5-bit bitmask) ends at bit 16
+constexpr uint64_t overrideBitOffset  = 24;  // property (7 bits) ends at bit 23
+constexpr uint64_t variantBitOffset   = 32;  // override (8 bits) ends at bit 31
 // clang-format on
 
-uint32_t packCacheKey(const StyleContext& context, StyleProperty property, uint8_t overrideId)
+uint64_t packContextKeyImpl(const StyleContext& context, uint8_t overrideId)
 {
     // clang-format off
-    return (static_cast<uint32_t>(context.component)                << componentBitOffset)
-         | (static_cast<uint32_t>(context.element)                  << elementBitOffset)
-         | (static_cast<uint32_t>(context.state.toUnderlyingType()) << stateBitOffset)
-         | (static_cast<uint32_t>(property)                         << propertyBitOffset)
-         | (packVariant(context.variant)                            << variantBitOffset)
-         | (static_cast<uint32_t>(overrideId)                       << overrideBitOffset);
+    return (static_cast<uint64_t>(context.component)                << componentBitOffset)
+         | (static_cast<uint64_t>(context.element)                  << elementBitOffset)
+         | (static_cast<uint64_t>(context.state.toUnderlyingType()) << stateBitOffset)
+         | (static_cast<uint64_t>(overrideId)                       << overrideBitOffset)
+         | (packVariant(context.variant)                            << variantBitOffset);
     // clang-format on
 }
 
 }  // namespace
+
+uint64_t FreeCADStyle::packContextKey(const StyleContext& context) const
+{
+    const uint8_t overrideId = context.componentOverride.empty()
+        ? static_cast<uint8_t>(0)
+        : internComponentOverride(context.componentOverride);
+    return packContextKeyImpl(context, overrideId);
+}
+
+uint64_t FreeCADStyle::packCacheKey(const StyleContext& context, StyleProperty property) const
+{
+    return packContextKey(context) | (static_cast<uint64_t>(property) << propertyBitOffset);
+}
 
 // ─── Tab position mapping ────────────────────────────────────────────────────
 
@@ -512,13 +525,10 @@ std::optional<StyleParameters::Value> FreeCADStyle::resolve(
     StyleProperty property
 ) const
 {
-    const uint8_t overrideId = context.componentOverride.empty()
-        ? uint8_t(0)
-        : internComponentOverride(context.componentOverride);
-    const uint32_t key = packCacheKey(context, property, overrideId);
+    const uint64_t key = packCacheKey(context, property);
 
-    if (const auto found = tokenCache.find(key); found != tokenCache.end()) {
-        return found->second;
+    if (const auto* cached = tokenCache.find(key)) {
+        return *cached;
     }
 
     const std::vector<std::string> prefixes = buildPrefixes(context);
@@ -537,12 +547,18 @@ std::optional<StyleParameters::Value> FreeCADStyle::resolve(
         break;
     }
 
-    tokenCache.emplace(key, result);
+    tokenCache.store(key, result);
     return result;
 }
 
 FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContext& context) const
 {
+    const uint64_t key = packContextKey(context);
+
+    if (const auto* cached = boxStyleCache.find(key)) {
+        return *cached;
+    }
+
     BoxStyleDefinition result;
 
     if (const auto backgroundValue = resolve(context, StyleProperty::Background)) {
@@ -576,11 +592,18 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
         result.innerShadow = Base::convertTo<InnerShadow>(*innerShadow);
     }
 
+    boxStyleCache.store(key, result);
     return result;
 }
 
 FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const StyleContext& context) const
 {
+    const uint64_t key = packContextKey(context);
+
+    if (const auto* cached = boxGeometryCache.find(key)) {
+        return *cached;
+    }
+
     BoxGeometryDefinition result;
 
     if (const auto padding = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
@@ -618,6 +641,7 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
         result.iconSpacing = static_cast<int>(spacing->value);
     }
 
+    boxGeometryCache.store(key, result);
     return result;
 }
 
@@ -637,6 +661,8 @@ uint8_t FreeCADStyle::internComponentOverride(const std::string& name) const
 void FreeCADStyle::clearTokenCache()
 {
     tokenCache.clear();
+    boxStyleCache.clear();
+    boxGeometryCache.clear();
     componentOverrideIds.clear();
     nextComponentOverrideId = 1;
 }
