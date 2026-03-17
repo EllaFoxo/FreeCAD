@@ -1976,6 +1976,10 @@ void FreeCADStyle::polish(QWidget* widget)
             IconManager::instance().icon(":/icons/bound-expression-symbol.svg")
         );
     }
+
+    if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
+        comboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    }
 }
 
 void FreeCADStyle::unpolish(QWidget* widget)
