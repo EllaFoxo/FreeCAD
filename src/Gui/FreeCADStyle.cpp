@@ -567,19 +567,20 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
 
         if (metric == PM_ExclusiveIndicatorWidth) {
             if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
-                return static_cast<int>(width->value);
+                return static_cast<int>(*width);
             }
         }
 
         if (metric == PM_ExclusiveIndicatorHeight) {
             if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
-                return static_cast<int>(height->value);
+                return static_cast<int>(*height);
             }
         }
 
         if (metric == PM_CheckBoxLabelSpacing) {
-            if (const auto spacing = resolve<StyleParameters::Numeric>("CheckBoxSpacing")) {
-                return static_cast<int>(spacing->value);
+            if (const auto spacing
+                = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
+                return static_cast<int>(*spacing);
             }
         }
     }
@@ -589,19 +590,20 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
 
         if (metric == PM_IndicatorWidth) {
             if (const auto width = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
-                return static_cast<int>(width->value);
+                return static_cast<int>(*width);
             }
         }
 
         if (metric == PM_IndicatorHeight) {
             if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {
-                return static_cast<int>(height->value);
+                return static_cast<int>(*height);
             }
         }
 
         if (metric == PM_CheckBoxLabelSpacing) {
-            if (const auto spacing = resolve<StyleParameters::Numeric>("CheckBoxSpacing")) {
-                return static_cast<int>(spacing->value);
+            if (const auto spacing
+                = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
+                return static_cast<int>(*spacing);
             }
         }
     }
@@ -609,19 +611,21 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
     if (qobject_cast<const QToolButton*>(widget) && metric == PM_MenuButtonIndicator) {
         const StyleContext context = contextOf(widget, option);
         if (const auto token = resolve<StyleParameters::Numeric>(context, StyleProperty::MenuWidth)) {
-            return static_cast<int>(token->value);
+            return static_cast<int>(*token);
         }
     }
 
     if (metric == PM_ToolBarItemSpacing) {
-        if (const auto spacing = resolve<StyleParameters::Numeric>("ToolBarItemSpacing")) {
-            return static_cast<int>(spacing->value);
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
+            return static_cast<int>(*spacing);
         }
     }
 
     if (metric == PM_ToolBarItemMargin) {
-        if (const auto spacing = resolve<StyleParameters::Numeric>("ToolBarItemMargin")) {
-            return static_cast<int>(spacing->value);
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Margin)) {
+            return static_cast<int>(*spacing);
         }
     }
 
@@ -633,8 +637,9 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
     // TabBarTabSpacing uses gap semantics (positive = gap, negative = overlap), so
     // overlap = -spacing. Default -1px → overlap 1 → 1px trailing extension hides shared border.
     if (metric == PM_TabBarTabOverlap) {
-        if (const auto spacing = resolve<StyleParameters::Numeric>("TabBarTabSpacing")) {
-            return static_cast<int>(-spacing->value);
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Tab);
+        if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::Spacing)) {
+            return -static_cast<int>(*spacing);
         }
     }
 
@@ -661,17 +666,20 @@ int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, co
     // pane inset — returning our large overlap there would push the frame into the tab row.
     // Guard on widget being a QTabBar so the QTabWidget pane calculation gets 0 (flush).
     if (qobject_cast<const QTabBar*>(widget)) {
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Base);
+
+        const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height);
+        const auto overlap = resolve<StyleParameters::Numeric>(context, StyleProperty::Overlap);
+
         if (metric == PM_TabBarBaseHeight) {
-            const auto height = resolve<StyleParameters::Numeric>("TabBarBaseHeight");
-            const auto overlap = resolve<StyleParameters::Numeric>("TabBarBaseOverlap");
             if (height) {
-                const int overlapPx = overlap ? static_cast<int>(overlap->value) : 0;
-                return static_cast<int>(height->value) + overlapPx;
+                const int overlapPx = overlap ? static_cast<int>(*overlap) : 0;
+                return static_cast<int>(*height) + overlapPx;
             }
         }
         if (metric == PM_TabBarBaseOverlap) {
-            if (const auto overlap = resolve<StyleParameters::Numeric>("TabBarBaseOverlap")) {
-                return static_cast<int>(overlap->value);
+            if (overlap) {
+                return static_cast<int>(*overlap);
             }
         }
     }
