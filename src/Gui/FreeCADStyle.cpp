@@ -892,6 +892,104 @@ void FreeCADStyle::drawPrimitive(
     QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
+QSize FreeCADStyle::tabBarTabSizeFromContents(
+    const QStyleOption* option,
+    const QSize& size,
+    const QWidget* widget
+) const
+{
+    QSize result = QProxyStyle::sizeFromContents(CT_TabBarTab, option, size, widget);
+
+    const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
+    if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
+        StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
+        geometryContext.variant.set(VariantSlot::Position, Position::North);
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
+        result.rwidth() += geometry.iconGapDelta();
+    }
+
+    // The background is painted narrower by |tabOverlap| on the trailing edge to create the
+    // visual gap between tabs (see drawTabBarTab). Add that same amount to the tab rect so
+    // the content area, computed from the background rect, still has symmetric padding.
+    const int tabOverlap = proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
+    if (tabOverlap < 0) {
+        result.rwidth() -= tabOverlap;
+    }
+
+    return result;
+}
+
+QSize FreeCADStyle::toolButtonSizeFromContents(
+    const QStyleOptionToolButton* option,
+    const QSize& size,
+    const QWidget* widget
+) const
+{
+    BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
+
+    // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
+    // naturally from the uniform padding. The height token still applies to all other
+    // ToolButton contexts (form-control-style buttons with text, small/big variants, etc).
+    const std::optional<Qt::Orientation> toolbarOrientation = toolbarOrientationOf(widget);
+    const bool isToolbarIconOnly = toolbarOrientation.has_value()
+        && option->toolButtonStyle == Qt::ToolButtonIconOnly;
+
+    if (isToolbarIconOnly) {
+        geometry.height = std::nullopt;
+    }
+
+    const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+    const bool hasMenu = option->features & QStyleOptionToolButton::MenuButtonPopup;
+
+    // QToolButton::sizeHint() adds PM_MenuButtonIndicator to the width for
+    // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar
+    // orientation. For vertical toolbars the strip goes below the icon, so we move
+    // the indicator contribution from width to height.
+    QSize contentSize = size;
+    if (hasMenu && toolbarOrientation == Qt::Vertical) {
+        contentSize.rwidth() -= menuWidth;
+        contentSize.rheight() += menuWidth;
+    }
+
+    // For horizontal menu-strip buttons, minWidth expresses the button body minimum;
+    // add the strip width so constrain sees the correct total minimum.
+    const bool hasHorizontalMenu = hasMenu && toolbarOrientation != Qt::Vertical;
+    if (hasHorizontalMenu && geometry.minWidth) {
+        geometry.minWidth = *geometry.minWidth + menuWidth;
+    }
+
+    return geometry.sizeFromContents(contentSize);
+}
+
+QSize FreeCADStyle::itemViewItemSizeFromContents(
+    const QStyleOption* option,
+    const QSize& size,
+    const QWidget* widget
+) const
+{
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+    if (context.element != StyleComponentElement::Item) {
+        return QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
+    }
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+
+    // If there is an index widget registered for this item (set via setItemWidget),
+    // use its natural sizeHint as the base so callers do not need to setSizeHint.
+    QSize baseSize = size;
+    const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+    if (const auto* view = qobject_cast<const QAbstractItemView*>(widget);
+        view && vopt && vopt->index.isValid()) {
+        if (const QWidget* indexWidget = view->indexWidget(vopt->index)) {
+            baseSize = indexWidget->sizeHint();
+        }
+    }
+    if (!baseSize.isValid()) {
+        baseSize = QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
+    }
+
+    return geometry.sizeFromContents(baseSize);
+}
+
 QSize FreeCADStyle::sizeFromContents(
     ContentsType type,
     const QStyleOption* option,
@@ -900,54 +998,30 @@ QSize FreeCADStyle::sizeFromContents(
 ) const
 {
     if (type == CT_PushButton) {
-        const StyleContext context = contextOf(widget, option);
         const auto* btnOption = qstyleoption_cast<const QStyleOptionButton*>(option);
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
         QSize contentSize = size;
         if (btnOption && !btnOption->icon.isNull() && !btnOption->text.isEmpty()) {
             contentSize.rwidth() += geometry.iconGapDelta();
         }
-
         return geometry.sizeFromContents(contentSize);
     }
 
     if (type == CT_ComboBox) {
-        const StyleContext context = contextOf(widget, option);
         const auto* comboOption = qstyleoption_cast<const QStyleOptionComboBox*>(option);
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
         QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
-
         // QComboBox::sizeHint bakes iconSize.width() + qtBuiltInIconGap into the content
         // size it passes here when the current item has an icon.  Replace that gap with
         // the token value, matching the layout used in drawComboBoxLabel.
         if (comboOption && !comboOption->currentIcon.isNull()) {
             result.rwidth() += geometry.iconGapDelta();
         }
-
         return geometry.constrain(result);
     }
 
     if (type == CT_TabBarTab) {
-        QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
-
-        const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
-        if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
-            StyleContext geometryContext = contextOf(widget, option, StyleComponentElement::Tab);
-            geometryContext.variant.set(VariantSlot::Position, Position::North);
-            const BoxGeometryDefinition geometry = resolveBoxGeometry(geometryContext);
-            result.rwidth() += geometry.iconGapDelta();
-        }
-
-        // The background is painted narrower by |tabOverlap| on the trailing edge to create the
-        // visual gap between tabs (see drawTabBarTab). Add that same amount to the tab rect so
-        // the content area, computed from the background rect, still has symmetric padding.
-        const int tabOverlap = proxy()->pixelMetric(PM_TabBarTabOverlap, option, widget);
-        if (tabOverlap < 0) {
-            result.rwidth() -= tabOverlap;
-        }
-
-        return result;
+        return tabBarTabSizeFromContents(option, size, widget);
     }
 
     if (type == CT_LineEdit || type == CT_SpinBox) {
@@ -956,67 +1030,13 @@ QSize FreeCADStyle::sizeFromContents(
     }
 
     if (type == CT_ToolButton) {
-        const StyleContext context = contextOf(widget, option);
-        const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option);
-        BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-
-        // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
-        // naturally from the uniform padding. The height token still applies to all other
-        // ToolButton contexts (form-control-style buttons with text, small/big variants, etc).
-        const std::optional<Qt::Orientation> toolbarOrientation = toolbarOrientationOf(widget);
-        const bool isToolbarIconOnly = toolbarOrientation.has_value() && tbOption
-            && tbOption->toolButtonStyle == Qt::ToolButtonIconOnly;
-
-        if (isToolbarIconOnly) {
-            geometry.height = std::nullopt;
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
+            return toolButtonSizeFromContents(opt, size, widget);
         }
-
-        const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-        const bool hasMenu = tbOption->features & QStyleOptionToolButton::MenuButtonPopup;
-
-        // QToolButton::sizeHint() adds PM_MenuButtonIndicator to the width for
-        // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar
-        // orientation. For vertical toolbars the strip goes below the icon, so we move
-        // the indicator contribution from width to height.
-        QSize contentSize = size;
-        if (tbOption && hasMenu && toolbarOrientation == Qt::Vertical) {
-            contentSize.rwidth() -= menuWidth;
-            contentSize.rheight() += menuWidth;
-        }
-
-        // For horizontal menu-strip buttons, minWidth expresses the button body minimum;
-        // add the strip width so constrain sees the correct total minimum.
-        const bool hasHorizontalMenu = hasMenu && toolbarOrientation != Qt::Vertical;
-        if (hasHorizontalMenu && geometry.minWidth) {
-            geometry.minWidth = *geometry.minWidth + menuWidth;
-        }
-
-        return geometry.sizeFromContents(contentSize);
     }
 
     if (type == CT_ItemViewItem) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        const bool isItemComponent = context.element == StyleComponentElement::Item;
-        if (!isItemComponent) {
-            return QProxyStyle::sizeFromContents(type, option, size, widget);
-        }
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-
-        // If there is an index widget registered for this item (set via setItemWidget),
-        // use its natural sizeHint as the base so callers do not need to setSizeHint.
-        QSize baseSize = size;
-        const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
-        if (const auto* view = qobject_cast<const QAbstractItemView*>(widget);
-            view && vopt && vopt->index.isValid()) {
-            if (const QWidget* indexWidget = view->indexWidget(vopt->index)) {
-                baseSize = indexWidget->sizeHint();
-            }
-        }
-        if (!baseSize.isValid()) {
-            baseSize = QProxyStyle::sizeFromContents(type, option, size, widget);
-        }
-
-        return geometry.sizeFromContents(baseSize);
+        return itemViewItemSizeFromContents(option, size, widget);
     }
 
     return QProxyStyle::sizeFromContents(type, option, size, widget);

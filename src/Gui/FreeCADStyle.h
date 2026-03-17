@@ -675,6 +675,43 @@ private:
         const QWidget* widget
     ) const;
 
+    /**
+     * @brief Computes the outer size for a CT_TabBarTab contents type.
+     *
+     * Adjusts the parent-style result for the icon–text gap token and the
+     * tab-overlap extension (the background is painted narrower by |tabOverlap|
+     * so the content area still has symmetric padding).
+     */
+    QSize tabBarTabSizeFromContents(
+        const QStyleOption* option,
+        const QSize& size,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Computes the outer size for a CT_ToolButton contents type.
+     *
+     * Handles icon-only toolbar squareness (suppresses the fixed height token),
+     * vertical-toolbar menu-strip reorientation, and horizontal minWidth adjustment.
+     */
+    QSize toolButtonSizeFromContents(
+        const QStyleOptionToolButton* option,
+        const QSize& size,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Computes the outer size for a CT_ItemViewItem contents type.
+     *
+     * Uses the index widget's sizeHint as the base when one is registered,
+     * so callers do not need to call setSizeHint on every model index.
+     */
+    QSize itemViewItemSizeFromContents(
+        const QStyleOption* option,
+        const QSize& size,
+        const QWidget* widget
+    ) const;
+
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 
