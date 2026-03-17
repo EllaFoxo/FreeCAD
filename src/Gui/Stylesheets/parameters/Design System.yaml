@@ -177,6 +177,8 @@ ToolButtonMenuWidth: 14px
 ToolBarItemSpacing: "@Spacing.100"
 ToolBarItemMargin: "@Spacing.100"
 
+ToolBarButtonHeight: "reset()" # Do not enforce height for toolbar buttons
+
 # ── Select Padding overrides
 SelectPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
 SelectSmallPadding: "@FormControlSmallPadding"

@@ -41,16 +41,18 @@ enum class StyleComponent : uint8_t
 {
     PushButton,
     ToolButton,
-    LineEdit,     // QLineEdit + QAbstractSpinBox edit frame
-    TextEdit,     // QPlainTextEdit, QTextEdit and derivatives
-    Select,       // QComboBox (non-editable), inherits Button styles
-    ComboBox,     // QComboBox (editable), inherits LineEdit styles
-    List,         // QListWidget, QListView
-    Tree,         // QTreeWidget, QTreeView
-    CheckBox,     // QCheckBox indicator
-    RadioButton,  // QRadioButton indicator
-    TabBar,       // QTabBar
-    TabWidget,    // QTabWidget pane (PE_FrameTabWidget)
+    LineEdit,       // QLineEdit + QAbstractSpinBox edit frame
+    TextEdit,       // QPlainTextEdit, QTextEdit and derivatives
+    Select,         // QComboBox (non-editable), inherits Button styles
+    ComboBox,       // QComboBox (editable), inherits LineEdit styles
+    List,           // QListWidget, QListView
+    Tree,           // QTreeWidget, QTreeView
+    CheckBox,       // QCheckBox indicator
+    RadioButton,    // QRadioButton indicator
+    TabBar,         // QTabBar
+    TabWidget,      // QTabWidget pane (PE_FrameTabWidget)
+    ToolBar,        // QToolBar
+    ToolBarButton,  // QToolButton in QToolBar - semantically different
     // Add new components before COUNT
     COUNT
 };

@@ -927,19 +927,10 @@ QSize FreeCADStyle::toolButtonSizeFromContents(
 {
     BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
 
-    // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
-    // naturally from the uniform padding. The height token still applies to all other
-    // ToolButton contexts (form-control-style buttons with text, small/big variants, etc).
-    const std::optional<Qt::Orientation> toolbarOrientation = toolbarOrientationOf(widget);
-    const bool isToolbarIconOnly = toolbarOrientation.has_value()
-        && option->toolButtonStyle == Qt::ToolButtonIconOnly;
-
-    if (isToolbarIconOnly) {
-        geometry.height = std::nullopt;
-    }
-
     const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
     const bool hasMenu = option->features & QStyleOptionToolButton::MenuButtonPopup;
+
+    const std::optional<Qt::Orientation> toolbarOrientation = toolbarOrientationOf(widget);
 
     // QToolButton::sizeHint() adds PM_MenuButtonIndicator to the width for
     // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar

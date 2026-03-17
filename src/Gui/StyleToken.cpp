@@ -48,6 +48,8 @@
 #include "StyleParameters/Insets.h"
 #include "Utilities.h"
 
+#include <QToolBar>
+
 using namespace Gui;
 
 // Explicit specialization declarations for convertTo<> overloads defined in FreeCADStyle.cpp.
@@ -88,24 +90,26 @@ auto lookup(const Map& map, const typename Map::key_type& key) -> const typename
 // To add a new abstract base: edit the relevant chain — no enum change needed.
 // clang-format off
 const std::map<StyleComponent, std::vector<std::string_view>> componentChains = {
-    {StyleComponent::PushButton,  {"Button", "FormControl"}},
-    {StyleComponent::ToolButton,  {"ToolButton", "Button", "FormControl"}},
-    {StyleComponent::LineEdit,    {"LineEdit", "FormControl"}},
-    {StyleComponent::TextEdit,    {"TextEdit", "LineEdit", "FormControl"}},
-    {StyleComponent::Select,      {"Select", "Button", "FormControl"}},
-    {StyleComponent::ComboBox,    {"ComboBox", "LineEdit", "FormControl"}},
-    {StyleComponent::List,        {"List"}},
-    {StyleComponent::Tree,        {"Tree", "List"}},
-    {StyleComponent::CheckBox,    {"CheckBox", "FormControl"}},
-    {StyleComponent::RadioButton, {"RadioButton", "CheckBox", "FormControl"}},
-    {StyleComponent::TabBar,      {"TabBar"}},
-    {StyleComponent::TabWidget,   {"TabWidget"}},
+    {StyleComponent::PushButton,    {"Button", "FormControl"}},
+    {StyleComponent::ToolButton,    {"ToolButton", "Button", "FormControl"}},
+    {StyleComponent::LineEdit,      {"LineEdit", "FormControl"}},
+    {StyleComponent::TextEdit,      {"TextEdit", "LineEdit", "FormControl"}},
+    {StyleComponent::Select,        {"Select", "Button", "FormControl"}},
+    {StyleComponent::ComboBox,      {"ComboBox", "LineEdit", "FormControl"}},
+    {StyleComponent::List,          {"List"}},
+    {StyleComponent::Tree,          {"Tree", "List"}},
+    {StyleComponent::CheckBox,      {"CheckBox", "FormControl"}},
+    {StyleComponent::RadioButton,   {"RadioButton", "CheckBox", "FormControl"}},
+    {StyleComponent::TabBar,        {"TabBar"}},
+    {StyleComponent::TabWidget,     {"TabWidget"}},
+    {StyleComponent::ToolBar,       {"ToolBar"}},
+    {StyleComponent::ToolBarButton, {"ToolBarButton", "ToolButton", "Button", "FormControl"}}
 };
 // clang-format on
 
 std::span<const std::string_view> componentChain(StyleComponent component)
 {
-    return std::span<const std::string_view>(lookup(componentChains, component));
+    return lookup(componentChains, component);
 }
 
 // ── Element string table ─────────────────────────────────────────────────────
@@ -361,7 +365,8 @@ StyleContext FreeCADStyle::contextOf(
     StyleContext context;
 
     if (qobject_cast<const QToolButton*>(widget)) {
-        context.component = StyleComponent::ToolButton;
+        const bool isInToolBar = qobject_cast<const QToolBar*>(widget->parent());
+        context.component = isInToolBar ? StyleComponent::ToolBarButton : StyleComponent::ToolButton;
     }
     else if (qobject_cast<const QPushButton*>(widget)) {
         context.component = StyleComponent::PushButton;
@@ -388,6 +393,10 @@ StyleContext FreeCADStyle::contextOf(
     }
     else if (qobject_cast<const QListView*>(widget)) {
         context.component = StyleComponent::List;
+        context.element = element;
+    }
+    else if (qobject_cast<const QToolBar*>(widget)) {
+        context.component = StyleComponent::ToolBar;
         context.element = element;
     }
     else if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {
@@ -517,10 +526,15 @@ std::optional<StyleParameters::Value> FreeCADStyle::resolve(
 
     std::optional<StyleParameters::Value> result;
     for (const std::string& prefix : prefixes) {
-        result = resolve(prefix + std::string(propertySuffix));
-        if (result) {
-            break;
+        auto candidate = resolve(prefix + std::string(propertySuffix));
+        if (!candidate) {
+            continue;  // not defined at this level — try next prefix
         }
+        if (candidate->holds<StyleParameters::None>()) {
+            break;  // explicitly reset — stop the chain, result stays nullopt
+        }
+        result = std::move(candidate);
+        break;
     }
 
     tokenCache.emplace(key, result);
