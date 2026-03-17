@@ -120,15 +120,29 @@ public:
     /**
      * @brief Describes the spatial layout properties of a box-shaped widget.
      *
-     * Resolved from Design System tokens (Padding, Height, MinWidth, IconSpacing).
-     * Used in both sizeFromContents (to compute the total widget size) and draw
-     * methods (to derive the content rect from the widget rect).
+     * Resolved from Design System tokens:
+     *   Padding, Height, MinWidth, MaxWidth, Width, MinHeight, MaxHeight, IconSpacing.
+     *
+     * Constraint semantics (applied by constrain() and sizeFromContents()):
+     *   1. Fixed overrides (width, height) are applied first — pin the dimension absolutely.
+     *   2. min* clamps raise the result.
+     *   3. max* clamps lower the result.
+     *
+     * Usage guidance:
+     *   - Use sizeFromContents(contentSize) for components that own their size computation
+     *     (PushButton, ToolButton, ItemViewItem): adds padding then constrains.
+     *   - Use constrain(result) for components that delegate to the parent style first
+     *     (ComboBox, LineEdit, SpinBox): only applies constraints to the delegated size.
      */
     struct BoxGeometryDefinition
     {
         QMarginsF padding;
         std::optional<int> height;
         std::optional<int> minWidth;
+        std::optional<int> width;      // fixed width override
+        std::optional<int> maxWidth;   // maximum width clamp
+        std::optional<int> minHeight;  // minimum height clamp
+        std::optional<int> maxHeight;  // maximum height clamp
         /** Qt hardcodes this many pixels between an icon and its label text. */
         static constexpr int qtBuiltInIconGap = 4;
 
@@ -156,6 +170,48 @@ public:
         [[nodiscard]] int paddingV() const
         {
             return static_cast<int>(padding.top() + padding.bottom());
+        }
+
+        /** @brief Applies all dimension constraints to a size. Fixed overrides first, then min
+         * clamps up, max clamps down. */
+        [[nodiscard]] QSize constrain(QSize size) const
+        {
+            if (width) {
+                size.setWidth(*width);
+            }
+            if (height) {
+                size.setHeight(*height);
+            }
+            if (minWidth) {
+                size.setWidth(std::max(size.width(), *minWidth));
+            }
+            if (minHeight) {
+                size.setHeight(std::max(size.height(), *minHeight));
+            }
+            if (maxWidth) {
+                size.setWidth(std::min(size.width(), *maxWidth));
+            }
+            if (maxHeight) {
+                size.setHeight(std::min(size.height(), *maxHeight));
+            }
+            return size;
+        }
+
+        /** @brief Applies all dimension constraints to a rect, preserving top-left position. */
+        [[nodiscard]] QRect constrain(const QRect& rect) const
+        {
+            return {rect.topLeft(), constrain(rect.size())};
+        }
+
+        /** @brief Computes outer widget size: adds padding to content size, then constrains.
+         *  Use for components that own their size computation (PushButton, ToolButton,
+         * ItemViewItem). Use constrain(result) for components that delegate to the parent style
+         * first (ComboBox, LineEdit). */
+        [[nodiscard]] QSize sizeFromContents(QSize contentSize) const
+        {
+            contentSize.rwidth() += paddingH();
+            contentSize.rheight() += paddingV();
+            return constrain(contentSize);
         }
 
         /** @brief Returns @p rect inset by this geometry's padding. */
@@ -368,7 +424,8 @@ private:
     /**
      * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
      *
-     * Calls resolve(context, property) for Padding, Height, MinWidth, and IconSpacing.
+     * Calls resolve(context, property) for:
+     *   Padding, Height, MinWidth, Width, MaxWidth, MinHeight, MaxHeight, IconSpacing.
      * All per-property lookups are individually cached.
      */
     BoxGeometryDefinition resolveBoxGeometry(const StyleContext& context) const;

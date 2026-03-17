@@ -580,6 +580,25 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
         result.minWidth = static_cast<int>(minWidth->value);
     }
 
+    if (const auto resolvedWidth = resolve<StyleParameters::Numeric>(context, StyleProperty::Width)) {
+        result.width = static_cast<int>(resolvedWidth->value);
+    }
+
+    if (const auto resolvedMaxWidth
+        = resolve<StyleParameters::Numeric>(context, StyleProperty::MaxWidth)) {
+        result.maxWidth = static_cast<int>(resolvedMaxWidth->value);
+    }
+
+    if (const auto resolvedMinHeight
+        = resolve<StyleParameters::Numeric>(context, StyleProperty::MinHeight)) {
+        result.minHeight = static_cast<int>(resolvedMinHeight->value);
+    }
+
+    if (const auto resolvedMaxHeight
+        = resolve<StyleParameters::Numeric>(context, StyleProperty::MaxHeight)) {
+        result.maxHeight = static_cast<int>(resolvedMaxHeight->value);
+    }
+
     if (const auto spacing = resolve<StyleParameters::Numeric>(context, StyleProperty::IconSpacing)) {
         result.iconSpacing = static_cast<int>(spacing->value);
     }

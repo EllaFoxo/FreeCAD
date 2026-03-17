@@ -752,10 +752,7 @@ void FreeCADStyle::drawPrimitive(
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setPen(Qt::NoPen);
 
-            QColor dotColor = option->palette.text().color();
-            if (const auto tickColor = resolve<Base::Color>(context, StyleProperty::TickColor)) {
-                dotColor = tickColor->asValue<QColor>();
-            }
+            QColor dotColor = resolveIconColor(context, option->palette);
 
             constexpr qreal dotPaddingRatio = 0.2;  // fallback: fraction of indicator width
             qreal padding = static_cast<qreal>(option->rect.width()) * dotPaddingRatio;
@@ -783,10 +780,7 @@ void FreeCADStyle::drawPrimitive(
             painter->setRenderHint(QPainter::Antialiasing);
             painter->setPen(Qt::NoPen);
 
-            QColor markColor = option->palette.text().color();
-            if (const auto tickColor = resolve<Base::Color>(context, StyleProperty::TickColor)) {
-                markColor = tickColor->asValue<QColor>();
-            }
+            QColor markColor = resolveIconColor(context, option->palette);
 
             constexpr qreal checkPaddingRatio = 0.2;  // fallback: fraction of box width
             constexpr qreal checkPenWidthRatio = 0.15;  // stroke width as fraction of inner rect width
@@ -875,22 +869,12 @@ QSize FreeCADStyle::sizeFromContents(
         const auto* btnOption = qstyleoption_cast<const QStyleOptionButton*>(option);
         const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
 
-        int width = size.width() + geometry.paddingH();
-        int height = size.height() + geometry.paddingV();
-
-        // Fix icon-text spacing contribution (Qt hardcodes qtBuiltInIconGap px).
+        QSize contentSize = size;
         if (btnOption && !btnOption->icon.isNull() && !btnOption->text.isEmpty()) {
-            width += geometry.iconGapDelta();
+            contentSize.rwidth() += geometry.iconGapDelta();
         }
 
-        if (geometry.height) {
-            height = *geometry.height;
-        }
-        if (geometry.minWidth) {
-            width = std::max(width, *geometry.minWidth);
-        }
-
-        return {width, height};
+        return geometry.sizeFromContents(contentSize);
     }
 
     if (type == CT_ComboBox) {
@@ -906,10 +890,7 @@ QSize FreeCADStyle::sizeFromContents(
             result.rwidth() += geometry.iconGapDelta();
         }
 
-        if (geometry.height) {
-            result.setHeight(*geometry.height);
-        }
-        return result;
+        return geometry.constrain(result);
     }
 
     if (type == CT_TabBarTab) {
@@ -936,32 +917,13 @@ QSize FreeCADStyle::sizeFromContents(
 
     if (type == CT_LineEdit || type == CT_SpinBox) {
         const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
-        QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
-        if (geometry.height) {
-            result.setHeight(*geometry.height);
-        }
-        return result;
+        return geometry.constrain(QProxyStyle::sizeFromContents(type, option, size, widget));
     }
 
     if (type == CT_ToolButton) {
         const StyleContext context = contextOf(widget, option);
         const auto* tbOption = qstyleoption_cast<const QStyleOptionToolButton*>(option);
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-
-        const bool hasIconOrArrow = tbOption
-            && (!tbOption->icon.isNull() || tbOption->arrowType != Qt::NoArrow);
-        const bool needsCustomLayout = hasIconOrArrow && tbOption && !tbOption->text.isEmpty()
-            && (tbOption->toolButtonStyle == Qt::ToolButtonTextBesideIcon
-                || tbOption->toolButtonStyle == Qt::ToolButtonTextUnderIcon);
-
-        int width = size.width() + geometry.paddingH();
-        int height = size.height() + geometry.paddingV();
-
-        if (needsCustomLayout && tbOption->toolButtonStyle == Qt::ToolButtonTextBesideIcon) {
-            // Qt hardcodes qtBuiltInIconGap px as the icon-text gap in QToolButton::sizeHint.
-            // Replace that with our spacing so the widget is wide enough.
-            // width += geometry.iconGapDelta();
-        }
+        BoxGeometryDefinition geometry = resolveBoxGeometry(context);
 
         // For icon-only toolbar buttons, skip the fixed-height token so squareness emerges
         // naturally from the uniform padding. The height token still applies to all other
@@ -970,8 +932,8 @@ QSize FreeCADStyle::sizeFromContents(
         const bool isToolbarIconOnly = toolbarOrientation.has_value() && tbOption
             && tbOption->toolButtonStyle == Qt::ToolButtonIconOnly;
 
-        if (geometry.height && !isToolbarIconOnly) {
-            height = *geometry.height;
+        if (isToolbarIconOnly) {
+            geometry.height = std::nullopt;
         }
 
         const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
@@ -981,19 +943,20 @@ QSize FreeCADStyle::sizeFromContents(
         // MenuButtonPopup buttons before calling sizeFromContents, regardless of toolbar
         // orientation. For vertical toolbars the strip goes below the icon, so we move
         // the indicator contribution from width to height.
+        QSize contentSize = size;
         if (tbOption && hasMenu && toolbarOrientation == Qt::Vertical) {
-            width -= menuWidth;
-            height += menuWidth;
+            contentSize.rwidth() -= menuWidth;
+            contentSize.rheight() += menuWidth;
         }
 
-        if (geometry.minWidth) {
-            width = std::max(
-                width,
-                *geometry.minWidth + ((hasMenu && toolbarOrientation != Qt::Vertical) ? menuWidth : 0)
-            );
+        // For horizontal menu-strip buttons, minWidth expresses the button body minimum;
+        // add the strip width so constrain sees the correct total minimum.
+        const bool hasHorizontalMenu = hasMenu && toolbarOrientation != Qt::Vertical;
+        if (hasHorizontalMenu && geometry.minWidth) {
+            geometry.minWidth = *geometry.minWidth + menuWidth;
         }
 
-        return {width, height};
+        return geometry.sizeFromContents(contentSize);
     }
 
     if (type == CT_ItemViewItem) {
@@ -1018,7 +981,7 @@ QSize FreeCADStyle::sizeFromContents(
             baseSize = QProxyStyle::sizeFromContents(type, option, size, widget);
         }
 
-        return {baseSize.width() + geometry.paddingH(), baseSize.height() + geometry.paddingV()};
+        return geometry.sizeFromContents(baseSize);
     }
 
     return QProxyStyle::sizeFromContents(type, option, size, widget);
