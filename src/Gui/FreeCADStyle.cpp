@@ -47,7 +47,10 @@
 #include <QListView>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
+#include <QPointer>
+#include <QScreen>
 #include <QTabBar>
+#include <QTimer>
 #include <QToolBar>
 
 #include <Base/Color.h>
@@ -1979,6 +1982,25 @@ void FreeCADStyle::polish(QWidget* widget)
 
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
         comboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        if (auto* listView = qobject_cast<QListView*>(comboBox->view())) {
+            listView->setProperty(comboDropdownProperty, true);
+            listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+            StyleContext context;
+            context.component = StyleComponent::DropdownList;
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+            if (geometry.maxHeight) {
+                listView->setMaximumHeight(*geometry.maxHeight);
+                if (QWidget* container = listView->parentWidget()) {
+                    container->setMaximumHeight(*geometry.maxHeight);
+                    // Guard against double-installation on re-polish (e.g. theme change).
+                    if (!container->property(comboContainerProperty).toBool()) {
+                        container->setProperty(comboContainerProperty, true);
+                        container->installEventFilter(this);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1986,6 +2008,23 @@ void FreeCADStyle::unpolish(QWidget* widget)
 {
     if (qobject_cast<QTabBar*>(widget)) {
         widget->removeEventFilter(this);
+    }
+    if (qobject_cast<QComboBox*>(widget)) {
+        // Use findChildren instead of view() to avoid lazily creating the container
+        // for a combo that was never opened (view() has a side effect of creating it).
+        const auto listViews = widget->findChildren<QListView*>();
+        for (auto* listView : listViews) {
+            if (!listView->property(comboDropdownProperty).toBool()) {
+                continue;
+            }
+            // Qt default for QComboBox's internal view is ScrollBarAlwaysOff.
+            listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            listView->setMaximumHeight(QWIDGETSIZE_MAX);
+            if (QWidget* container = listView->parentWidget()) {
+                container->setMaximumHeight(QWIDGETSIZE_MAX);
+                container->removeEventFilter(this);
+            }
+        }
     }
     QProxyStyle::unpolish(widget);
 }
@@ -2031,6 +2070,61 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         if (event->type() == QEvent::MouseMove || event->type() == QEvent::Leave
             || event->type() == QEvent::HoverMove || event->type() == QEvent::HoverLeave) {
             static_cast<QWidget*>(obj)->update();
+        }
+    }
+
+    // Qt positions the popup using the unconstrained sizeHint() height, so when the
+    // unconstrained height does not fit below the combo box, Qt places the popup above —
+    // even though the maxHeight-constrained popup *would* fit below.  We fix this in a
+    // deferred callback (after Qt has finished all internal placement / screen-clamping)
+    // by checking whether the constrained popup fits below and moving it there if so.
+    // When it genuinely does not fit below either, we fall back to touching the combo
+    // top so there is no gap from the mismatch between Qt's positioning and our constraint.
+    if (event->type() == QEvent::Show) {
+        if (auto* container = qobject_cast<QWidget*>(obj)) {
+            if (container->property(comboContainerProperty).toBool()) {
+                QPointer<QWidget> containerGuard = container;
+                QTimer::singleShot(0, [containerGuard]() {
+                    if (!containerGuard || !containerGuard->isVisible()) {
+                        return;
+                    }
+                    QWidget* comboBox = containerGuard->parentWidget();
+                    if (!comboBox) {
+                        return;
+                    }
+
+                    const QPoint comboScreenPos = comboBox->mapToGlobal(QPoint {});
+                    const int comboTopScreenY = comboScreenPos.y();
+                    const int comboBottomScreenY = comboTopScreenY + comboBox->height();
+                    const int containerTopScreenY = containerGuard->mapToGlobal(QPoint {}).y();
+                    const int containerHeight = containerGuard->height();
+
+                    const bool placedAbove = containerTopScreenY < comboTopScreenY;
+                    if (!placedAbove) {
+                        return;  // popup is below — no correction needed
+                    }
+
+                    // Popup was placed above. Check if the constrained height fits below.
+                    const QScreen* screen = QGuiApplication::screenAt(comboScreenPos);
+                    const int screenBottom = screen ? screen->availableGeometry().bottom() : INT_MAX;
+
+                    if (comboBottomScreenY + containerHeight <= screenBottom) {
+                        // Fits below: move there (Qt chose above only because the
+                        // unconstrained sizeHint was too tall to fit).
+                        const int delta = comboBottomScreenY - containerTopScreenY;
+                        containerGuard->move(containerGuard->pos() + QPoint(0, delta));
+                    }
+                    else {
+                        // Genuinely doesn't fit below — keep above but close the gap
+                        // that the maxHeight constraint left between popup and combo top.
+                        const int containerBottomScreenY = containerTopScreenY + containerHeight;
+                        if (containerBottomScreenY < comboTopScreenY) {
+                            const int delta = comboTopScreenY - containerBottomScreenY;
+                            containerGuard->move(containerGuard->pos() + QPoint(0, delta));
+                        }
+                    }
+                });
+            }
         }
     }
 

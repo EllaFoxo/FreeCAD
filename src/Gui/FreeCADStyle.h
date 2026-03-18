@@ -722,6 +722,11 @@ private:
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 
+    // Dynamic widget property names used to tag combo box internals.
+    // Defined here so both FreeCADStyle.cpp and StyleToken.cpp can share them.
+    static constexpr const char* comboDropdownProperty = "_fc_comboDropdown";
+    static constexpr const char* comboContainerProperty = "_fc_comboContainer";
+
     /**
      * @brief Resolves the icon color for @p context.
      *

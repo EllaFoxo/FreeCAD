@@ -264,6 +264,9 @@ ScrollBarThumbMinLength: 50px
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 ListItemIconSpacing: "@Spacing.150"
 
+# ── Dropdown List (QComboBox popup) ────────────────────────────────────────
+DropdownListMaxHeight: "250px"
+
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 

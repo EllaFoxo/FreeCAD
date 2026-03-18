@@ -46,6 +46,7 @@ enum class StyleComponent : uint8_t
     Select,         // QComboBox (non-editable), inherits Button styles
     ComboBox,       // QComboBox (editable), inherits LineEdit styles
     List,           // QListWidget, QListView
+    DropdownList,   // QListView inside a QComboBox popup
     Tree,           // QTreeWidget, QTreeView
     CheckBox,       // QCheckBox indicator
     RadioButton,    // QRadioButton indicator

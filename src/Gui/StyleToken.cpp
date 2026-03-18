@@ -174,6 +174,7 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::Select,        {"Select", "Button", "FormControl"}},
     {StyleComponent::ComboBox,      {"ComboBox", "LineEdit", "FormControl"}},
     {StyleComponent::List,          {"List"}},
+    {StyleComponent::DropdownList,  {"DropdownList", "List"}},
     {StyleComponent::Tree,          {"Tree", "List"}},
     {StyleComponent::CheckBox,      {"CheckBox", "FormControl"}},
     {StyleComponent::RadioButton,   {"RadioButton", "CheckBox", "FormControl"}},
@@ -482,7 +483,11 @@ StyleContext FreeCADStyle::contextOf(
         context.element = element;
     }
     else if (qobject_cast<const QListView*>(widget)) {
-        context.component = StyleComponent::List;
+        // FreeCADStyle::polish() tags the QComboBox's internal list view with this property
+        // so we can reliably distinguish it without depending on Qt's internal parent chain,
+        // which can change when the popup container is reparented at show time.
+        const bool isDropdown = widget->property(FreeCADStyle::comboDropdownProperty).toBool();
+        context.component = isDropdown ? StyleComponent::DropdownList : StyleComponent::List;
         context.element = element;
     }
     else if (qobject_cast<const QToolBar*>(widget)) {
