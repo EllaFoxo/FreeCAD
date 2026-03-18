@@ -1,4 +1,9 @@
 ---
+Colors:
+  white: "#ffffff"
+  black: "#000000"
+  transparent: "opacity(#ffffff, 0%)"
+
 BaseShades:
   050: 0.05
   100: 0.10
@@ -143,8 +148,8 @@ ButtonDisabledBorderColor: "@BaseBorderColor"
 ButtonPrimaryBackground: "blend(@ButtonBackground, @Accent.500, 15%)"
 ButtonPrimaryBorderColor: "blend(@ButtonBorderColor, @Accent.500, 25%)"
 
-ButtonLinkBackground: transparent
-ButtonLinkBorderColor: transparent
+ButtonLinkBackground: "@Colors.transparent"
+ButtonLinkBorderColor: "@Colors.transparent"
 
 ButtonLinkHoveredBackground: "@Background.100"
 ButtonLinkHoveredBorderColor: "@BaseBorderColor"
@@ -251,7 +256,7 @@ CheckBoxPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 1px, blur
 RadioButtonBorderRadius: "border_radius(100px)"
 
 # ── Scroll Bar ───────────────────────────────────────────────────────────
-ScrollBarBackground: transparent
+ScrollBarBackground: "@Colors.transparent"
 ScrollBarHoveredBackground: "opacity(@BaseBorderColor, 0.1)"
 
 ScrollBarThumbBackground: "@Neutral.400"
