@@ -314,17 +314,8 @@ protected:
         const QWidget* widget = nullptr
     ) const override;
 
-protected:
     /**
      * @brief Paints a background box with optional rounded corners and border.
-     *
-     * If borderColor + borderThickness are both set:
-     *   1. Fill the outer rounded rect (borderRadius) with borderColor.
-     *   2. Fill the inner rounded rect (inset by borderThickness, inner radii
-     *      shrunk by thickness) with background.
-     * Otherwise just fill the outer rounded rect with background.
-     *
-     * The painter state (pen, brush, render hints) is saved and restored.
      */
     static void drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& style);
 
@@ -423,18 +414,11 @@ private:
 
     /**
      * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
-     *
-     * Calls resolve(context, property) for each visual property, so all
-     * per-property lookups are individually cached.
      */
     BoxStyleDefinition resolveBoxStyle(const StyleContext& context) const;
 
     /**
      * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
-     *
-     * Calls resolve(context, property) for:
-     *   Padding, Height, MinWidth, Width, MaxWidth, MinHeight, MaxHeight, IconSpacing.
-     * All per-property lookups are individually cached.
      */
     BoxGeometryDefinition resolveBoxGeometry(const StyleContext& context) const;
 
@@ -451,79 +435,26 @@ private:
         const StyleComponentElement& element = StyleComponentElement::Root
     );
 
-    static Position tabPositionOf(QTabBar::Shape shape);
-
     static StyleContext withNorthPosition(const StyleContext& context);
 
-    /**
-     * @brief Returns the trailing-edge overlap for a tab, or 0 for the last/only tab.
-     *
-     * Last and only tabs must not be extended or shrunk on their trailing edge because
-     * there is no adjacent tab to overlap or gap with.
-     */
+    Position tabPositionOf(QTabBar::Shape shape);
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
-    /**
-     * @brief Adjusts the trailing edge of a tab rect by the tab overlap amount.
-     *
-     * Both drawTabBarTab and drawTabBarTabLabel compute this identically: extend
-     * (positive overlap) or shrink (negative overlap) the trailing edge so the
-     * background paint rect and content geometry agree.
-     */
+
     static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
 
-    /**
-     * @brief Paints the background shape of a single tab.
-     *
-     * Handles geometric rotation (BorderRadius, BorderThickness) from the canonical
-     * North definition to the actual tab position, while resolving visual tokens
-     * (Background, TextColor, Overlay) with the full position context so per-position
-     * colour overrides (e.g. TabBarTabSouthBackground) work naturally.
-     * Called from drawControl when element == CE_TabBarTabShape.
-     */
     void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
-    /**
-     * @brief Paints the label (icon + text) of a tab bar tab.
-     *
-     * Overrides CE_TabBarTabLabel to apply the TabBarTabIconSpacing token as the
-     * icon-to-text gap (Qt Fusion hardcodes 4 px). Only active when both icon and
-     * text are present and the tab is horizontal (North/South); vertical (East/West)
-     * tabs delegate to the parent.
-     */
     void drawTabBarTabLabel(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
-    /**
-     * @brief Paints the decorative base strip between the tab bar and the page content area.
-     *
-     * Renders a 4px-tall strip at the attachment edge using a transparent→shadow gradient
-     * and a 1px border on the attachment edge. Geometric tokens are resolved from the
-     * canonical North position and rotated to the actual position; visual tokens are
-     * resolved with the full position context so per-position overrides work naturally.
-     * Called from drawPrimitive when element == PE_FrameTabBarBase.
-     */
     void drawTabBarBase(
         QPainter* painter,
         const QStyleOptionTabBarBase* option,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Draws the shadow strip at the tab attachment edge of a QTabWidget content frame.
-     *
-     * QTabWidget sets drawBase(false) on its internal QTabBar, suppressing PE_FrameTabBarBase.
-     * This method replicates the same shadow strip by clipping the frame rect to the attachment
-     * edge and drawing via resolveBoxStyle(). Called before falling through to the parent
-     * style which draws the frame border.
-     */
     void drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const;
 
-    /**
-     * @brief Draws the filled dot inside a checked radio button indicator.
-     *
-     * Resolves padding from the StyleProperty::Padding token; falls back to 20 % of
-     * the rect width. Caller is responsible for having already painted the box background.
-     */
     void drawRadioButtonDot(
         QPainter* painter,
         const QRect& rect,
@@ -531,12 +462,6 @@ private:
         const QPalette& palette
     ) const;
 
-    /**
-     * @brief Draws the check mark stroke inside a fully-checked checkbox indicator.
-     *
-     * Padding and pen width are resolved from design tokens. Caller is responsible for
-     * having already painted the box background.
-     */
     void drawCheckMark(
         QPainter* painter,
         const QRect& rect,
@@ -544,12 +469,6 @@ private:
         const QPalette& palette
     ) const;
 
-    /**
-     * @brief Draws the horizontal dash for an indeterminate checkbox indicator.
-     *
-     * Padding and pen width are resolved from design tokens. Caller is responsible for
-     * having already painted the box background.
-     */
     void drawIndeterminateMark(
         QPainter* painter,
         const QRect& rect,
@@ -557,40 +476,18 @@ private:
         const QPalette& palette
     ) const;
 
-    /**
-     * @brief Paints the label (icon + text) of a push button.
-     *
-     * Overrides CE_PushButtonLabel to apply the ButtonIconSpacing token as the
-     * icon-to-text gap (Qt Fusion hardcodes 4 px). Only active when both icon and
-     * text are present; icon-only or text-only buttons delegate to the parent.
-     */
     void drawPushButtonLabel(
         QPainter* painter,
         const QStyleOptionButton* option,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Paints the label (icon + text) of a tool button.
-     *
-     * Handles padding inset, icon/arrow pixmap selection, pressed-state shift,
-     * and the two layout modes: TextBesideIcon and TextUnderIcon.
-     * Called from drawControl when element == CE_ToolButtonLabel.
-     */
     void drawToolButtonLabel(
         QPainter* painter,
         const QStyleOptionToolButton* option,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Paints the label (icon + text) of a non-editable combo box.
-     *
-     * Overrides CE_ComboBoxLabel to apply the SelectIconSpacing token as the
-     * icon-to-text gap (Qt hardcodes 4 px). Editable combos are delegated to
-     * the parent because their icon–QLineEdit gap is fixed inside QComboBox
-     * internals and cannot be overridden from a style.
-     */
     void drawComboBoxLabel(
         QPainter* painter,
         const QStyleOptionComboBox* option,
@@ -613,30 +510,9 @@ private:
         const QStyleOption* option = nullptr
     ) const;
 
-    /**
-     * @brief Draws a separator line (horizontal or vertical) using design tokens.
-     *
-     * Resolves SeparatorThickness and SeparatorColor tokens, then fills the
-     * appropriate sub-rect of @p rect.
-     */
     void drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const;
-
-    /**
-     * @brief Paints a QSpinBox: outer frame + up/down button arrows.
-     *
-     * Does not delegate to the base style at all — the base style would repaint its own
-     * frame and button backgrounds on top of ours.
-     */
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
-
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
-
-    /**
-     * @brief Paints a QToolButton: main area, optional menu strip, and label.
-     *
-     * Handles both plain and MenuButtonPopup variants, including the seamed
-     * border treatment where the two halves share an edge.
-     */
     void drawToolButton(
         const QStyleOptionToolButton* option,
         QPainter* painter,
@@ -659,72 +535,36 @@ private:
         bool isVertical
     ) const;
 
-    /**
-     * @brief Returns subcontrol rects for CC_ComboBox.
-     *
-     * Handles SC_ComboBoxFrame, SC_ComboBoxEditField, SC_ComboBoxArrow;
-     * delegates to QProxyStyle for any other subcontrol.
-     */
     QRect comboBoxSubControlRect(
         const QStyleOptionComboBox* option,
         SubControl subControl,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Returns subcontrol rects for CC_SpinBox.
-     *
-     * Handles SC_SpinBoxFrame, SC_SpinBoxEditField, SC_SpinBoxUp, SC_SpinBoxDown;
-     * delegates to QProxyStyle for any other subcontrol.
-     */
     QRect spinBoxSubControlRect(
         const QStyleOptionSpinBox* option,
         SubControl subControl,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Returns subcontrol rects for CC_ToolButton.
-     *
-     * Only overrides layout for MenuButtonPopup buttons; delegates to QProxyStyle otherwise.
-     */
     QRect toolButtonSubControlRect(
         const QStyleOptionToolButton* option,
         SubControl subControl,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Computes the outer size for a CT_TabBarTab contents type.
-     *
-     * Adjusts the parent-style result for the icon–text gap token and the
-     * tab-overlap extension (the background is painted narrower by |tabOverlap|
-     * so the content area still has symmetric padding).
-     */
     QSize tabBarTabSizeFromContents(
         const QStyleOption* option,
         const QSize& size,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Computes the outer size for a CT_ToolButton contents type.
-     *
-     * Handles icon-only toolbar squareness (suppresses the fixed height token),
-     * vertical-toolbar menu-strip reorientation, and horizontal minWidth adjustment.
-     */
     QSize toolButtonSizeFromContents(
         const QStyleOptionToolButton* option,
         const QSize& size,
         const QWidget* widget
     ) const;
 
-    /**
-     * @brief Computes the outer size for a CT_ItemViewItem contents type.
-     *
-     * Uses the index widget's sizeHint as the base when one is registered,
-     * so callers do not need to call setSizeHint on every model index.
-     */
     QSize itemViewItemSizeFromContents(
         const QStyleOption* option,
         const QSize& size,
