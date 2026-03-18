@@ -40,6 +40,8 @@
 #include <QStyleOption>
 #include <QTabBar>
 #include <QToolButton>
+
+class QTextDocument;
 #include "StyleParameters/Value.h"
 #include "StyleToken.h"
 
@@ -449,10 +451,8 @@ private:
         const StyleComponentElement& element = StyleComponentElement::Root
     );
 
-    /** @brief Maps a QTabBar::Shape to the canonical Position enum. */
     static Position tabPositionOf(QTabBar::Shape shape);
 
-    /** @brief Returns a copy of @p context with Position forced to North (canonical). */
     static StyleContext withNorthPosition(const StyleContext& context);
 
     /**
@@ -606,7 +606,6 @@ private:
      */
     void drawComponent(QPainter* painter, const QRect& rect, const StyleContext& context) const;
 
-    /** @brief Convenience overload that builds the context from @p widget and @p option. */
     void drawComponent(
         QPainter* painter,
         const QRect& rect,
@@ -630,9 +629,6 @@ private:
      */
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
 
-    /**
-     * @brief Paints a QComboBox: background box + dropdown arrow indicator.
-     */
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
 
     /**
@@ -645,6 +641,22 @@ private:
         const QStyleOptionToolButton* option,
         QPainter* painter,
         const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Resolves the BoxStyleDefinition for a tool button half, zeroing seam borders/radii.
+     *
+     * For MenuButtonPopup buttons the two halves (Root = main button, Menu = dropdown strip)
+     * share an edge. This method removes the border on the Menu half's joining edge to avoid
+     * a double border, and zeroes the corner radii of both halves at the seam so the join
+     * looks flat.  For non-split buttons (hasMenuButton == false) the style is returned
+     * unchanged.
+     */
+    BoxStyleDefinition seamedBoxStyle(
+        const StyleContext& context,
+        StyleComponentElement element,
+        bool hasMenuButton,
+        bool isVertical
     ) const;
 
     /**
@@ -734,6 +746,24 @@ private:
     static void hideScrollerButtons(QWidget* container);
     static void restoreScrollerButtons(QWidget* container);
     void correctComboPopupPlacement(QWidget* container);
+
+    // ── eventFilter helpers ────────────────────────────────────────────────
+    // Each handles one concern from eventFilter(); see implementations for details.
+
+    /** Zeroes layout margins on GroupBox/TaskHeader/TaskGroup and applies token
+     *  padding to QTextEdit / QPlainTextEdit via document margin. */
+    void resetTaskPanelMargins(QObject* obj);
+
+    /** Forces a QTabBar repaint on mouse-move/leave events so hover highlighting
+     *  is always up to date. */
+    void forceTabBarRepaint(QObject* obj, QEvent* event);
+
+    /** Defers correctComboPopupPlacement() via QTimer::singleShot(0) so Qt
+     *  finishes its own screen-edge clamping before we adjust the popup. */
+    void scheduleComboPopupCorrection(QObject* obj);
+
+    /** Resolves token padding and applies it to @p document's document margin. */
+    void applyTextEditDocumentPadding(QWidget* widget, QTextDocument* document) const;
 
     /**
      * @brief Resolves the icon color for @p context.

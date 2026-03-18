@@ -38,6 +38,7 @@
 #include <QLayout>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QTextDocument>
 #include <QTextEdit>
 #include <QPainterPath>
 #include <QStyleOption>
@@ -570,9 +571,9 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
 
         default: {
             if (const auto it = metrics.find(metric); it != metrics.end()) {
-                const auto& [el, prop] = it->second;
+                const auto& [component, property] = it->second;
 
-                return resolve<int>(element(el), prop);
+                return resolve<int>(element(component), property);
             }
 
             return {};
@@ -1197,53 +1198,6 @@ void FreeCADStyle::drawToolButton(
     const bool hasMenuButton = option->features & QStyleOptionToolButton::MenuButtonPopup;
     const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
 
-    // Resolves a BoxStyleDefinition and, for MenuButtonPopup buttons, zeroes the
-    // border thickness and corner radii on the edge that joins the two halves.
-    // This prevents a double border at the seam and keeps corners square where
-    // the main button and the menu strip meet.
-    // element = Root  → main button (join is on its trailing/right or bottom edge)
-    // element = Menu  → menu strip  (join is on its leading/left or top edge)
-    const auto seamed = [&](const StyleContext& ctx,
-                            StyleComponentElement element) -> BoxStyleDefinition {
-        BoxStyleDefinition style = resolveBoxStyle(ctx);
-        if (!hasMenuButton) {
-            return style;
-        }
-
-        const bool isTrailing = (element != StyleComponentElement::Menu);
-
-        // The main button (isTrailing) keeps its border on the joining edge — it acts as
-        // the visible separator between the two halves. The menu strip removes its border
-        // on that same edge to avoid a double border.
-        if (!isTrailing && style.borderThickness.has_value()) {
-            if (isVertical) {
-                style.borderThickness->setTop(0);
-            }
-            else {
-                style.borderThickness->setLeft(0);
-            }
-        }
-
-        // Both halves need square corners at the seam.
-        if (isVertical) {
-            if (isTrailing) {
-                style.borderRadius.setBottom(0);
-            }
-            else {
-                style.borderRadius.setTop(0);
-            }
-        }
-        else {
-            if (isTrailing) {
-                style.borderRadius.setRight(0);
-            }
-            else {
-                style.borderRadius.setLeft(0);
-            }
-        }
-        return style;
-    };
-
     // Draw the main button area. Strip State_Sunken when only the menu strip is the
     // active subcontrol so that clicking the dropdown does not depress the main area.
     // When the menu strip is being pressed Qt may clear State_MouseOver from the overall
@@ -1260,7 +1214,7 @@ void FreeCADStyle::drawToolButton(
     drawBoxBackground(
         painter,
         mainRect,
-        seamed(contextOf(widget, &mainOption), StyleComponentElement::Root)
+        seamedBoxStyle(contextOf(widget, &mainOption), StyleComponentElement::Root, hasMenuButton, isVertical)
     );
 
     if (hasMenuButton) {
@@ -1274,7 +1228,7 @@ void FreeCADStyle::drawToolButton(
         drawBoxBackground(
             painter,
             menuRect,
-            seamed(contextOf(widget, &menuOption), StyleComponentElement::Menu)
+            seamedBoxStyle(contextOf(widget, &menuOption), StyleComponentElement::Menu, hasMenuButton, isVertical)
         );
 
         QStyleOptionToolButton arrowOption = *option;
@@ -1301,6 +1255,52 @@ void FreeCADStyle::drawToolButton(
     labelOption.rect = mainRect;
     labelOption.subControls &= ~SC_ToolButtonMenu;
     proxy()->drawControl(CE_ToolButtonLabel, &labelOption, painter, widget);
+}
+
+FreeCADStyle::BoxStyleDefinition FreeCADStyle::seamedBoxStyle(
+    const StyleContext& context,
+    StyleComponentElement element,
+    bool hasMenuButton,
+    bool isVertical
+) const
+{
+    BoxStyleDefinition style = resolveBoxStyle(context);
+    if (!hasMenuButton) {
+        return style;
+    }
+
+    const bool isTrailing = (element != StyleComponentElement::Menu);
+
+    // The main button (isTrailing) keeps its border on the joining edge — it acts as
+    // the visible separator between the two halves. The menu strip removes its border
+    // on that same edge to avoid a double border.
+    if (!isTrailing && style.borderThickness.has_value()) {
+        if (isVertical) {
+            style.borderThickness->setTop(0);
+        }
+        else {
+            style.borderThickness->setLeft(0);
+        }
+    }
+
+    // Both halves need square corners at the seam.
+    if (isVertical) {
+        if (isTrailing) {
+            style.borderRadius.setBottom(0);
+        }
+        else {
+            style.borderRadius.setTop(0);
+        }
+    }
+    else {
+        if (isTrailing) {
+            style.borderRadius.setRight(0);
+        }
+        else {
+            style.borderRadius.setLeft(0);
+        }
+    }
+    return style;
 }
 
 void FreeCADStyle::drawComplexControl(
@@ -2130,52 +2130,70 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
     }
 
     if (event->type() == QEvent::Polish) {
-        if (auto* groupBox = qobject_cast<QGroupBox*>(obj)) {
-            if (auto* layout = groupBox->layout()) {
-                layout->setContentsMargins(0, 0, 0, 0);
-            }
-        }
-
-        // Apply token padding to QTextEdit / QPlainTextEdit via the document margin.
-        // This pads the text content relative to the viewport while leaving scrollbars
-        // flush with the frame edge (unlike viewport-margin approaches).
-        const auto applyTextEditDocumentMargin = [this](QWidget* widget, QTextDocument* document) {
-            const StyleContext context = contextOf(widget);
-            const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-            document->setDocumentMargin(geometry.padding.left());
-        };
-
-        if (auto* textEdit = qobject_cast<QTextEdit*>(obj)) {
-            applyTextEditDocumentMargin(textEdit, textEdit->document());
-        }
-        else if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(obj)) {
-            applyTextEditDocumentMargin(plainTextEdit, plainTextEdit->document());
-        }
+        resetTaskPanelMargins(obj);
     }
 
-    // Force tab bar repaint on mouse move/leave so our cursor-position hover check in
-    // contextOf() sees up-to-date state. Qt's internal WA_Hover tracking for QTabBar does
-    // not consistently trigger repaints in all configurations.
-    if (qobject_cast<QTabBar*>(obj)) {
-        if (event->type() == QEvent::MouseMove || event->type() == QEvent::Leave
-            || event->type() == QEvent::HoverMove || event->type() == QEvent::HoverLeave) {
-            static_cast<QWidget*>(obj)->update();
-        }
-    }
+    forceTabBarRepaint(obj, event);
 
     if (event->type() == QEvent::Show) {
-        if (auto* container = qobject_cast<QWidget*>(obj)) {
-            if (container->property(comboContainerProperty).toBool()) {
-                QPointer<QWidget> containerGuard = container;
-                // Defer so Qt finishes its own screen-edge clamping first.
-                QTimer::singleShot(0, [this, containerGuard]() {
-                    if (containerGuard && containerGuard->isVisible()) {
-                        correctComboPopupPlacement(containerGuard);
-                    }
-                });
-            }
-        }
+        scheduleComboPopupCorrection(obj);
     }
 
     return QObject::eventFilter(obj, event);
+}
+
+void FreeCADStyle::resetTaskPanelMargins(QObject* obj)
+{
+    if (auto* groupBox = qobject_cast<QGroupBox*>(obj)) {
+        if (auto* layout = groupBox->layout()) {
+            layout->setContentsMargins(0, 0, 0, 0);
+        }
+    }
+
+
+
+    // Apply token padding to QTextEdit / QPlainTextEdit via the document margin.
+    // This pads the text content relative to the viewport while leaving scrollbars
+    // flush with the frame edge (unlike viewport-margin approaches).
+    if (auto* textEdit = qobject_cast<QTextEdit*>(obj)) {
+        applyTextEditDocumentPadding(textEdit, textEdit->document());
+    }
+    else if (auto* plainTextEdit = qobject_cast<QPlainTextEdit*>(obj)) {
+        applyTextEditDocumentPadding(plainTextEdit, plainTextEdit->document());
+    }
+}
+
+void FreeCADStyle::applyTextEditDocumentPadding(QWidget* widget, QTextDocument* document) const
+{
+    const StyleContext context = contextOf(widget);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+    document->setDocumentMargin(geometry.padding.left());
+}
+
+// Force tab bar repaint on mouse move/leave so our cursor-position hover check in
+// contextOf() sees up-to-date state. Qt's internal WA_Hover tracking for QTabBar does
+// not consistently trigger repaints in all configurations.
+void FreeCADStyle::forceTabBarRepaint(QObject* obj, QEvent* event)
+{
+    if (!qobject_cast<QTabBar*>(obj)) {
+        return;
+    }
+
+    if (event->type() == QEvent::MouseMove || event->type() == QEvent::Leave
+        || event->type() == QEvent::HoverMove || event->type() == QEvent::HoverLeave) {
+        static_cast<QWidget*>(obj)->update();
+    }
+}
+
+void FreeCADStyle::scheduleComboPopupCorrection(QObject* obj)
+{
+    if (obj->property(comboContainerProperty).toBool()) {
+        QPointer<QWidget> containerGuard = qobject_cast<QWidget*>(obj);
+        // Defer so Qt finishes its own screen-edge clamping first.
+        QTimer::singleShot(0, [this, containerGuard]() {
+            if (containerGuard && containerGuard->isVisible()) {
+                correctComboPopupPlacement(containerGuard);
+            }
+        });
+    }
 }
