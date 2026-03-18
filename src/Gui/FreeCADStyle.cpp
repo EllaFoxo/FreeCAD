@@ -48,6 +48,7 @@
 #include <QStyleOptionViewItem>
 #include <QTreeView>
 #include <QPointer>
+#include <QScrollBar>
 #include <QScreen>
 #include <QTabBar>
 #include <QTimer>
@@ -708,8 +709,8 @@ void FreeCADStyle::drawPrimitive(
         // (via setFrame(false)). Respect that: the spinbox outer frame is drawn separately
         // via CC_SpinBox → PE_PanelLineEdit with the spinbox widget, so the inner edit
         // panel must not draw a second border.
-        const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option);
-        if (frameOption && frameOption->lineWidth == 0) {
+        if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option);
+            frameOption && frameOption->lineWidth == 0) {
             // The spinbox outer frame was already drawn by drawComplexControl(CC_SpinBox).
             // Do not repaint the inner QLineEdit panel — it would cover our background
             // with the system-palette colour (especially wrong in the disabled state).
@@ -1007,14 +1008,14 @@ QRect FreeCADStyle::comboBoxSubControlRect(
         case SC_ComboBoxFrame:
             return outerRect;
         case SC_ComboBoxEditField:
-            return QRect(
+            return {
                 contentRect.left(),
                 contentRect.top(),
                 editRight - contentRect.left() + 1,
                 contentRect.height()
-            );
+            };
         case SC_ComboBoxArrow:
-            return QRect(arrowLeft, contentRect.top(), arrowWidth, contentRect.height());
+            return {arrowLeft, contentRect.top(), arrowWidth, contentRect.height()};
         default:
             return QProxyStyle::subControlRect(CC_ComboBox, option, subControl, widget);
     }
@@ -1981,25 +1982,59 @@ void FreeCADStyle::polish(QWidget* widget)
     }
 
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
-        comboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-        if (auto* listView = qobject_cast<QListView*>(comboBox->view())) {
-            listView->setProperty(comboDropdownProperty, true);
-            listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        constrainComboDropdown(comboBox);
+    }
+}
 
-            StyleContext context;
-            context.component = StyleComponent::DropdownList;
-            const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-            if (geometry.maxHeight) {
-                listView->setMaximumHeight(*geometry.maxHeight);
-                if (QWidget* container = listView->parentWidget()) {
-                    container->setMaximumHeight(*geometry.maxHeight);
-                    // Guard against double-installation on re-polish (e.g. theme change).
-                    if (!container->property(comboContainerProperty).toBool()) {
-                        container->setProperty(comboContainerProperty, true);
-                        container->installEventFilter(this);
-                    }
-                }
-            }
+void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
+{
+    comboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+
+    auto* listView = qobject_cast<QListView*>(comboBox->view());
+    if (!listView) {
+        return;
+    }
+    listView->setProperty(comboDropdownProperty, true);
+    listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    StyleContext context;
+    context.component = StyleComponent::DropdownList;
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+    if (!geometry.maxHeight) {
+        return;
+    }
+
+    listView->setMaximumHeight(*geometry.maxHeight);
+
+    QWidget* container = listView->parentWidget();
+    if (!container) {
+        return;
+    }
+
+    container->setMaximumHeight(*geometry.maxHeight);
+    hideScrollerButtons(container);
+
+    // Guard against double-installation on re-polish (e.g. theme change).
+    if (!container->property(comboContainerProperty).toBool()) {
+        container->setProperty(comboContainerProperty, true);
+        container->installEventFilter(this);
+    }
+}
+
+void FreeCADStyle::hideScrollerButtons(QWidget* container)
+{
+    for (auto* child : container->findChildren<QWidget*>(Qt::FindDirectChildrenOnly)) {
+        if (strcmp(child->metaObject()->className(), "QComboBoxPrivateScroller") == 0) {
+            child->setMaximumHeight(0);
+        }
+    }
+}
+
+void FreeCADStyle::restoreScrollerButtons(QWidget* container)
+{
+    for (auto* child : container->findChildren<QWidget*>(Qt::FindDirectChildrenOnly)) {
+        if (strcmp(child->metaObject()->className(), "QComboBoxPrivateScroller") == 0) {
+            child->setMaximumHeight(QWIDGETSIZE_MAX);
         }
     }
 }
@@ -2009,24 +2044,79 @@ void FreeCADStyle::unpolish(QWidget* widget)
     if (qobject_cast<QTabBar*>(widget)) {
         widget->removeEventFilter(this);
     }
-    if (qobject_cast<QComboBox*>(widget)) {
-        // Use findChildren instead of view() to avoid lazily creating the container
-        // for a combo that was never opened (view() has a side effect of creating it).
-        const auto listViews = widget->findChildren<QListView*>();
-        for (auto* listView : listViews) {
-            if (!listView->property(comboDropdownProperty).toBool()) {
-                continue;
-            }
-            // Qt default for QComboBox's internal view is ScrollBarAlwaysOff.
-            listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            listView->setMaximumHeight(QWIDGETSIZE_MAX);
-            if (QWidget* container = listView->parentWidget()) {
-                container->setMaximumHeight(QWIDGETSIZE_MAX);
-                container->removeEventFilter(this);
-            }
-        }
+    if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
+        restoreComboDropdownDefaults(comboBox);
     }
     QProxyStyle::unpolish(widget);
+}
+
+void FreeCADStyle::restoreComboDropdownDefaults(QComboBox* comboBox)
+{
+    // Use findChildren instead of view() — calling view() lazily creates the container
+    // for a combo that was never opened.
+    for (auto* listView : comboBox->findChildren<QListView*>()) {
+        if (!listView->property(comboDropdownProperty).toBool()) {
+            continue;
+        }
+        listView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        listView->setMaximumHeight(QWIDGETSIZE_MAX);
+
+        QWidget* container = listView->parentWidget();
+        if (!container) {
+            continue;
+        }
+        container->setMaximumHeight(QWIDGETSIZE_MAX);
+        restoreScrollerButtons(container);
+        container->removeEventFilter(this);
+    }
+}
+
+void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
+{
+    QWidget* comboBox = container->parentWidget();
+    if (!comboBox) {
+        return;
+    }
+
+    // Widen by the scrollbar width if the scrollbar appeared after Qt calculated the width.
+    for (auto* child : container->findChildren<QListView*>()) {
+        if (!child->property(comboDropdownProperty).toBool()) {
+            continue;
+        }
+        const auto* vbar = child->verticalScrollBar();
+        if (vbar && vbar->isVisible()) {
+            container->resize(container->width() + vbar->width(), container->height());
+        }
+        break;
+    }
+
+    const QPoint comboScreenPos = comboBox->mapToGlobal(QPoint {});
+    const int comboTopScreenY = comboScreenPos.y();
+    const int comboBottomScreenY = comboTopScreenY + comboBox->height();
+    const int containerTopScreenY = container->mapToGlobal(QPoint {}).y();
+    const int containerHeight = container->height();
+
+    if (containerTopScreenY >= comboTopScreenY) {
+        return;  // popup is below — no correction needed
+    }
+
+    // Qt placed the popup above because the unconstrained sizeHint didn't fit below.
+    // Check whether the constrained height actually fits below.
+    const QScreen* screen = QGuiApplication::screenAt(comboScreenPos);
+    const int screenBottom = screen ? screen->availableGeometry().bottom() : INT_MAX;
+
+    if (comboBottomScreenY + containerHeight <= screenBottom) {
+        const int delta = comboBottomScreenY - containerTopScreenY;
+        container->move(container->pos() + QPoint(0, delta));
+    }
+    else {
+        // Genuinely doesn't fit below — close the gap above.
+        const int containerBottomScreenY = containerTopScreenY + containerHeight;
+        if (containerBottomScreenY < comboTopScreenY) {
+            const int delta = comboTopScreenY - containerBottomScreenY;
+            container->move(container->pos() + QPoint(0, delta));
+        }
+    }
 }
 
 bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
@@ -2073,55 +2163,14 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         }
     }
 
-    // Qt positions the popup using the unconstrained sizeHint() height, so when the
-    // unconstrained height does not fit below the combo box, Qt places the popup above —
-    // even though the maxHeight-constrained popup *would* fit below.  We fix this in a
-    // deferred callback (after Qt has finished all internal placement / screen-clamping)
-    // by checking whether the constrained popup fits below and moving it there if so.
-    // When it genuinely does not fit below either, we fall back to touching the combo
-    // top so there is no gap from the mismatch between Qt's positioning and our constraint.
     if (event->type() == QEvent::Show) {
         if (auto* container = qobject_cast<QWidget*>(obj)) {
             if (container->property(comboContainerProperty).toBool()) {
                 QPointer<QWidget> containerGuard = container;
-                QTimer::singleShot(0, [containerGuard]() {
-                    if (!containerGuard || !containerGuard->isVisible()) {
-                        return;
-                    }
-                    QWidget* comboBox = containerGuard->parentWidget();
-                    if (!comboBox) {
-                        return;
-                    }
-
-                    const QPoint comboScreenPos = comboBox->mapToGlobal(QPoint {});
-                    const int comboTopScreenY = comboScreenPos.y();
-                    const int comboBottomScreenY = comboTopScreenY + comboBox->height();
-                    const int containerTopScreenY = containerGuard->mapToGlobal(QPoint {}).y();
-                    const int containerHeight = containerGuard->height();
-
-                    const bool placedAbove = containerTopScreenY < comboTopScreenY;
-                    if (!placedAbove) {
-                        return;  // popup is below — no correction needed
-                    }
-
-                    // Popup was placed above. Check if the constrained height fits below.
-                    const QScreen* screen = QGuiApplication::screenAt(comboScreenPos);
-                    const int screenBottom = screen ? screen->availableGeometry().bottom() : INT_MAX;
-
-                    if (comboBottomScreenY + containerHeight <= screenBottom) {
-                        // Fits below: move there (Qt chose above only because the
-                        // unconstrained sizeHint was too tall to fit).
-                        const int delta = comboBottomScreenY - containerTopScreenY;
-                        containerGuard->move(containerGuard->pos() + QPoint(0, delta));
-                    }
-                    else {
-                        // Genuinely doesn't fit below — keep above but close the gap
-                        // that the maxHeight constraint left between popup and combo top.
-                        const int containerBottomScreenY = containerTopScreenY + containerHeight;
-                        if (containerBottomScreenY < comboTopScreenY) {
-                            const int delta = comboTopScreenY - containerBottomScreenY;
-                            containerGuard->move(containerGuard->pos() + QPoint(0, delta));
-                        }
+                // Defer so Qt finishes its own screen-edge clamping first.
+                QTimer::singleShot(0, [this, containerGuard]() {
+                    if (containerGuard && containerGuard->isVisible()) {
+                        correctComboPopupPlacement(containerGuard);
                     }
                 });
             }

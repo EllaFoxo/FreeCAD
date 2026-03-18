@@ -724,8 +724,16 @@ private:
 
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and StyleToken.cpp can share them.
-    static constexpr const char* comboDropdownProperty = "_fc_comboDropdown";
+    // clang-format off
+    static constexpr const char* comboDropdownProperty  = "_fc_comboDropdown";
     static constexpr const char* comboContainerProperty = "_fc_comboContainer";
+    // clang-format on
+
+    void constrainComboDropdown(QComboBox* comboBox);
+    void restoreComboDropdownDefaults(QComboBox* comboBox);
+    static void hideScrollerButtons(QWidget* container);
+    static void restoreScrollerButtons(QWidget* container);
+    void correctComboPopupPlacement(QWidget* container);
 
     /**
      * @brief Resolves the icon color for @p context.
