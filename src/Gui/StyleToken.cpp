@@ -67,6 +67,11 @@ template<>
 FreeCADStyle::InnerShadow convertTo<FreeCADStyle::InnerShadow, StyleParameters::InnerShadow>(
     const StyleParameters::InnerShadow& shadow
 );
+
+template<>
+FreeCADStyle::BorderColorsPerSide convertTo<FreeCADStyle::BorderColorsPerSide, StyleParameters::BorderColors>(
+    const StyleParameters::BorderColors& borderColors
+);
 }  // namespace Base
 
 namespace
@@ -425,7 +430,7 @@ uint64_t FreeCADStyle::packCacheKey(const StyleContext& context, StyleProperty p
  *
  * Both Rounded and Triangular shapes at the same edge map to the same position.
  */
-Position FreeCADStyle::tabPositionOf(QTabBar::Shape shape)
+/*static*/ Position FreeCADStyle::tabPositionOf(QTabBar::Shape shape)
 {
     switch (shape) {
         case QTabBar::RoundedNorth:
@@ -664,8 +669,9 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
     if (const auto overlay = resolve<Base::Color>(context, StyleProperty::Overlay)) {
         result.overlay = overlay->asValue<QColor>();
     }
-    if (const auto borderColor = resolve<Base::Color>(context, StyleProperty::BorderColor)) {
-        result.borderColor = borderColor->asValue<QColor>();
+    if (const auto borderColors
+        = resolve<StyleParameters::BorderColors>(context, StyleProperty::BorderColor)) {
+        result.borderColor = Base::convertTo<BorderColorsPerSide>(*borderColors);
     }
     if (const auto borderOverlay = resolve<Base::Color>(context, StyleProperty::BorderOverlay)) {
         result.borderOverlay = borderOverlay->asValue<QColor>();

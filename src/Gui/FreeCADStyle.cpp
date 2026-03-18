@@ -149,6 +149,19 @@ FreeCADStyle::InnerShadow convertTo<FreeCADStyle::InnerShadow, InnerShadow>(cons
     };
 }
 
+template<>
+FreeCADStyle::BorderColorsPerSide convertTo<FreeCADStyle::BorderColorsPerSide, BorderColors>(
+    const BorderColors& borderColors
+)
+{
+    return {
+        .top = borderColors.top().asValue<QColor>(),
+        .right = borderColors.right().asValue<QColor>(),
+        .bottom = borderColors.bottom().asValue<QColor>(),
+        .left = borderColors.left().asValue<QColor>(),
+    };
+}
+
 }  // namespace Base
 
 namespace
@@ -341,6 +354,54 @@ QIcon::State iconStateOf(const QStyleOption* option)
 
 }  // namespace
 
+// Fills each side of a border ring with its own color using CSS-style diagonal corner splits.
+// Four non-overlapping trapezoids partition the border ring; corners are split diagonally,
+// matching CSS border-color behaviour.
+static void drawBorderRingSided(
+    QPainter* painter,
+    const QRect& rect,
+    const QPainterPath& borderRingPath,
+    const QMarginsF& thickness,
+    const FreeCADStyle::BorderColorsPerSide& colors
+)
+{
+    const auto fillSide = [&](const QPolygonF& trapezoid, QColor color) {
+        QPainterPath clip;
+        clip.addPolygon(trapezoid);
+        clip.closeSubpath();
+        painter->fillPath(borderRingPath.intersected(clip), QBrush(color));
+    };
+
+    // Use QRectF to match the exclusive right/bottom used in borderRingPath (built from
+    // QRectF(rect)). QRect::right() = left() + width() - 1 (inclusive), QRectF::right() = left() +
+    // width() (exclusive).
+    const QRectF rectF(rect);
+    const qreal rectLeft = rectF.left();
+    const qreal rectRight = rectF.right();
+    const qreal rectTop = rectF.top();
+    const qreal rectBottom = rectF.bottom();
+
+    const qreal innerLeft = rectLeft + thickness.left();
+    const qreal innerRight = rectRight - thickness.right();
+    const qreal innerTop = rectTop + thickness.top();
+    const qreal innerBottom = rectBottom - thickness.bottom();
+
+    // Fill the entire ring with the top color first.
+    // This acts as a base so that anti-aliased pixels at the diagonal corner boundaries blend
+    // between the two adjacent side colors rather than exposing the painter background.
+    // Without this, intersected() produces semi-transparent edges on both trapezoids at the
+    // shared diagonal, leaving a gap where the background shows through.
+    painter->fillPath(borderRingPath, QBrush(colors.top));
+
+    // Overwrite right, bottom, left with their own colors.
+    // Anti-aliasing at each diagonal blends the overdraw color into the top base — no gap.
+    // clang-format off
+    fillSide({{rectRight, rectTop},    {rectRight,  rectBottom}, {innerRight, innerBottom}, {innerRight, innerTop}},    colors.right);
+    fillSide({{rectRight, rectBottom}, {rectLeft,   rectBottom}, {innerLeft,  innerBottom}, {innerRight, innerBottom}}, colors.bottom);
+    fillSide({{rectLeft,  rectBottom}, {rectLeft,   rectTop},   {innerLeft,  innerTop},    {innerLeft,  innerBottom}},  colors.left);
+    // clang-format on
+}
+
 void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& rule)
 {
     const bool hasBorder = rule.borderColor.has_value() && rule.borderThickness.has_value();
@@ -382,7 +443,14 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         const QPainterPath outerPath = roundedRectPath(QRectF(rect), rule.borderRadius);
         const QPainterPath innerPath = roundedRectPath(QRectF(backgroundRect), backgroundRadii);
         const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
-        painter->fillPath(borderRingPath, QBrush(*rule.borderColor));
+
+        const BorderColorsPerSide& colors = *rule.borderColor;
+        if (colors.isUniform()) {
+            painter->fillPath(borderRingPath, QBrush(colors.uniform()));
+        }
+        else {
+            drawBorderRingSided(painter, rect, borderRingPath, snappedThickness, colors);
+        }
 
         if (rule.borderOverlay) {
             painter->fillPath(borderRingPath, *rule.borderOverlay);

@@ -103,6 +103,30 @@ public:
     };
 
     /**
+     * @brief Per-side border colors in CSS TRBL order.
+     *
+     * When all four sides are equal, isUniform() returns true and uniform()
+     * gives the shared color, enabling a single-fill fast path in drawBoxBackground().
+     */
+    struct BorderColorsPerSide
+    {
+        QColor top;
+        QColor right;
+        QColor bottom;
+        QColor left;
+
+        bool isUniform() const
+        {
+            return top == right && right == bottom && bottom == left;
+        }
+
+        QColor uniform() const
+        {
+            return top;
+        }
+    };
+
+    /**
      * @brief Describes the visual appearance of a painted background box.
      *
      * All border fields must be set together (borderColor + borderThickness)
@@ -111,7 +135,7 @@ public:
     struct BoxStyleDefinition
     {
         QBrush background;
-        std::optional<QColor> borderColor;
+        std::optional<BorderColorsPerSide> borderColor;
         std::optional<QMarginsF> borderThickness;
         CornerRadii borderRadius;  // default: all zero (sharp corners)
         std::optional<QColor> overlay;
@@ -437,7 +461,7 @@ private:
 
     static StyleContext withNorthPosition(const StyleContext& context);
 
-    Position tabPositionOf(QTabBar::Shape shape);
+    static Position tabPositionOf(QTabBar::Shape shape);
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
 
