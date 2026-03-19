@@ -30,6 +30,7 @@
 #include <span>
 #include <string>
 #include <vector>
+
 #include <QApplication>
 #include <QAbstractSpinBox>
 #include <QFrame>
@@ -57,18 +58,21 @@
 
 #include <Base/Color.h>
 #include <Base/Converter.h>
-#include <Base/Exception.h>
 
 #include "Application.h"
 #include "QuantitySpinBox_p.h"
 #include "ThemeReloadEvent.h"
 #include "Utilities.h"
+#include "IconManager.h"
+
+#include "QSint/actionpanel/taskgroup_p.h"
+#include "QSint/actionpanel/taskheader_p.h"
+
 #include "StyleParameters/Corners.h"
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
 
-#include <IconManager.h>
 
 QT_BEGIN_NAMESPACE
 extern Q_WIDGETS_EXPORT void qt_blurImage(
@@ -90,24 +94,7 @@ FreeCADStyle::FreeCADStyle()
     : QProxyStyle(QStringLiteral("Fusion"))
 {
     IconManager::instance().setIconColorProvider(
-        [this](const IconManager::IconMeta& /*meta*/, QIcon::Mode mode, QIcon::State /*state*/) -> QColor {
-            StyleContext context;
-            context.component = StyleComponent::PushButton;
-            if (mode == QIcon::Disabled) {
-                context.state |= StyleState::Disabled;
-            }
-            else if (mode == QIcon::Active) {
-                context.state |= StyleState::Hovered;
-            }
-            else if (mode == QIcon::Selected) {
-                context.state |= StyleState::Checked;
-            }
-            if (const auto color = resolve<Base::Color>(context, StyleProperty::IconColor)) {
-                return color->asValue<QColor>();
-            }
-            if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
-                return color->asValue<QColor>();
-            }
+        [](const IconManager::IconMeta&, QIcon::Mode, QIcon::State) -> QColor {
             return qApp->palette().buttonText().color();
         }
     );
