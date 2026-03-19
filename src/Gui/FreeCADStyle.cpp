@@ -2033,8 +2033,6 @@ void FreeCADStyle::polish(QWidget* widget)
 
 void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
 {
-    comboBox->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
-
     auto* listView = qobject_cast<QListView*>(comboBox->view());
     if (!listView) {
         return;
