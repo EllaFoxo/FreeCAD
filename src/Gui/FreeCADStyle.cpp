@@ -1103,22 +1103,17 @@ QRect FreeCADStyle::spinBoxSubControlRect(
                 editRight - contentRect.left() + 1,
                 contentRect.height()
             };
-        case SC_SpinBoxUp: {
-            if (!hasButtons) {
-                return {};
-            }
-            return {
-                buttonLeft,
-                centerY - buttonSize.height() + 1,
-                buttonSize.width(),
-                buttonSize.height()
-            };
-        }
+
+        case SC_SpinBoxUp:
         case SC_SpinBoxDown: {
             if (!hasButtons) {
                 return {};
             }
-            return {buttonLeft, centerY + 1, buttonSize.width(), buttonSize.height()};
+
+            const auto buttonTop = subControl == SC_SpinBoxUp ? centerY - buttonSize.height()
+                                                              : centerY;
+
+            return {buttonLeft, buttonTop + 1, buttonSize.width(), buttonSize.height()};
         }
         default:
             return QProxyStyle::subControlRect(CC_SpinBox, option, subControl, widget);
