@@ -402,47 +402,10 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
     painter->setPen(Qt::NoPen);
-    // Clip to the outer rect so antialiased arc pixels cannot bleed outside.
     painter->setClipRect(rect, Qt::IntersectClip);
 
     QRect backgroundRect = rect;
     CornerRadii backgroundRadii = rule.borderRadius;
-
-    if (hasBorder) {
-        const QMarginsF& thickness = *rule.borderThickness;
-
-        // Snap each border side to the nearest integer pixel.
-        const QMarginsF snappedThickness(
-            qRound(thickness.left()),
-            qRound(thickness.top()),
-            qRound(thickness.right()),
-            qRound(thickness.bottom())
-        );
-        backgroundRect = rect.adjusted(
-            qRound(thickness.left()),
-            qRound(thickness.top()),
-            -qRound(thickness.right()),
-            -qRound(thickness.bottom())
-        );
-        backgroundRadii = innerRadii(rule.borderRadius, snappedThickness);
-
-        // Subtract inner from outer path to fill only the border ring, preserving transparency.
-        const QPainterPath outerPath = roundedRectPath(QRectF(rect), rule.borderRadius);
-        const QPainterPath innerPath = roundedRectPath(QRectF(backgroundRect), backgroundRadii);
-        const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
-
-        const BorderColorsPerSide& colors = *rule.borderColor;
-        if (colors.isUniform()) {
-            painter->fillPath(borderRingPath, QBrush(colors.uniform()));
-        }
-        else {
-            drawBorderRingSided(painter, rect, borderRingPath, snappedThickness, colors);
-        }
-
-        if (rule.borderOverlay) {
-            painter->fillPath(borderRingPath, *rule.borderOverlay);
-        }
-    }
 
     if (hasBackground) {
         painter->fillPath(roundedRectPath(QRectF(backgroundRect), backgroundRadii), rule.background);
@@ -451,8 +414,6 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
             painter->fillPath(roundedRectPath(QRectF(backgroundRect), backgroundRadii), *rule.overlay);
         }
     }
-
-    painter->restore();
 
     if (hasInnerShadow) {
         const int padding = static_cast<int>(std::ceil(rule.innerShadow->blur)) + 1;
@@ -470,6 +431,40 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         );
         painter->restore();
     }
+
+    if (hasBorder) {
+        const QMarginsF& thickness = *rule.borderThickness;
+
+        // Snap each border side to the nearest integer pixel.
+        const QMarginsF snappedThickness(
+            qRound(thickness.left()),
+            qRound(thickness.top()),
+            qRound(thickness.right()),
+            qRound(thickness.bottom())
+        );
+
+        const QRect innerRect = backgroundRect.marginsRemoved(thickness.toMargins());
+
+        // Subtract inner from outer path to fill only the border ring, preserving transparency.
+        const QPainterPath outerPath = roundedRectPath(QRectF(rect), rule.borderRadius);
+        const QPainterPath innerPath
+            = roundedRectPath(QRectF(innerRect), innerRadii(rule.borderRadius, snappedThickness));
+        const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
+
+        const BorderColorsPerSide& colors = *rule.borderColor;
+        if (colors.isUniform()) {
+            painter->fillPath(borderRingPath, QBrush(colors.uniform()));
+        }
+        else {
+            drawBorderRingSided(painter, rect, borderRingPath, snappedThickness, colors);
+        }
+
+        if (rule.borderOverlay) {
+            painter->fillPath(borderRingPath, *rule.borderOverlay);
+        }
+    }
+
+    painter->restore();
 }
 
 void FreeCADStyle::polish(QPalette& palette)
