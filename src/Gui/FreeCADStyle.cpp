@@ -865,6 +865,25 @@ QSize FreeCADStyle::tabBarTabSizeFromContents(
         result.rwidth() -= tabOverlap;
     }
 
+    // If the tab bar has an expanding size policy along its cross-axis, grow tabs to fill the
+    // allocated extent rather than staying at the style-computed minimum.
+    // Note: QTabBar transposes tab sizes for East/West; the height here maps to widget width.
+    if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {
+        const bool isVertical = tabBar->shape() == QTabBar::RoundedEast
+            || tabBar->shape() == QTabBar::RoundedWest || tabBar->shape() == QTabBar::TriangularEast
+            || tabBar->shape() == QTabBar::TriangularWest;
+        if (isVertical) {
+            if (tabBar->sizePolicy().horizontalPolicy() & QSizePolicy::ExpandFlag) {
+                result.setWidth(tabBar->width());
+            }
+        }
+        else {
+            if (tabBar->sizePolicy().verticalPolicy() & QSizePolicy::ExpandFlag) {
+                result.setHeight(tabBar->height());
+            }
+        }
+    }
+
     return result;
 }
 
