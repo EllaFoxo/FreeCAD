@@ -176,6 +176,8 @@ enum class StyleProperty : uint8_t
     OverlayOpacity,
     InnerShadow,
     IconColor,
+    BackgroundEffect,
+    BorderColorEffect,
     // Add new properties before COUNT
     COUNT,
 };

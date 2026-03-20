@@ -43,6 +43,7 @@
 
 #include <Base/Converter.h>
 
+#include "StyleParameters/ColorEffect.h"
 #include "StyleParameters/Corners.h"
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
@@ -292,8 +293,10 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::TextColor,       "TextColor"},
     {StyleProperty::Overlay,         "Overlay"},
     {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
-    {StyleProperty::InnerShadow,     "InnerShadow"},
-    {StyleProperty::IconColor,       "IconColor"},
+    {StyleProperty::InnerShadow,        "InnerShadow"},
+    {StyleProperty::IconColor,          "IconColor"},
+    {StyleProperty::BackgroundEffect,   "BackgroundEffect"},
+    {StyleProperty::BorderColorEffect,  "BorderColorEffect"},
 };
 // clang-format on
 
@@ -406,6 +409,64 @@ uint64_t packContextKeyImpl(const StyleContext& context, uint8_t overrideId)
          | (static_cast<uint64_t>(overrideId)                       << overrideBitOffset)
          | (packVariant(context.variant)                            << variantBitOffset);
     // clang-format on
+}
+
+// ─── Color effect helpers ─────────────────────────────────────────────────────
+
+/**
+ * @brief Applies a ColorEffect to each color in a QBrush.
+ *
+ * Solid brushes are shifted directly. Gradient brushes have each stop color
+ * shifted individually so the gradient shape is preserved.
+ */
+static QBrush applyEffectToBrush(const QBrush& brush, const StyleParameters::ColorEffect& effect)
+{
+    const auto applyToColor = [&](const QColor& color) -> QColor {
+        return effect.apply(Base::Color::fromValue(color)).asValue<QColor>();
+    };
+
+    if (brush.style() == Qt::SolidPattern) {
+        return QBrush(applyToColor(brush.color()));
+    }
+
+    if (const QGradient* gradient = brush.gradient()) {
+        QGradientStops stops = gradient->stops();
+        for (auto& [position, color] : stops) {
+            color = applyToColor(color);
+        }
+
+        // clang-format off
+        switch (gradient->type()) {
+            case QGradient::LinearGradient: {
+                const auto* linear = static_cast<const QLinearGradient*>(gradient);
+                QLinearGradient result(linear->start(), linear->finalStop());
+                result.setStops(stops);
+                result.setSpread(gradient->spread());
+                result.setCoordinateMode(gradient->coordinateMode());
+                return QBrush(result);
+            }
+            case QGradient::RadialGradient: {
+                const auto* radial = static_cast<const QRadialGradient*>(gradient);
+                QRadialGradient result(radial->center(), radial->radius(), radial->focalPoint());
+                result.setStops(stops);
+                result.setSpread(gradient->spread());
+                result.setCoordinateMode(gradient->coordinateMode());
+                return QBrush(result);
+            }
+            case QGradient::ConicalGradient: {
+                const auto* conical = static_cast<const QConicalGradient*>(gradient);
+                QConicalGradient result(conical->center(), conical->angle());
+                result.setStops(stops);
+                result.setCoordinateMode(gradient->coordinateMode());
+                return QBrush(result);
+            }
+            default:
+                break;
+        }
+        // clang-format on
+    }
+
+    return brush;  // unsupported brush type — return unchanged
 }
 
 }  // namespace
@@ -679,6 +740,25 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
     if (const auto innerShadow
         = resolve<StyleParameters::InnerShadow>(context, StyleProperty::InnerShadow)) {
         result.innerShadow = Base::convertTo<InnerShadow>(*innerShadow);
+    }
+
+    // BackgroundEffect: resolved from northContext (same directional semantics as Background).
+    if (const auto effect
+        = resolve<StyleParameters::ColorEffect>(northContext, StyleProperty::BackgroundEffect)) {
+        result.background = applyEffectToBrush(result.background, *effect);
+    }
+
+    // BorderColorEffect: resolved from actual context (same as BorderColor).
+    if (const auto effect
+        = resolve<StyleParameters::ColorEffect>(context, StyleProperty::BorderColorEffect)) {
+        if (result.borderColor) {
+            auto& colors = *result.borderColor;
+            // clang-format off
+            for (QColor* side : std::array {&colors.top, &colors.right, &colors.bottom, &colors.left}) {
+                *side = effect->apply(Base::Color::fromValue(*side)).asValue<QColor>();
+            }
+            // clang-format on
+        }
     }
 
     boxStyleCache.store(key, result);
