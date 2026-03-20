@@ -92,13 +92,7 @@ BaseShadingShadow: "@Neutral.800"
 
 BaseBorderColor: "@Neutral.400"
 BaseShadowColor: "rgba(0, 0, 0, 0.08)"
-
-BaseHoveredOverlay: "#ffffff"
-BaseHoveredOverlayOpacity: 50%
-
-BasePressedOverlay: "@Contrast.800"
-BasePressedOverlayOpacity: 10%
-BaseHalfPressedOverlayOpacity: 7%
+BaseHoveredBorderColorEffect: "effect(darken: 0.08)"
 
 FormControlSmallHeight: 24px
 FormControlHeight: 28px
@@ -126,20 +120,20 @@ ButtonSmallFontSize: 11px
 ButtonSmallFontWeight: 500
 
 ButtonFocusedBorderColor: "@Accent.600"
-ButtonPrimaryFocusedBorderColor: "@Accent.600"
+ButtonPrimaryFocusedBorderColor: "@ButtonFocusedBorderColor"
 
 ButtonSpacing: "@Spacing.250"
 
 ButtonTextColor: "@BaseTextColor"
 ButtonBorderColor: "@BaseBorderColor"
 
-ButtonHoveredOverlay: "opacity(@BaseHoveredOverlay, @BaseHoveredOverlayOpacity)"
+ButtonHoveredBackgroundEffect: "effect(lighten: 0.05)"
+ButtonPressedBackgroundEffect: "effect(darken: 0.04)"
+ButtonCheckedBackgroundEffect: "effect(darken: 0.02)"
 
-ButtonPressedOverlay: "opacity(@BasePressedOverlay, @BasePressedOverlayOpacity)"
 ButtonPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 2px, blur: 6px)"
 
-ButtonCheckedOverlay: "opacity(@BasePressedOverlay, @BaseHalfPressedOverlayOpacity)"
-ButtonCheckedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 2px, blur: 6px)"
+ButtonCheckedInnerShadow: "@ButtonPressedInnerShadow"
 
 ButtonDisabledBackground: "@BaseDisabledBackground"
 ButtonDisabledTextColor: "@BaseDisabledTextColor"
@@ -199,7 +193,7 @@ LineEditHeight: "@FormControlHeight"
 LineEditSmallHeight: "@FormControlSmallHeight"
 
 LineEditFocusedBorderColor: "@Accent.500"
-LineEditHoveredBorderOverlay: "opacity(@Contrast.700, 20%)"
+LineEditHoveredBorderColorEffect: "@BaseHoveredBorderColorEffect"
 
 LineEditDisabledBackground: "@BaseDisabledBackground"
 LineEditDisabledTextColor: "@BaseDisabledTextColor"
@@ -243,7 +237,7 @@ CheckBoxTickColor: "@BaseTextColor"
 
 # State overrides
 CheckBoxFocusedBorderColor: "@Accent.500"
-CheckBoxHoveredBorderOverlay: "@LineEditHoveredBorderOverlay"
+CheckBoxHoveredBorderColorEffect: "@BaseHoveredBorderColorEffect"
 
 CheckBoxDisabledBackground: "@BaseDisabledBackground"
 CheckBoxDisabledTickColor: "@BaseDisabledTextColor"
