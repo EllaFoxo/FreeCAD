@@ -408,11 +408,15 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
     CornerRadii backgroundRadii = rule.borderRadius;
 
     if (hasBackground) {
-        painter->fillPath(roundedRectPath(QRectF(backgroundRect), backgroundRadii), rule.background);
+        QRectF backgroundInnerRect = backgroundRect;
 
-        if (rule.overlay) {
-            painter->fillPath(roundedRectPath(QRectF(backgroundRect), backgroundRadii), *rule.overlay);
+        // In case of border being applied, shrink the background to half of the border thickness
+        // so it does not bleed out to outer background.
+        if (rule.borderThickness) {
+            backgroundInnerRect = backgroundInnerRect.marginsRemoved(*rule.borderThickness / 2);
         }
+
+        painter->fillPath(roundedRectPath(QRectF(backgroundInnerRect), backgroundRadii), rule.background);
     }
 
     if (hasInnerShadow) {
