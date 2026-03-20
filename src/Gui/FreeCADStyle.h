@@ -138,8 +138,6 @@ public:
         std::optional<BorderColorsPerSide> borderColor;
         std::optional<QMarginsF> borderThickness;
         CornerRadii borderRadius;  // default: all zero (sharp corners)
-        std::optional<QColor> overlay;
-        std::optional<QColor> borderOverlay;
         std::optional<InnerShadow> innerShadow;
     };
 

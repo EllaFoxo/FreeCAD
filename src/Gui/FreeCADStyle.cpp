@@ -458,10 +458,6 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         else {
             drawBorderRingSided(painter, rect, borderRingPath, snappedThickness, colors);
         }
-
-        if (rule.borderOverlay) {
-            painter->fillPath(borderRingPath, *rule.borderOverlay);
-        }
     }
 
     painter->restore();

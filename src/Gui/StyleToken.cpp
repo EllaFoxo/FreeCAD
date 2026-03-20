@@ -280,7 +280,6 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::BorderThickness, "BorderThickness"},
     {StyleProperty::BorderRadius,    "BorderRadius"},
     {StyleProperty::BorderColor,     "BorderColor"},
-    {StyleProperty::BorderOverlay,   "BorderOverlay"},
     {StyleProperty::Padding,         "Padding"},
     {StyleProperty::Margin,          "Margin"},
     {StyleProperty::Spacing,         "Spacing"},
@@ -291,9 +290,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::FontWeight,      "FontWeight"},
     {StyleProperty::Background,      "Background"},
     {StyleProperty::TextColor,       "TextColor"},
-    {StyleProperty::Overlay,         "Overlay"},
-    {StyleProperty::OverlayOpacity,  "OverlayOpacity"},
-    {StyleProperty::InnerShadow,        "InnerShadow"},
+    {StyleProperty::InnerShadow,     "InnerShadow"},
     {StyleProperty::IconColor,          "IconColor"},
     {StyleProperty::BackgroundEffect,   "BackgroundEffect"},
     {StyleProperty::BorderColorEffect,  "BorderColorEffect"},
@@ -727,15 +724,9 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
     }
 
     // Non-directional visual tokens resolved from the actual context.
-    if (const auto overlay = resolve<Base::Color>(context, StyleProperty::Overlay)) {
-        result.overlay = overlay->asValue<QColor>();
-    }
     if (const auto borderColors
         = resolve<StyleParameters::BorderColors>(context, StyleProperty::BorderColor)) {
         result.borderColor = Base::convertTo<BorderColorsPerSide>(*borderColors);
-    }
-    if (const auto borderOverlay = resolve<Base::Color>(context, StyleProperty::BorderOverlay)) {
-        result.borderOverlay = borderOverlay->asValue<QColor>();
     }
     if (const auto innerShadow
         = resolve<StyleParameters::InnerShadow>(context, StyleProperty::InnerShadow)) {
