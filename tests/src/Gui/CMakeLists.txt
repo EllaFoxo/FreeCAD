@@ -13,6 +13,7 @@ add_executable(Gui_tests_run
         StyleParameters/ParserTest.cpp
         StyleParameters/ParameterManagerTest.cpp
         StyleParameters/YamlParameterSourceTest.cpp
+        StyleParameters/ColorEffectTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
 )
