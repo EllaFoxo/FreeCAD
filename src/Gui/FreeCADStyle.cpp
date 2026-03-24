@@ -52,6 +52,7 @@
 #include <QPointer>
 #include <QScrollBar>
 #include <QScreen>
+#include <QMenuBar>
 #include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
@@ -558,6 +559,7 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         {PM_MenuButtonIndicator, {StyleComponentElement::Menu, Width}},
         {PM_ToolBarItemMargin, {StyleComponentElement::Item, Margin}},
         {PM_ToolBarItemSpacing, {StyleComponentElement::Item, Spacing}},
+        {PM_MenuBarItemSpacing, {StyleComponentElement::Item, Spacing}},
     };
 
     switch (metric) {
@@ -977,6 +979,14 @@ QSize FreeCADStyle::sizeFromContents(
             result.rwidth() += geometry.iconGapDelta();
         }
         return geometry.constrain(result);
+    }
+
+    if (type == CT_MenuBarItem) {
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(
+            contextOf(widget, option, StyleComponentElement::Item)
+        );
+
+        return geometry.marginBox(size);
     }
 
     if (type == CT_TabBarTab) {
@@ -1447,6 +1457,23 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    if (element == CE_MenuBarEmptyArea) {
+        // Draw the bar background for the empty area of the menu bar. Qt sets the painter
+        // clip to the region not occupied by items before calling this, so we simply draw
+        // on option->rect and let the clip restrict painting to the empty portion only.
+        // Items draw their own portion of the bar background inside CE_MenuBarItem.
+        const StyleContext barContext = contextOf(widget, option);
+        drawBoxBackground(painter, option->rect, resolveBoxStyle(barContext));
+        return;
+    }
+
+    if (element == CE_MenuBarItem) {
+        if (const auto* menuOption = qstyleoption_cast<const QStyleOptionMenuItem*>(option)) {
+            drawMenuBarItem(painter, menuOption, widget);
+            return;
+        }
+    }
+
     QProxyStyle::drawControl(element, option, painter, widget);
 }
 
@@ -1818,6 +1845,34 @@ void FreeCADStyle::drawTabBarTabLabel(
         option->text,
         textRole
     );
+
+    painter->restore();
+}
+
+void FreeCADStyle::drawMenuBarItem(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+
+    const QRect contentRect = geometry.contentRect(option->rect);
+
+    drawBoxBackground(painter, geometry.borderRect(option->rect), resolveBoxStyle(itemContext));
+
+    painter->save();
+
+    if (const auto textColor = resolve<Base::Color>(itemContext, StyleProperty::TextColor)) {
+        painter->setPen(textColor->asValue<QColor>());
+    }
+    else {
+        painter->setPen(option->palette.buttonText().color());
+    }
+
+    constexpr int textFlags = Qt::AlignCenter | Qt::TextShowMnemonic | Qt::TextDontClip;
+    painter->drawText(contentRect, textFlags, option->text);
 
     painter->restore();
 }

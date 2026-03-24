@@ -54,6 +54,7 @@ enum class StyleComponent : uint8_t
     TabWidget,      // QTabWidget pane (PE_FrameTabWidget)
     ToolBar,        // QToolBar
     ToolBarButton,  // QToolButton in QToolBar - semantically different
+    MenuBar,        // QMenuBar
     // Add new components before COUNT
     COUNT
 };

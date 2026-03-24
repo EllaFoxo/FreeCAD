@@ -91,7 +91,7 @@ BaseShadingDark: "@Neutral.600"
 BaseShadingShadow: "@Neutral.800"
 
 BaseBorderColor: "@Neutral.400"
-BaseShadowColor: "rgba(0, 0, 0, 0.08)"
+BaseShadowColor: "opacity(@Color.black, 8%)"
 BaseHoveredBorderColorEffect: "effect(darken: 0.08)"
 
 FormControlSmallHeight: 24px
@@ -127,9 +127,9 @@ ButtonSpacing: "@Spacing.250"
 ButtonTextColor: "@BaseTextColor"
 ButtonBorderColor: "@BaseBorderColor"
 
-ButtonHoveredBackgroundEffect: "effect(lighten: 0.05)"
+ButtonHoveredBackgroundEffect: "effect(lighten: 0.035)"
 ButtonPressedBackgroundEffect: "effect(darken: 0.04)"
-ButtonCheckedBackgroundEffect: "effect(darken: 0.02)"
+ButtonCheckedBackgroundEffect: "effect(darken: 0.03)"
 
 ButtonPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 2px, blur: 6px)"
 
@@ -294,6 +294,8 @@ TabBarTabCheckedBorderColor: "@BaseBorderColor"
 TabBarTabDisabledBackground: "@BaseDisabledBackground"
 TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
 
+WbTabBarBaseBackground: "reset()"
+
 # ── Tab Bar Base ─────────────────────────────────────────────────────────────
 # TabBarBaseHeight:  visible strip height below the tabs (PM_TabBarBaseHeight - PM_TabBarBaseOverlap).
 # TabBarBaseOverlap: how many px the strip extends under the tab row (PM_TabBarBaseOverlap).
@@ -319,3 +321,30 @@ ExpressionButtonCheckedBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, 
 ExpressionButtonCheckedBorderColor: "@Accent.900"
 ExpressionButtonCheckedIconColor: "@Background.050"
 ExpressionButtonPadding: "0px"
+
+# ── Menu Bar ─────────────────────────────────────────────────────────────────
+# Root tokens control the bar background and outer layout.
+# MenuBarPadding drives PM_MenuBarHMargin / PM_MenuBarVMargin (half-edge values each side).
+# MenuBarBorderThickness draws a bottom separator between the bar and content area.
+MenuBarBackground: "@BaseWindowBackground"
+MenuBarBorderColor: "@BaseBorderColor"
+MenuBarBorderThickness: "border_thickness(0px, bottom: 1px)"
+MenuBarPadding: "padding(horizontal: @Spacing.300, vertical: @Spacing.000)"
+
+# ── Menu Bar Items ────────────────────────────────────────────────────────────
+# MenuBarItemSpacing drives PM_MenuBarItemSpacing (gap between adjacent items).
+# MenuBarItemPadding controls the content area inside each item (drives CT_MenuBarItem size).
+MenuBarItemSpacing: "@Spacing.000"
+MenuBarItemPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.050)"
+MenuBarItemMargin: "padding(@Spacing.100)"
+MenuBarItemBorderRadius: "@BaseRadius.small"
+MenuBarItemTextColor: "@BaseTextColor"
+
+MenuBarItemHoveredBackground: "@Background.200"
+MenuBarItemHoveredTextColor: "@BaseTextColor"
+
+MenuBarItemPressedBackground: "@Neutral.400"
+MenuBarItemPressedInnerShadow: "@ButtonPressedInnerShadow"
+MenuBarItemPressedTextColor: "@BaseTextColor"
+
+MenuBarItemDisabledTextColor: "@BaseDisabledTextColor"

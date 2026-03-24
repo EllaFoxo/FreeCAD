@@ -1345,6 +1345,7 @@ SET(FreeCADGui_CPP_SRCS
     ExpressionCompleter.cpp
     FileHandler.cpp
     FileHandler.h
+    FCMenuBar.cpp
     FreeCADStyle.cpp
     StyleToken.cpp
     ThemeReloadEvent.cpp
@@ -1389,6 +1390,7 @@ SET(FreeCADGui_SRCS
     ExpressionCompleter.h
     FreeCADGuiInit.py
     FreeCADGuiTest.py
+    FCMenuBar.h
     FreeCADStyle.h
     ThemeReloadEvent.h
     StyleToken.h
