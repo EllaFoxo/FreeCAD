@@ -119,6 +119,8 @@ WorkbenchTabWidget::WorkbenchTabWidget(WorkbenchGroup* aGroup, QWidget* parent)
     layout->addWidget(moreButton);
     layout->setAlignment(moreButton, Qt::AlignCenter);
 
+    sizePolicy().setVerticalPolicy(QSizePolicy::Expanding);
+
     setLayout(layout);
 
     moreButton->setIcon(Gui::BitmapFactory().iconFromTheme("list-add"));
@@ -223,17 +225,24 @@ void WorkbenchTabWidget::updateLayout()
         setToolBarArea(Gui::ToolBarArea::TopToolBarArea);
         return;
     }
+    tabBar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
     if (auto toolBar = qobject_cast<QToolBar*>(parentWidget())) {
-        setSizePolicy(toolBar->sizePolicy());
-        tabBar->setSizePolicy(toolBar->sizePolicy());
-
+        toolBar->layout()->setContentsMargins({});
         if (toolBar->isFloating()) {
             setToolBarArea(
                 toolBar->orientation() == Qt::Horizontal ? Gui::ToolBarArea::TopToolBarArea
                                                          : Gui::ToolBarArea::LeftToolBarArea
             );
             return;
+        }
+        else {
+            if (toolBar->orientation() == Qt::Horizontal) {
+                tabBar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+            }
+            else {
+                tabBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+            }
         }
     }
 
@@ -296,8 +305,6 @@ void WorkbenchTabWidget::handleTabChange(int selectedTabIndex)
     if (selectedTabIndex != temporaryWorkbenchTabIndex()) {
         setTemporaryWorkbenchTab(nullptr);
     }
-
-    adjustSize();
 }
 
 void WorkbenchTabWidget::updateWorkbenchList()

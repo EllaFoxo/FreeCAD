@@ -76,6 +76,7 @@ class GuiExport WorkbenchTabWidget: public QWidget
             : QTabBar(parent)
         {
             setDrawBase(false);
+            setProperty("component", "WbTabBar");
         }
 
         QSize tabSizeHint(int index) const override
