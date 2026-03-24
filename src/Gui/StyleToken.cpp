@@ -50,6 +50,7 @@
 #include "Utilities.h"
 
 #include <QLinearGradient>
+#include <QMenuBar>
 #include <QToolBar>
 
 using namespace Gui;
@@ -187,7 +188,8 @@ const std::map<StyleComponent, std::vector<std::string_view>> componentChains = 
     {StyleComponent::TabBar,        {"TabBar"}},
     {StyleComponent::TabWidget,     {"TabWidget"}},
     {StyleComponent::ToolBar,       {"ToolBar"}},
-    {StyleComponent::ToolBarButton, {"ToolBarButton", "ToolButton", "Button", "FormControl"}}
+    {StyleComponent::ToolBarButton, {"ToolBarButton", "ToolButton", "Button", "FormControl"}},
+    {StyleComponent::MenuBar,       {"MenuBar"}}
 };
 // clang-format on
 
@@ -557,6 +559,18 @@ StyleContext FreeCADStyle::contextOf(
         context.component = StyleComponent::ToolBar;
         context.element = element;
     }
+    else if (qobject_cast<const QMenuBar*>(widget)) {
+        context.component = StyleComponent::MenuBar;
+        context.element = element;
+        // QMenuBarItem uses State_Selected to indicate the active/hovered item; map it to Hovered.
+        // State_Sunken indicates the menu is open (pressed).
+        if (option && (option->state & QStyle::State_Selected)) {
+            context.state |= StyleState::Hovered;
+        }
+        if (option && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+    }
     else if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {
         context.component = StyleComponent::TabBar;
         context.element = element;
@@ -768,6 +782,10 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
 
     if (const auto padding = resolve<StyleParameters::Insets>(context, StyleProperty::Padding)) {
         result.padding = Base::convertTo<QMarginsF>(*padding);
+    }
+
+    if (const auto margin = resolve<StyleParameters::Insets>(context, StyleProperty::Margin)) {
+        result.margin = Base::convertTo<QMarginsF>(*margin);
     }
 
     if (const auto height = resolve<StyleParameters::Numeric>(context, StyleProperty::Height)) {

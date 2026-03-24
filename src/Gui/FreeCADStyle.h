@@ -161,6 +161,8 @@ public:
     struct BoxGeometryDefinition
     {
         QMarginsF padding;
+        QMarginsF margin;
+
         std::optional<int> height;
         std::optional<int> minWidth;
         std::optional<int> width;      // fixed width override
@@ -233,15 +235,18 @@ public:
          * first (ComboBox, LineEdit). */
         [[nodiscard]] QSize sizeFromContents(QSize contentSize) const
         {
-            contentSize.rwidth() += paddingH();
-            contentSize.rheight() += paddingV();
-            return constrain(contentSize);
+            return constrain(contentSize.grownBy(padding.toMargins()));
+        }
+
+        [[nodiscard]] QSize marginBox(QSize contentSize) const
+        {
+            return sizeFromContents(contentSize).grownBy(margin.toMargins());
         }
 
         /** @brief Returns @p rect inset by this geometry's padding. */
         [[nodiscard]] QRect contentRect(const QRect& rect) const
         {
-            return rect.marginsRemoved(padding.toMargins());
+            return borderRect(rect).marginsRemoved(padding.toMargins());
         }
 
         /** @brief Returns @p rect inset by this geometry's padding. */
@@ -267,6 +272,11 @@ public:
                 -static_cast<int>(padding.right() * scaleHorizontal),
                 -static_cast<int>(padding.bottom() * scaleVertical)
             );
+        }
+
+        [[nodiscard]] QRect borderRect(QRect rect) const
+        {
+            return rect.marginsRemoved(margin.toMargins());
         }
     };
 
@@ -464,6 +474,8 @@ private:
 
 
     static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
+
+    void drawMenuBarItem(QPainter* painter, const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
     void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
