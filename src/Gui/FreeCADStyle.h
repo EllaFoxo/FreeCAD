@@ -57,38 +57,46 @@ public:
     ~FreeCADStyle() override;
 
     /**
-     * @brief Per-corner border radii in pixels.
+     * @brief Per-corner border radii, each stored as a Numeric (possibly with "%" unit).
+     *
+     * Percent values are resolved to absolute pixels at paint time via resolve().
+     * Use setLeft/setRight/setTop/setBottom to zero out corners (e.g. for tab shapes).
      */
     struct CornerRadii
     {
-        qreal topLeft = 0;
-        qreal topRight = 0;
-        qreal bottomRight = 0;
-        qreal bottomLeft = 0;
+        StyleParameters::Numeric topLeft = {.value = 0, .unit = "px"};
+        StyleParameters::Numeric topRight = {.value = 0, .unit = "px"};
+        StyleParameters::Numeric bottomRight = {.value = 0, .unit = "px"};
+        StyleParameters::Numeric bottomLeft = {.value = 0, .unit = "px"};
 
         void setLeft(qreal left)
         {
-            topLeft = left;
-            bottomLeft = left;
+            topLeft = bottomLeft = {.value = left, .unit = "px"};
         }
 
         void setRight(qreal right)
         {
-            topRight = right;
-            bottomRight = right;
+            topRight = bottomRight = {.value = right, .unit = "px"};
         }
 
         void setTop(qreal top)
         {
-            topLeft = top;
-            topRight = top;
+            topLeft = topRight = {.value = top, .unit = "px"};
         }
 
         void setBottom(qreal bottom)
         {
-            bottomLeft = bottom;
-            bottomRight = bottom;
+            bottomLeft = bottomRight = {.value = bottom, .unit = "px"};
         }
+
+        /**
+         * @brief Resolves any percent-unit radii to absolute pixel values.
+         *
+         * A "%" radius is resolved as value/100 * min(width, height), matching
+         * the CSS border-radius convention for uniform corner shapes. Absolute
+         * radii ("px" or dimensionless) are passed through unchanged.
+         */
+        CornerRadii resolve(QSizeF size) const;
     };
 
     /**

@@ -252,7 +252,7 @@ CheckBoxPressedInnerShadow: "inner_shadow(color: rgba(0, 0, 0, 50), y: 1px, blur
 # ── Radio Button indicator ────────────────────────────────────────────────
 # Inherits all visual properties from CheckBox; only border radius is overridden
 # to produce a circular indicator.
-RadioButtonBorderRadius: "border_radius(100px)"
+RadioButtonBorderRadius: "border_radius(50%)"
 
 # ── Scroll Bar ───────────────────────────────────────────────────────────
 ScrollBarBackground: "@Colors.transparent"

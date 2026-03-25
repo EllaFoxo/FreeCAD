@@ -119,10 +119,10 @@ template<>
 FreeCADStyle::CornerRadii convertTo<FreeCADStyle::CornerRadii, Corners>(const Corners& corners)
 {
     return {
-        .topLeft = corners.topLeft().value,
-        .topRight = corners.topRight().value,
-        .bottomRight = corners.bottomRight().value,
-        .bottomLeft = corners.bottomLeft().value,
+        .topLeft = corners.topLeft(),
+        .topRight = corners.topRight(),
+        .bottomRight = corners.bottomRight(),
+        .bottomLeft = corners.bottomLeft(),
     };
 }
 
@@ -152,6 +152,24 @@ FreeCADStyle::BorderColorsPerSide convertTo<FreeCADStyle::BorderColorsPerSide, B
 
 }  // namespace Base
 
+FreeCADStyle::CornerRadii FreeCADStyle::CornerRadii::resolve(QSizeF size) const
+{
+    const qreal minDimension = std::min(size.width(), size.height());
+    auto resolveOne =
+        [minDimension](const StyleParameters::Numeric& radius) -> StyleParameters::Numeric {
+        if (radius.unit == "%") {
+            return {.value = radius.value / 100.0 * minDimension, .unit = "px"};
+        }
+        return radius;
+    };
+    return {
+        .topLeft = resolveOne(topLeft),
+        .topRight = resolveOne(topRight),
+        .bottomRight = resolveOne(bottomRight),
+        .bottomLeft = resolveOne(bottomLeft),
+    };
+}
+
 namespace
 {
 
@@ -164,13 +182,13 @@ constexpr qreal arcSweepClockwise = -90;
 
 QPainterPath roundedRectPath(const QRectF& rect, const FreeCADStyle::CornerRadii& radii)
 {
-    // Clamp each radius to at most half the shorter side so the path stays valid
-    // even when a large radius (e.g. 100 px) is used to produce a circular shape.
+    // Resolve percent radii then clamp to at most half the shorter side.
+    const FreeCADStyle::CornerRadii resolved = radii.resolve(rect.size());
     const qreal maxRadius = std::min(rect.width(), rect.height()) / 2.0;
-    const qreal topLeft = std::min(radii.topLeft, maxRadius);
-    const qreal topRight = std::min(radii.topRight, maxRadius);
-    const qreal bottomRight = std::min(radii.bottomRight, maxRadius);
-    const qreal bottomLeft = std::min(radii.bottomLeft, maxRadius);
+    const qreal topLeft = std::min(resolved.topLeft.value, maxRadius);
+    const qreal topRight = std::min(resolved.topRight.value, maxRadius);
+    const qreal bottomRight = std::min(resolved.bottomRight.value, maxRadius);
+    const qreal bottomLeft = std::min(resolved.bottomLeft.value, maxRadius);
 
     QPainterPath path;
     path.moveTo(rect.left() + topLeft, rect.top());
@@ -207,16 +225,24 @@ QPainterPath roundedRectPath(const QRectF& rect, const FreeCADStyle::CornerRadii
     return path;
 }
 
+// Computes inner corner radii after subtracting border thickness.
+// Expects outer to already be resolved to absolute pixels (no "%" unit).
 FreeCADStyle::CornerRadii innerRadii(const FreeCADStyle::CornerRadii& outer, const QMarginsF& thickness)
 {
     auto shrink = [](qreal radius, qreal a, qreal b) -> qreal {
         return std::max(0.0, radius - std::max(a, b));
     };
     return {
-        .topLeft = shrink(outer.topLeft, thickness.top(), thickness.left()),
-        .topRight = shrink(outer.topRight, thickness.top(), thickness.right()),
-        .bottomRight = shrink(outer.bottomRight, thickness.bottom(), thickness.right()),
-        .bottomLeft = shrink(outer.bottomLeft, thickness.bottom(), thickness.left()),
+        .topLeft
+        = {.value = shrink(outer.topLeft.value, thickness.top(), thickness.left()), .unit = "px"},
+        .topRight
+        = {.value = shrink(outer.topRight.value, thickness.top(), thickness.right()), .unit = "px"},
+        .bottomRight
+        = {.value = shrink(outer.bottomRight.value, thickness.bottom(), thickness.right()),
+           .unit = "px"},
+        .bottomLeft
+        = {.value = shrink(outer.bottomLeft.value, thickness.bottom(), thickness.left()),
+           .unit = "px"},
     };
 }
 
@@ -287,10 +313,10 @@ const QImage& getCachedShadowImage(
         .y = shadow.y,
         .blur = shadow.blur,
         .color = shadow.color.rgba(),
-        .radiusTopLeft = radii.topLeft,
-        .radiusTopRight = radii.topRight,
-        .radiusBottomRight = radii.bottomRight,
-        .radiusBottomLeft = radii.bottomLeft,
+        .radiusTopLeft = radii.topLeft.value,
+        .radiusTopRight = radii.topRight.value,
+        .radiusBottomRight = radii.bottomRight.value,
+        .radiusBottomLeft = radii.bottomLeft.value,
     };
 
     if (auto it = cache.find(key); it != cache.end()) {
@@ -405,8 +431,9 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
     painter->setPen(Qt::NoPen);
     painter->setClipRect(rect, Qt::IntersectClip);
 
-    QRect backgroundRect = rect;
-    CornerRadii backgroundRadii = rule.borderRadius;
+    // Resolve percent radii once against the rect size; all downstream helpers expect absolute px.
+    const CornerRadii resolvedBorderRadius = rule.borderRadius.resolve(rect.size());
+    const QRect backgroundRect = rect;
 
     if (hasBackground) {
         QRectF backgroundInnerRect = backgroundRect;
@@ -417,16 +444,19 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
             backgroundInnerRect = backgroundInnerRect.marginsRemoved(*rule.borderThickness / 2);
         }
 
-        painter->fillPath(roundedRectPath(QRectF(backgroundInnerRect), backgroundRadii), rule.background);
+        painter->fillPath(
+            roundedRectPath(QRectF(backgroundInnerRect), resolvedBorderRadius),
+            rule.background
+        );
     }
 
     if (hasInnerShadow) {
         const int padding = static_cast<int>(std::ceil(rule.innerShadow->blur)) + 1;
-        const QImage& shadowImage = getCachedShadowImage(rect, rule.borderRadius, *rule.innerShadow);
+        const QImage& shadowImage = getCachedShadowImage(rect, resolvedBorderRadius, *rule.innerShadow);
 
         painter->save();
         painter->setRenderHint(QPainter::Antialiasing);
-        painter->setClipPath(roundedRectPath(QRectF(rect), rule.borderRadius), Qt::IntersectClip);
+        painter->setClipPath(roundedRectPath(QRectF(rect), resolvedBorderRadius), Qt::IntersectClip);
         painter->drawImage(
             QPointF(
                 rect.left() - padding + rule.innerShadow->x,
@@ -451,9 +481,9 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         const QRect innerRect = backgroundRect.marginsRemoved(thickness.toMargins());
 
         // Subtract inner from outer path to fill only the border ring, preserving transparency.
-        const QPainterPath outerPath = roundedRectPath(QRectF(rect), rule.borderRadius);
+        const QPainterPath outerPath = roundedRectPath(QRectF(rect), resolvedBorderRadius);
         const QPainterPath innerPath
-            = roundedRectPath(QRectF(innerRect), innerRadii(rule.borderRadius, snappedThickness));
+            = roundedRectPath(QRectF(innerRect), innerRadii(resolvedBorderRadius, snappedThickness));
         const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
 
         const BorderColorsPerSide& colors = *rule.borderColor;
