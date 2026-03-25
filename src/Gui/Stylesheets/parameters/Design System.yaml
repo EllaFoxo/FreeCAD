@@ -319,6 +319,21 @@ TabWidgetBorderRadius: "border_radius(@BaseRadius.medium)"
 TabWidgetBorderThickness: "border_thickness(1px)"
 TabWidgetPadding: 0
 
+# ── Tab Bar Close Button ──────────────────────────────────────────────────────
+TabBarCloseButtonHeight: 14px
+TabBarCloseButtonWidth: 14px
+TabBarCloseButtonBorderRadius: "@BaseRadius.medium"
+TabBarCloseButtonIconColor: "@BaseTextColor"
+TabBarCloseButtonPadding: "padding(@Spacing.100)"
+
+TabBarCloseButtonHoveredBackground: "@Red.600"
+TabBarCloseButtonHoveredIconColor: "@Background.050"
+
+TabBarCloseButtonPressedBackground: "@Red.800"
+TabBarCloseButtonPressedIconColor: "@Background.050"
+
+TabBarCloseButtonDisabledIconColor: "@BaseDisabledTextColor"
+
 ExpressionButtonBackground: "@ButtonBackground"
 ExpressionButtonBorderColor: "@ButtonBorderColor"
 

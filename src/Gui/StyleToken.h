@@ -67,12 +67,13 @@ enum class StyleComponent : uint8_t
  */
 enum class StyleComponentElement : uint8_t
 {
-    Root,       // Main component
-    Item,       // Item of the component (useful for lists, trees etc_
-    Indicator,  // Checkbox for items
-    Tab,        // Individual tab of a TabBar
-    Base,       // Base strip of a TabBar (PE_FrameTabBarBase)
-    Menu,       // Dropdown menu strip of a MenuButtonPopup ToolButton
+    Root,         // Main component
+    Item,         // Item of the component (useful for lists, trees etc_
+    Indicator,    // Checkbox for items
+    Tab,          // Individual tab of a TabBar
+    Base,         // Base strip of a TabBar (PE_FrameTabBarBase)
+    Menu,         // Dropdown menu strip of a MenuButtonPopup ToolButton
+    CloseButton,  // Tab close button (QAbstractButton child of QTabBar)
     // Add new components before COUNT
     COUNT,
 };

@@ -560,6 +560,8 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         {PM_ToolBarItemMargin, {StyleComponentElement::Item, Margin}},
         {PM_ToolBarItemSpacing, {StyleComponentElement::Item, Spacing}},
         {PM_MenuBarItemSpacing, {StyleComponentElement::Item, Spacing}},
+        {PM_TabCloseIndicatorWidth, {StyleComponentElement::CloseButton, Width}},
+        {PM_TabCloseIndicatorHeight, {StyleComponentElement::CloseButton, Height}},
     };
 
     switch (metric) {
@@ -745,6 +747,39 @@ void FreeCADStyle::drawIndeterminateMark(
     painter->restore();
 }
 
+
+void FreeCADStyle::drawTabCloseButton(
+    QPainter* painter,
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    // Explicitly request CloseButton element so token lookup works whether widget is the
+    // close button (QAbstractButton child of QTabBar) or the QTabBar itself.
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::CloseButton);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+    const BoxStyleDefinition style = resolveBoxStyle(context);
+    const QRect borderRect = geometry.borderRect(option->rect);
+
+    drawBoxBackground(painter, borderRect, style);
+
+    // X mark — two diagonal lines crossing at center, inset by the box padding.
+    constexpr qreal xPenWidthRatio = 0.12;
+    constexpr qreal xMinPenWidth = 1.2;
+
+    const QRectF innerRect = QRectF(geometry.contentRect(option->rect));
+    const qreal penWidth = qMax(xMinPenWidth, innerRect.width() * xPenWidthRatio);
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setPen(
+        QPen(resolveIconColor(context, option->palette), penWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin)
+    );
+    painter->drawLine(innerRect.topLeft(), innerRect.bottomRight());
+    painter->drawLine(innerRect.topRight(), innerRect.bottomLeft());
+    painter->restore();
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,
@@ -840,6 +875,11 @@ void FreeCADStyle::drawPrimitive(
         }
     }
 
+    if (element == PE_IndicatorTabClose) {
+        drawTabCloseButton(painter, option, widget);
+        return;
+    }
+
     QProxyStyle::drawPrimitive(element, option, painter, widget);
 }
 
@@ -852,11 +892,24 @@ QSize FreeCADStyle::tabBarTabSizeFromContents(
     QSize result = QProxyStyle::sizeFromContents(CT_TabBarTab, option, size, widget);
 
     const auto* tabOption = qstyleoption_cast<const QStyleOptionTab*>(option);
-    if (tabOption && !tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(
+    if (tabOption) {
+        const BoxGeometryDefinition tabGeometry = resolveBoxGeometry(
             withNorthPosition(contextOf(widget, option, StyleComponentElement::Tab))
         );
-        result.rwidth() += geometry.iconGapDelta();
+
+        // Adjust icon–text gap: Qt hardcodes 4 px; replace with our token value.
+        if (!tabOption->icon.isNull() && !tabOption->text.isEmpty()) {
+            result.rwidth() += tabGeometry.iconGapDelta();
+        }
+
+        // Adjust close-button gap: Qt also hardcodes 4 px next to each button; replace with
+        // our token value (same Tab IconSpacing, one delta per button side present).
+        if (tabOption->rightButtonSize.isValid()) {
+            result.rwidth() += tabGeometry.iconGapDelta();
+        }
+        if (tabOption->leftButtonSize.isValid()) {
+            result.rwidth() += tabGeometry.iconGapDelta();
+        }
     }
 
     // The background is painted narrower by |tabOverlap| on the trailing edge to create the

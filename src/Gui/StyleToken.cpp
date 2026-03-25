@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include <QAbstractButton>
 #include <QAbstractSpinBox>
 #include <QCheckBox>
 #include <QComboBox>
@@ -208,7 +209,8 @@ const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Indicator, "Indicator"},
     {StyleComponentElement::Tab,       "Tab"},
     {StyleComponentElement::Base,      "Base"},
-    {StyleComponentElement::Menu,      "Menu"},
+    {StyleComponentElement::Menu,        "Menu"},
+    {StyleComponentElement::CloseButton, "CloseButton"},
 };
 // clang-format on
 
@@ -569,6 +571,24 @@ StyleContext FreeCADStyle::contextOf(
         }
         if (option && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
+        }
+    }
+    else if (qobject_cast<const QAbstractButton*>(widget) && widget->parent()
+             && qobject_cast<const QTabBar*>(widget->parent())) {
+        // Qt's tab close buttons are private QAbstractButton children of QTabBar.
+        // They must be detected before the generic QAbstractButton fallthrough below.
+        context.component = StyleComponent::TabBar;
+        context.element = StyleComponentElement::CloseButton;
+        // component=TabBar is not in the isButton guard in the generic state block below,
+        // so Pressed must be mapped explicitly here.
+        if (option && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+        // Qt's CloseButton sets State_Raised (not State_MouseOver) for hover: its paintEvent
+        // uses underMouse() and does not rely on WA_Hover. Map both flags to be safe.
+        if (option
+            && ((option->state & QStyle::State_Raised) || (option->state & QStyle::State_MouseOver))) {
+            context.state |= StyleState::Hovered;
         }
     }
     else if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {

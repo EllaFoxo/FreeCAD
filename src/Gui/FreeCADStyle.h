@@ -477,6 +477,8 @@ private:
 
     void drawMenuBarItem(QPainter* painter, const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
+    void drawTabCloseButton(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
+
     void drawTabBarTab(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
 
     void drawTabBarTabLabel(QPainter* painter, const QStyleOptionTab* option, const QWidget* widget) const;
