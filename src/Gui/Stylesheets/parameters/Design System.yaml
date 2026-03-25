@@ -20,6 +20,7 @@ BaseRadius:
   small: 2px
   medium: 3px
   large: 4px
+  full: 100px
 
 BaseSpacing: 4px
 SpacingFactors:
@@ -46,7 +47,11 @@ BaseContrast: "#495057"
 Neutral: "shades(@BaseNeutral, (000: 0.00, 150: 0.15) + @BaseShades, range: 0.6, max: 1.0, q: 1.0)"
 Contrast: "shades(@BaseContrast, @BaseShades, range: 0.6, q: 1.0)"
 
+Green: "shades(#51cf66, @BaseShades)"
+Red: "shades(#e01b24, @BaseShades)"
+Yellow: "shades(#fcc419, @BaseShades)"
 Blue: "shades(#418fde, @BaseShades)"
+Purple: "shades(#845ef7, @BaseShades)"
 Orange: "shades(#ff922b, @BaseShades)"
 Accent: "shades(@ThemeAccentColor1, @BaseShades)"
 
