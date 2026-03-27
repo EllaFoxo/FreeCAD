@@ -843,12 +843,9 @@ void FreeCADStyle::drawPrimitive(
     }
 
     if (element == PE_Frame) {
-        if (qobject_cast<const QTextEdit*>(widget) || qobject_cast<const QPlainTextEdit*>(widget)) {
-            const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option);
-            if (frameOption && frameOption->lineWidth > 0) {
-                drawComponent(painter, option->rect, widget, option);
-                return;
-            }
+        if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option)) {
+            drawComponent(painter, option->rect, widget, option);
+            return;
         }
     }
 
@@ -1537,8 +1534,14 @@ void FreeCADStyle::drawControl(
     if (element == CE_ShapedFrame) {
         if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option)) {
             const QFrame::Shape shape = frameOption->frameShape;
+
             if (shape == QFrame::HLine || shape == QFrame::VLine) {
                 drawSeparatorLine(painter, option->rect, shape == QFrame::HLine);
+                return;
+            }
+
+            if (shape == QFrame::StyledPanel || shape == QFrame::Panel) {
+                drawComponent(painter, option->rect, contextOf(widget, option));
                 return;
             }
         }
@@ -2173,6 +2176,36 @@ void FreeCADStyle::drawSeparatorLine(QPainter* painter, const QRect& rect, bool 
     }
 }
 
+void FreeCADStyle::updateScrollAreaViewportMask(QAbstractScrollArea* scrollArea) const
+{
+    if (scrollArea->size().isEmpty()) {
+        return;
+    }
+
+    const StyleContext context = contextOf(scrollArea, nullptr);
+    const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
+
+    const CornerRadii outerRadii = boxStyle.borderRadius.resolve(scrollArea->size());
+
+    const bool hasRoundedCorners = outerRadii.topLeft.value > 0 || outerRadii.topRight.value > 0
+        || outerRadii.bottomLeft.value > 0 || outerRadii.bottomRight.value > 0;
+
+    if (!hasRoundedCorners) {
+        scrollArea->clearMask();
+        return;
+    }
+
+    // Clip the scroll area to its outer border-radius so the square widget corners
+    // are not visible at the compositor level.
+    QBitmap bitmap(scrollArea->size());
+    bitmap.fill(Qt::color0);
+    {
+        QPainter maskPainter(&bitmap);
+        maskPainter.fillPath(roundedRectPath(QRectF(scrollArea->rect()), outerRadii), Qt::color1);
+    }
+    scrollArea->setMask(bitmap);
+}
+
 void FreeCADStyle::polish(QWidget* widget)
 {
     QProxyStyle::polish(widget);
@@ -2189,6 +2222,36 @@ void FreeCADStyle::polish(QWidget* widget)
 
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
         constrainComboDropdown(comboBox);
+    }
+
+    if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
+        auto viewport = scrollArea->viewport();
+
+        if (!viewport) {
+            return;
+        }
+
+        scrollArea->removeEventFilter(this);
+        scrollArea->installEventFilter(this);
+
+        const auto disableDefaultBackground = [](QWidget* widget) {
+            // do not disable background if it was changed from default
+            if (widget->backgroundRole() != QPalette::Button
+                && widget->backgroundRole() != QPalette::Window) {
+                return;
+            }
+
+            widget->setAttribute(Qt::WA_NoSystemBackground);
+            widget->setAutoFillBackground(false);
+        };
+
+        disableDefaultBackground(viewport);
+        std::ranges::for_each(
+            viewport->findChildren<QWidget*>(Qt::FindDirectChildrenOnly),
+            disableDefaultBackground
+        );
+
+        updateScrollAreaViewportMask(scrollArea);
     }
 }
 
@@ -2250,6 +2313,10 @@ void FreeCADStyle::unpolish(QWidget* widget)
     }
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
         restoreComboDropdownDefaults(comboBox);
+    }
+    if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
+        scrollArea->removeEventFilter(this);
+        scrollArea->clearMask();
     }
     QProxyStyle::unpolish(widget);
 }
@@ -2341,6 +2408,25 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
 
     if (event->type() == QEvent::Show) {
         scheduleComboPopupCorrection(obj);
+    }
+
+    if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
+        if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(obj)) {
+            updateScrollAreaViewportMask(scrollArea);
+        }
+    }
+
+    // QAbstractScrollArea::paintEvent is an empty stub in Qt 6 — the frame is never
+    // drawn via CE_ShapedFrame. For non-item-view scroll areas (e.g. QScrollArea with
+    // component="List") we must draw the token-based border/background ourselves.
+    // Item views are handled via PE_Frame in their own paintEvent.
+    if (event->type() == QEvent::Paint) {
+        if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(obj)) {
+            if (!qobject_cast<QAbstractItemView*>(scrollArea)) {
+                QPainter painter(scrollArea);
+                drawComponent(&painter, scrollArea->rect(), contextOf(scrollArea, nullptr));
+            }
+        }
     }
 
     return QObject::eventFilter(obj, event);
@@ -2616,6 +2702,11 @@ StyleContext FreeCADStyle::contextOf(
         context.component = isDropdown ? StyleComponent::DropdownList : StyleComponent::List;
         context.element = element;
     }
+    else if (qobject_cast<const QAbstractItemView*>(widget)) {
+        // Catches QTableView, QColumnView, and other item-view subclasses not matched above.
+        context.component = StyleComponent::List;
+        context.element = element;
+    }
     else if (qobject_cast<const QToolBar*>(widget)) {
         context.component = StyleComponent::ToolBar;
         context.element = element;
@@ -2694,12 +2785,20 @@ StyleContext FreeCADStyle::contextOf(
     }
 
     // Component override — derived from the "component" widget property.
-    // Allows a widget to opt into a custom token namespace (e.g. "ActionButton")
-    // while still falling back to the standard component chain.
+    // For unrecognised widget types the name is resolved to a StyleComponent enum value
+    // when possible (e.g. QFrame[component="List"] → StyleComponent::List). For recognised
+    // widget types the name becomes a prefix override (e.g. "DocumentTree" on a QTreeView).
     if (widget) {
-        const QString overrideName = widget->property("component").toString();
-        if (!overrideName.isEmpty()) {
-            context.componentOverride = overrideName.toStdString();
+        const std::string overrideName = widget->property("component").toString().toStdString();
+        if (!overrideName.empty()) {
+            auto* manager = Application::Instance->styleParameterManager();
+
+            if (const auto namedComponent = manager->descriptorRegistry().findComponent(overrideName)) {
+                context.component = *namedComponent;
+            }
+            else {
+                context.componentOverride = overrideName;
+            }
         }
     }
 

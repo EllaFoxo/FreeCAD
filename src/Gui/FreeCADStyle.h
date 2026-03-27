@@ -35,6 +35,7 @@
 #include <QMarginsF>
 #include <QPainter>
 #include <QProxyStyle>
+#include <QAbstractScrollArea>
 #include <QComboBox>
 #include <QPushButton>
 #include <QStyleOption>
@@ -566,6 +567,10 @@ private:
     ) const;
 
     void drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const;
+
+    /// Recomputes and applies the rounded-rect clip mask on a scroll area's viewport.
+    /// Must be called after polish and on every viewport resize.
+    void updateScrollAreaViewportMask(QAbstractScrollArea* scrollArea) const;
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
     void drawToolButton(
@@ -632,8 +637,9 @@ private:
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.
     // clang-format off
-    static constexpr const char* comboDropdownProperty  = "_fc_comboDropdown";
-    static constexpr const char* comboContainerProperty = "_fc_comboContainer";
+    static constexpr const char* comboDropdownProperty         = "_fc_comboDropdown";
+    static constexpr const char* comboContainerProperty        = "_fc_comboContainer";
+    static constexpr const char* viewportMaskInstalledProperty = "_fc_viewportMask";
     // clang-format on
 
     void constrainComboDropdown(QComboBox* comboBox);
