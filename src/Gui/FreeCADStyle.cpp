@@ -25,6 +25,7 @@
 #include "FreeCADStyle.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <span>
@@ -32,6 +33,7 @@
 #include <vector>
 
 #include <QApplication>
+#include <QAbstractButton>
 #include <QAbstractSpinBox>
 #include <QFrame>
 #include <QGroupBox>
@@ -52,6 +54,7 @@
 #include <QPointer>
 #include <QScrollBar>
 #include <QScreen>
+#include <QCursor>
 #include <QMenuBar>
 #include <QTabBar>
 #include <QTimer>
@@ -69,6 +72,7 @@
 #include "QSint/actionpanel/taskgroup_p.h"
 #include "QSint/actionpanel/taskheader_p.h"
 
+#include "StyleParameters/ColorEffect.h"
 #include "StyleParameters/Corners.h"
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
@@ -2396,4 +2400,512 @@ void FreeCADStyle::scheduleComboPopupCorrection(QObject* obj)
             }
         });
     }
+}
+
+// ─── Directional rotation helpers ────────────────────────────────────────────
+
+namespace
+{
+
+/**
+ * @brief Applies the standard 4-way edge rotation to an array of values.
+ *
+ * Canonical (North) order: (left/topLeft, top/topRight, right/bottomRight, bottom/bottomLeft).
+ * South swaps opposite pairs; East/West rotate by one step in either direction.
+ */
+template<typename T>
+std::array<T, 4> rotate4(std::array<T, 4> values, Position position)
+{
+    // The array has known size - bounds are guaranteed
+    // NOLINTBEGIN(*-pro-bounds-avoid-unchecked-container-access)
+    // clang-format off
+    switch (position) {
+        case Position::South: return {values[2], values[3], values[0], values[1]};
+        case Position::East:  return {values[3], values[0], values[1], values[2]};
+        case Position::West:  return {values[1], values[2], values[3], values[0]};
+        default:              return values;
+    }
+    // clang-format on
+    // NOLINTEND(*-pro-bounds-avoid-unchecked-container-access)
+}
+
+/** @brief Rotates canonical (North) margins to the given position. */
+QMarginsF rotated(const QMarginsF& margins, Position position)
+{
+    const auto [left, top, right, bottom] = rotate4(
+        std::to_array({margins.left(), margins.top(), margins.right(), margins.bottom()}),
+        position
+    );
+    return {left, top, right, bottom};
+}
+
+/** @brief Rotates canonical (North) corner radii to the given position. */
+FreeCADStyle::CornerRadii rotated(const FreeCADStyle::CornerRadii& corners, Position position)
+{
+    const auto [topLeft, topRight, bottomRight, bottomLeft] = rotate4(
+        std::to_array({corners.topLeft, corners.topRight, corners.bottomRight, corners.bottomLeft}),
+        position
+    );
+    return {.topLeft = topLeft, .topRight = topRight, .bottomRight = bottomRight, .bottomLeft = bottomLeft};
+}
+
+/**
+ * @brief Rotates a canonical (North, top→bottom) linear gradient brush to the given position.
+ *
+ * Point transform: North=(px,py), South=(px,1-py), East=(1-py,px), West=(py,1-px).
+ * Non-linear-gradient brushes are returned unchanged.
+ */
+// clang-format off
+QBrush rotated(const QBrush& brush, Position position)
+{
+    if (position == Position::North) {
+        return brush;
+    }
+    const QGradient* gradient = brush.gradient();
+    if (!gradient || gradient->type() != QGradient::LinearGradient) {
+        return brush;
+    }
+    const auto* linear = static_cast<const QLinearGradient*>(gradient);
+    const auto rotatePoint = [position](const QPointF& pointF) -> QPointF {
+        switch (position) {
+            case Position::South: return {pointF.x(),       1.0 - pointF.y()};
+            case Position::East:  return {1.0 - pointF.y(), pointF.x()      };
+            case Position::West:  return {pointF.y(),       1.0 - pointF.x()};
+            default:              return pointF;
+        }
+    };
+
+    QLinearGradient result(rotatePoint(linear->start()), rotatePoint(linear->finalStop()));
+    result.setStops(linear->stops());
+    result.setCoordinateMode(linear->coordinateMode());
+    result.setSpread(linear->spread());
+
+    return result;
+}
+// clang-format on
+
+// ─── Color effect helpers ─────────────────────────────────────────────────────
+
+/**
+ * @brief Applies a ColorEffect to each color in a QBrush.
+ *
+ * Solid brushes are shifted directly. Gradient brushes have each stop color
+ * shifted individually so the gradient shape is preserved.
+ */
+QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
+{
+    const auto applyToColor = [&](const QColor& color) -> QColor {
+        return effect.apply(Base::Color::fromValue(color)).asValue<QColor>();
+    };
+
+    if (brush.style() == Qt::SolidPattern) {
+        return QBrush(applyToColor(brush.color()));
+    }
+
+    if (const QGradient* gradient = brush.gradient()) {
+        QGradientStops stops = gradient->stops();
+        for (auto& [position, color] : stops) {
+            color = applyToColor(color);
+        }
+
+        // clang-format off
+        switch (gradient->type()) {
+            case QGradient::LinearGradient: {
+                const auto* linear = static_cast<const QLinearGradient*>(gradient);
+                QLinearGradient result(linear->start(), linear->finalStop());
+                result.setStops(stops);
+                result.setSpread(gradient->spread());
+                result.setCoordinateMode(gradient->coordinateMode());
+                return result;
+            }
+            case QGradient::RadialGradient: {
+                const auto* radial = static_cast<const QRadialGradient*>(gradient);
+                QRadialGradient result(radial->center(), radial->radius(), radial->focalPoint());
+                result.setStops(stops);
+                result.setSpread(gradient->spread());
+                result.setCoordinateMode(gradient->coordinateMode());
+                return result;
+            }
+            case QGradient::ConicalGradient: {
+                const auto* conical = static_cast<const QConicalGradient*>(gradient);
+                QConicalGradient result(conical->center(), conical->angle());
+                result.setStops(stops);
+                result.setCoordinateMode(gradient->coordinateMode());
+                return result;
+            }
+            default:
+                break;
+        }
+        // clang-format on
+    }
+
+    return brush;  // unsupported brush type — return unchanged
+}
+
+}  // namespace
+
+// ─── Tab position mapping ────────────────────────────────────────────────────
+
+/**
+ * @brief Maps a QTabBar::Shape to the canonical Position.
+ *
+ * Both Rounded and Triangular shapes at the same edge map to the same position.
+ */
+/*static*/ Position FreeCADStyle::tabPositionOf(QTabBar::Shape shape)
+{
+    switch (shape) {
+        case QTabBar::RoundedNorth:
+        case QTabBar::TriangularNorth:
+            return Position::North;
+        case QTabBar::RoundedEast:
+        case QTabBar::TriangularEast:
+            return Position::East;
+        case QTabBar::RoundedSouth:
+        case QTabBar::TriangularSouth:
+            return Position::South;
+        case QTabBar::RoundedWest:
+        case QTabBar::TriangularWest:
+            return Position::West;
+        default:
+            return Position::North;
+    }
+}
+
+// ─── Context building ────────────────────────────────────────────────────────
+
+StyleContext FreeCADStyle::contextOf(
+    const QWidget* widget,
+    const QStyleOption* option,
+    const StyleComponentElement& element
+)
+{
+    StyleContext context;
+
+    if (qobject_cast<const QToolButton*>(widget)) {
+        const bool isInToolBar = qobject_cast<const QToolBar*>(widget->parent());
+        context.component = isInToolBar ? StyleComponent::ToolBarButton : StyleComponent::ToolButton;
+    }
+    else if (qobject_cast<const QPushButton*>(widget)) {
+        context.component = StyleComponent::PushButton;
+    }
+    else if (qobject_cast<const QLineEdit*>(widget) || qobject_cast<const QAbstractSpinBox*>(widget)) {
+        context.component = StyleComponent::LineEdit;
+    }
+    else if (qobject_cast<const QTextEdit*>(widget) || qobject_cast<const QPlainTextEdit*>(widget)) {
+        context.component = StyleComponent::TextEdit;
+    }
+    else if (const auto* comboBox = qobject_cast<const QComboBox*>(widget)) {
+        context.component = comboBox->isEditable() ? StyleComponent::ComboBox
+                                                   : StyleComponent::Select;
+    }
+    else if (qobject_cast<const QRadioButton*>(widget)) {
+        context.component = StyleComponent::RadioButton;
+    }
+    else if (qobject_cast<const QCheckBox*>(widget) || element == StyleComponentElement::Indicator) {
+        context.component = StyleComponent::CheckBox;
+    }
+    else if (qobject_cast<const QTreeView*>(widget)) {
+        context.component = StyleComponent::Tree;
+        context.element = element;
+    }
+    else if (qobject_cast<const QListView*>(widget)) {
+        // FreeCADStyle::polish() tags the QComboBox's internal list view with this property
+        // so we can reliably distinguish it without depending on Qt's internal parent chain,
+        // which can change when the popup container is reparented at show time.
+        const bool isDropdown = widget->property(FreeCADStyle::comboDropdownProperty).toBool();
+        context.component = isDropdown ? StyleComponent::DropdownList : StyleComponent::List;
+        context.element = element;
+    }
+    else if (qobject_cast<const QToolBar*>(widget)) {
+        context.component = StyleComponent::ToolBar;
+        context.element = element;
+    }
+    else if (qobject_cast<const QMenuBar*>(widget)) {
+        context.component = StyleComponent::MenuBar;
+        context.element = element;
+        // QMenuBarItem uses State_Selected to indicate the active/hovered item; map it to Hovered.
+        // State_Sunken indicates the menu is open (pressed).
+        if (option && (option->state & QStyle::State_Selected)) {
+            context.state |= StyleState::Hovered;
+        }
+        if (option && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+    }
+    else if (qobject_cast<const QAbstractButton*>(widget) && widget->parent()
+             && qobject_cast<const QTabBar*>(widget->parent())) {
+        // Qt's tab close buttons are private QAbstractButton children of QTabBar.
+        // They must be detected before the generic QAbstractButton fallthrough below.
+        context.component = StyleComponent::TabBar;
+        context.element = StyleComponentElement::CloseButton;
+        // component=TabBar is not in the isButton guard in the generic state block below,
+        // so Pressed must be mapped explicitly here.
+        if (option && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+        // Qt's CloseButton sets State_Raised (not State_MouseOver) for hover: its paintEvent
+        // uses underMouse() and does not rely on WA_Hover. Map both flags to be safe.
+        if (option
+            && ((option->state & QStyle::State_Raised) || (option->state & QStyle::State_MouseOver))) {
+            context.state |= StyleState::Hovered;
+        }
+    }
+    else if (const auto* tabBar = qobject_cast<const QTabBar*>(widget)) {
+        context.component = StyleComponent::TabBar;
+        context.element = element;
+        context.variant.set(VariantSlot::Position, tabPositionOf(tabBar->shape()));
+        // QTabBar uses State_Selected (not State_On) to mark the active tab; map it to Checked.
+        if (option && (option->state & QStyle::State_Selected)) {
+            context.state |= StyleState::Checked;
+        }
+        // State_MouseOver is not reliably set in QStyleOptionTab — Qt tracks tab hover via
+        // WA_Hover events and an internal hoverIndex, but does not always propagate that to
+        // the option flags. Check cursor position directly instead.
+        if (option && option->rect.contains(tabBar->mapFromGlobal(QCursor::pos()))) {
+            context.state |= StyleState::Hovered;
+        }
+    }
+
+    // ButtonType — derived from style option features first, then widget properties.
+    const auto* buttonOption = qstyleoption_cast<const QStyleOptionButton*>(option);
+    if (buttonOption && (buttonOption->features & QStyleOptionButton::DefaultButton)) {
+        context.variant.set(VariantSlot::ButtonType, ButtonType::Primary);
+    }
+    else if (buttonOption && (buttonOption->features & QStyleOptionButton::Flat)) {
+        context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
+    }
+    else if (const auto* toolButton = qobject_cast<const QToolButton*>(widget);
+             toolButton && toolButton->autoRaise()) {
+        context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
+    }
+    else if (widget && widget->property("flat").toBool()) {
+        context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
+    }
+
+    // ControlSize — derived from the "controlSize" widget property.
+    if (widget) {
+        const QString sizeName = widget->property("controlSize").toString();
+        if (sizeName == u"small") {
+            context.variant.set(VariantSlot::ControlSize, ControlSize::Small);
+        }
+        else if (sizeName == u"big") {
+            context.variant.set(VariantSlot::ControlSize, ControlSize::Big);
+        }
+    }
+
+    // Component override — derived from the "component" widget property.
+    // Allows a widget to opt into a custom token namespace (e.g. "ActionButton")
+    // while still falling back to the standard component chain.
+    if (widget) {
+        const QString overrideName = widget->property("component").toString();
+        if (!overrideName.isEmpty()) {
+            context.componentOverride = overrideName.toStdString();
+        }
+    }
+
+    // State — all active flags captured as a bitmask.
+    if (option) {
+        if (!(option->state & QStyle::State_Enabled)) {
+            context.state |= StyleState::Disabled;
+        }
+
+        // State_Sunken means "button is being pressed" for buttons, but "has a sunken
+        // frame appearance" for input widgets (QLineEdit always sets it). Only map it
+        // to Pressed for button components to avoid masking the Focused state on inputs.
+        const bool isButton = context.component == StyleComponent::PushButton
+            || context.component == StyleComponent::ToolButton
+            || context.component == StyleComponent::Select
+            || context.component == StyleComponent::CheckBox
+            || context.component == StyleComponent::RadioButton;
+        if (isButton && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+        if (option->state & QStyle::State_MouseOver) {
+            context.state |= StyleState::Hovered;
+        }
+        if (option->state & QStyle::State_On) {
+            context.state |= StyleState::Checked;
+        }
+        if (option->state & QStyle::State_HasFocus) {
+            context.state |= StyleState::Focused;
+        }
+    }
+
+    // QAbstractSpinBox delegates keyboard focus to an inner QLineEdit child, so
+    // the spinbox widget's hasFocus() returns false and State_HasFocus is absent
+    // from its style option. Supplement the state by checking the inner edit directly.
+    if (qobject_cast<const QAbstractSpinBox*>(widget)) {
+        if (const QLineEdit* innerEdit = widget->findChild<QLineEdit*>()) {
+            if (innerEdit->hasFocus()) {
+                context.state |= StyleState::Focused;
+            }
+        }
+    }
+
+    // An editable QComboBox also delegates keyboard focus to its inner QLineEdit.
+    // Same pattern as QAbstractSpinBox: supplement state from the inner edit.
+    if (const auto* comboBox = qobject_cast<const QComboBox*>(widget);
+        comboBox && comboBox->isEditable()) {
+        if (const QLineEdit* lineEdit = comboBox->lineEdit()) {
+            if (lineEdit->hasFocus()) {
+                context.state |= StyleState::Focused;
+            }
+        }
+    }
+
+    return context;
+}
+
+// ─── Token resolution ────────────────────────────────────────────────────────
+
+std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StyleProperty property) const
+{
+    const uint64_t key = context.cacheKey(property);
+
+    if (const auto* cached = tokenCache.find(key)) {
+        return *cached;
+    }
+
+    auto* manager = Application::Instance->styleParameterManager();
+
+    const std::string propertySuffix(propertyString(property));
+    std::optional<Value> result;
+
+    for (const std::string& prefix : manager->descriptorRegistry().buildPrefixes(context)) {
+        // Use the flat resolver per prefix: the prefix list IS the inheritance
+        // walk, so name-based chain synthesis must not run here.
+        result = manager->resolve(
+            prefix + propertySuffix,
+            StyleParameters::ParameterManager::ResolveContext {}
+        );
+        if (!result) {
+            continue;
+        }
+        if (result->holds<None>()) {
+            result = std::nullopt;
+            break;
+        }
+        break;
+    }
+
+    tokenCache.store(key, result);
+    return result;
+}
+
+FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContext& context) const
+{
+    const uint64_t key = context.cacheKey();
+
+    if (const auto* cached = boxStyleCache.find(key)) {
+        return *cached;
+    }
+
+    const auto position = static_cast<Position>(context.variant.get(VariantSlot::Position));
+    const StyleContext northContext = withNorthPosition(context);
+
+    BoxStyleDefinition result;
+
+    // Directional tokens: resolved from canonical North, rotated to actual position.
+    // rotated(x, North) is the identity — safe to call unconditionally for all components.
+    if (const auto background = resolve(northContext, StyleProperty::Background)) {
+        result.background = rotated(Base::convertTo<QBrush>(*background), position);
+    }
+    if (const auto borderRadius = resolve<Corners>(northContext, StyleProperty::BorderRadius)) {
+        result.borderRadius = rotated(Base::convertTo<CornerRadii>(*borderRadius), position);
+    }
+    if (const auto borderThickness = resolve<Insets>(northContext, StyleProperty::BorderThickness)) {
+        result.borderThickness = rotated(Base::convertTo<QMarginsF>(*borderThickness), position);
+    }
+
+    // Non-directional visual tokens resolved from the actual context.
+    if (const auto borderColors = resolve<BorderColors>(context, StyleProperty::BorderColor)) {
+        result.borderColor = Base::convertTo<BorderColorsPerSide>(*borderColors);
+    }
+    if (const auto innerShadow
+        = resolve<StyleParameters::InnerShadow>(context, StyleProperty::InnerShadow)) {
+        result.innerShadow = Base::convertTo<InnerShadow>(*innerShadow);
+    }
+
+    // BackgroundEffect: resolved from northContext (same directional semantics as Background).
+    if (const auto effect = resolve<ColorEffect>(northContext, StyleProperty::BackgroundEffect)) {
+        result.background = applyEffectToBrush(result.background, *effect);
+    }
+
+    // BorderColorEffect: resolved from actual context (same as BorderColor).
+    if (const auto effect = resolve<ColorEffect>(context, StyleProperty::BorderColorEffect)) {
+        if (result.borderColor) {
+            auto& colors = *result.borderColor;
+            for (QColor* side : {&colors.top, &colors.right, &colors.bottom, &colors.left}) {
+                *side = effect->apply(Base::Color::fromValue(*side)).asValue<QColor>();
+            }
+        }
+    }
+
+    boxStyleCache.store(key, result);
+    return result;
+}
+
+FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const StyleContext& context) const
+{
+    const uint64_t key = context.cacheKey();
+
+    if (const auto* cached = boxGeometryCache.find(key)) {
+        return *cached;
+    }
+
+    BoxGeometryDefinition result;
+
+    if (const auto padding = resolve<Insets>(context, StyleProperty::Padding)) {
+        result.padding = Base::convertTo<QMarginsF>(*padding);
+    }
+
+    if (const auto margin = resolve<Insets>(context, StyleProperty::Margin)) {
+        result.margin = Base::convertTo<QMarginsF>(*margin);
+    }
+
+    if (const auto height = resolve<Numeric>(context, StyleProperty::Height)) {
+        result.height = static_cast<int>(*height);
+    }
+
+    if (const auto minWidth = resolve<Numeric>(context, StyleProperty::MinWidth)) {
+        result.minWidth = static_cast<int>(*minWidth);
+    }
+
+    if (const auto resolvedWidth = resolve<Numeric>(context, StyleProperty::Width)) {
+        result.width = static_cast<int>(*resolvedWidth);
+    }
+
+    if (const auto resolvedMaxWidth = resolve<Numeric>(context, StyleProperty::MaxWidth)) {
+        result.maxWidth = static_cast<int>(*resolvedMaxWidth);
+    }
+
+    if (const auto resolvedMinHeight = resolve<Numeric>(context, StyleProperty::MinHeight)) {
+        result.minHeight = static_cast<int>(*resolvedMinHeight);
+    }
+
+    if (const auto resolvedMaxHeight = resolve<Numeric>(context, StyleProperty::MaxHeight)) {
+        result.maxHeight = static_cast<int>(*resolvedMaxHeight);
+    }
+
+    if (const auto spacing = resolve<Numeric>(context, StyleProperty::IconSpacing)) {
+        result.iconSpacing = static_cast<int>(*spacing);
+    }
+
+    boxGeometryCache.store(key, result);
+    return result;
+}
+
+void FreeCADStyle::clearTokenCache()
+{
+    tokenCache.clear();
+    boxStyleCache.clear();
+    boxGeometryCache.clear();
+    StyleContext::Intern::global().clear();
+}
+
+StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)
+{
+    StyleContext north = context;
+    north.variant.set(VariantSlot::Position, Position::North);
+    return north;
 }

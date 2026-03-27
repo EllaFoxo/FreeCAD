@@ -341,9 +341,27 @@ void YamlParameterSource::flush()
 
 ParameterManager::ParameterManager() = default;
 
+void ParameterManager::setResolver(StyleParameterResolver* resolver)
+{
+    _resolver = resolver;
+}
+
+ParameterDescriptorRegistry& ParameterManager::descriptorRegistry()
+{
+    return _descriptorRegistry;
+}
+
+const ParameterDescriptorRegistry& ParameterManager::descriptorRegistry() const
+{
+    return _descriptorRegistry;
+}
+
 void ParameterManager::reload()
 {
     _resolved.clear();
+    if (_resolver) {
+        _resolver->refresh();
+    }
 }
 
 std::string ParameterManager::replacePlaceholders(
@@ -440,6 +458,14 @@ std::optional<std::string> ParameterManager::expression(const std::string& name)
     }
 
     return {};
+}
+
+std::optional<Value> ParameterManager::resolve(const std::string& name) const
+{
+    if (_resolver) {
+        return _resolver->resolve(name, this);
+    }
+    return resolve(name, ResolveContext {});
 }
 
 std::optional<Value> ParameterManager::resolve(const std::string& name, ResolveContext context) const

@@ -347,6 +347,8 @@ public:
     //@}
 
 private:
+    StyleParameters::StyleParameterResolver* createStyleParameterResolver();
+
     struct ApplicationP* d;
     /// workbench python dictionary
     PyObject* _pcWorkbenchDictionary;

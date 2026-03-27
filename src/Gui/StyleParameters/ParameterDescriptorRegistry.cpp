@@ -1,0 +1,554 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+/****************************************************************************
+ *                                                                          *
+ *   Copyright (c) 2025 Kacper Donat <kacper@kadet.net>                     *
+ *                                                                          *
+ *   This file is part of FreeCAD.                                          *
+ *                                                                          *
+ *   FreeCAD is free software: you can redistribute it and/or modify it     *
+ *   under the terms of the GNU Lesser General Public License as            *
+ *   published by the Free Software Foundation, either version 2.1 of the   *
+ *   License, or (at your option) any later version.                        *
+ *                                                                          *
+ *   FreeCAD is distributed in the hope that it will be useful, but         *
+ *   WITHOUT ANY WARRANTY; without even the implied warranty of             *
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU       *
+ *   Lesser General Public License for more details.                        *
+ *                                                                          *
+ *   You should have received a copy of the GNU Lesser General Public       *
+ *   License along with FreeCAD. If not, see                                *
+ *   <https://www.gnu.org/licenses/>.                                       *
+ *                                                                          *
+ ***************************************************************************/
+
+#include "ParameterDescriptorRegistry.h"
+
+#include <algorithm>
+#include <array>
+#include <map>
+#include <ranges>
+
+namespace Gui::StyleParameters
+{
+
+namespace
+{
+
+// ─── String table helpers ─────────────────────────────────────────────────────
+// All tables use std::map so entries are self-documenting and order-independent.
+
+// Returns a const reference to map[key] if present, or to a static empty
+// default otherwise. Returning by reference avoids copies and is safe to
+// wrap in std::span since the default outlives the call.
+template<typename Map>
+auto lookup(const Map& map, const typename Map::key_type& key) -> const typename Map::mapped_type&
+{
+    static const typename Map::mapped_type empty {};
+    const auto found = map.find(key);
+    return found != map.end() ? found->second : empty;
+}
+
+// ── Element string table ─────────────────────────────────────────────────────
+// Root (0) is absent; elementString returns "" for it, so Root components
+// produce the same token prefixes as before this field was introduced.
+
+// clang-format off
+const std::map<StyleComponentElement, std::string_view> elementNames = {
+    {StyleComponentElement::Item,        "Item"},
+    {StyleComponentElement::Indicator,   "Indicator"},
+    {StyleComponentElement::Tab,         "Tab"},
+    {StyleComponentElement::Base,        "Base"},
+    {StyleComponentElement::Menu,        "Menu"},
+    {StyleComponentElement::CloseButton, "CloseButton"},
+};
+// clang-format on
+
+std::string_view elementString(StyleComponentElement element)
+{
+    return lookup(elementNames, element);
+}
+
+// ── Variant slot string tables ───────────────────────────────────────────────
+// Default (0) is absent from each inner map; variantSlotString returns "" for it.
+// These are the canonical source of truth for variant value strings — also used
+// by registerBuiltinVariants() to populate the ParameterDescriptorRegistry.
+
+// clang-format off
+const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotNames = {
+    {VariantSlot::ButtonType, {
+        {static_cast<uint8_t>(ButtonType::Primary), "Primary"},
+        {static_cast<uint8_t>(ButtonType::Link),    "Link"},
+    }},
+    {VariantSlot::ControlSize, {
+        {static_cast<uint8_t>(ControlSize::Small), "Small"},
+        {static_cast<uint8_t>(ControlSize::Big),   "Big"},
+    }},
+    {VariantSlot::Position, {
+        {static_cast<uint8_t>(Position::East),  "East"},
+        {static_cast<uint8_t>(Position::South), "South"},
+        {static_cast<uint8_t>(Position::West),  "West"},
+    }},
+};
+// clang-format on
+
+std::string_view variantSlotString(VariantSlot slot, uint8_t value)
+{
+    return lookup(lookup(variantSlotNames, slot), value);
+}
+
+// Concatenates the string fragments of all non-default variant slots.
+// e.g. ButtonType=Primary, ControlSize=Default → "Primary"
+std::string variantString(const VariantKey& variant)
+{
+    std::string result;
+    for (size_t index = 0; index < variant.slots.size(); ++index) {
+        result += variantSlotString(static_cast<VariantSlot>(index), variant.slots.at(index));
+    }
+    return result;
+}
+
+// ── State strings ────────────────────────────────────────────────────────────
+
+// clang-format off
+const std::map<StyleState, std::string_view> stateNames = {
+    {StyleState::Disabled, "Disabled"},
+    {StyleState::Pressed,  "Pressed"},
+    {StyleState::Hovered,  "Hovered"},
+    {StyleState::Checked,  "Checked"},
+    {StyleState::Focused,  "Focused"},
+};
+// clang-format on
+
+std::string_view stateString(StyleState state)
+{
+    return lookup(stateNames, state);
+}
+
+// Priority order — highest first. Mirrors enum declaration order (Disabled > Pressed > …).
+constexpr auto statePriorityOrder = std::to_array({
+    StyleState::Disabled,
+    StyleState::Pressed,
+    StyleState::Hovered,
+    StyleState::Checked,
+    StyleState::Focused,
+});
+
+// Maps each VariantSlot to its display name (used in token names), in enum order.
+// clang-format off
+constexpr std::array<std::string_view, size_t(VariantSlot::COUNT)> variantSlotDisplayNames = {
+    "ButtonType",   // VariantSlot::ButtonType
+    "ControlSize",  // VariantSlot::ControlSize
+    "Position",     // VariantSlot::Position
+};
+// clang-format on
+
+// ── Property string table ─────────────────────────────────────────────────────
+
+// clang-format off
+const std::map<StyleProperty, std::string_view> propertyNames = {
+    {StyleProperty::Width,              "Width"},
+    {StyleProperty::MinWidth,           "MinWidth"},
+    {StyleProperty::MaxWidth,           "MaxWidth"},
+    {StyleProperty::Height,             "Height"},
+    {StyleProperty::MinHeight,          "MinHeight"},
+    {StyleProperty::MaxHeight,          "MaxHeight"},
+    {StyleProperty::BorderThickness,    "BorderThickness"},
+    {StyleProperty::BorderRadius,       "BorderRadius"},
+    {StyleProperty::BorderColor,        "BorderColor"},
+    {StyleProperty::Padding,            "Padding"},
+    {StyleProperty::Margin,             "Margin"},
+    {StyleProperty::Spacing,            "Spacing"},
+    {StyleProperty::Overlap,            "Overlap"},
+    {StyleProperty::IconSize,           "IconSize"},
+    {StyleProperty::IconSpacing,        "IconSpacing"},
+    {StyleProperty::FontSize,           "FontSize"},
+    {StyleProperty::FontWeight,         "FontWeight"},
+    {StyleProperty::Background,         "Background"},
+    {StyleProperty::TextColor,          "TextColor"},
+    {StyleProperty::InnerShadow,        "InnerShadow"},
+    {StyleProperty::IconColor,          "IconColor"},
+    {StyleProperty::BackgroundEffect,   "BackgroundEffect"},
+    {StyleProperty::BorderColorEffect,  "BorderColorEffect"},
+};
+// clang-format on
+
+}  // namespace
+
+// ─── propertyString ──────────────────────────────────────────────────────────
+
+std::string_view propertyString(StyleProperty property)
+{
+    return lookup(propertyNames, property);
+}
+
+// ─── ParameterDescriptorRegistry ─────────────────────────────────────────────
+
+void ParameterDescriptorRegistry::registerVariant(ParameterVariant variant)
+{
+    _variants[variant.name] = std::move(variant);
+}
+
+void ParameterDescriptorRegistry::registerDescriptor(
+    ParameterDescriptor descriptor,
+    StyleComponent component
+)
+{
+    const std::string name = descriptor.name;
+
+    if (component != StyleComponent::COUNT) {
+        // Descriptor must be inserted first so resolveChainNames() can follow
+        // the inherits list when building the full chain.
+        _descriptors[name] = std::move(descriptor);
+        _componentChains[component] = resolveChainNames(name);
+    }
+    else {
+        _descriptors[name] = std::move(descriptor);
+    }
+
+    _sortedNamesDirty = true;
+}
+
+std::optional<ParsedParameterName> ParameterDescriptorRegistry::parse(const std::string& name) const
+{
+    // ── 1. Find the component prefix (longest match wins) ──────────────────
+    std::string componentName;
+    std::string remaining;
+
+    for (const std::string& candidate : sortedNames()) {
+        if (name.starts_with(candidate)) {
+            componentName = candidate;
+            remaining = name.substr(candidate.size());
+            break;
+        }
+    }
+
+    if (componentName.empty()) {
+        return std::nullopt;
+    }
+
+    const ParameterDescriptor* desc = descriptor(componentName);
+    if (!desc) {
+        return std::nullopt;
+    }
+
+    // ── 2. Greedily match variant values in descriptor variant order ───────
+    ParsedParameterName result;
+    result.component = componentName;
+
+    for (const std::string& variantName : desc->variants) {
+        const auto variantIt = _variants.find(variantName);
+        if (variantIt == _variants.end()) {
+            continue;
+        }
+
+        const ParameterVariant& variant = variantIt->second;
+        for (const std::string& value : variant.values) {
+            if (remaining.starts_with(value)) {
+                result.variants[variantName] = value;
+                remaining = remaining.substr(value.size());
+                break;
+            }
+        }
+    }
+
+    // ── 3. Remaining string must be a non-empty property name ─────────────
+    if (remaining.empty()) {
+        return std::nullopt;
+    }
+
+    result.property = remaining;
+    return result;
+}
+
+std::vector<std::string> ParameterDescriptorRegistry::buildPrefixes(const StyleContext& context) const
+{
+    const std::string elementSuffix = std::string(elementString(context.element));
+    const std::string variantStr = variantString(context.variant);
+
+    std::vector<std::string> activeStates;
+    for (const StyleState stateFlag : statePriorityOrder) {
+        if (context.state.testFlag(stateFlag)) {
+            activeStates.push_back(std::string(stateString(stateFlag)));
+        }
+    }
+
+    std::vector<std::string> prefixes;
+
+    if (!context.componentOverride.empty()) {
+        appendPrefixEntries(prefixes, context.componentOverride + elementSuffix, variantStr, activeStates);
+    }
+
+    for (const std::string& componentName : chain(context.component)) {
+        appendPrefixEntries(prefixes, componentName + elementSuffix, variantStr, activeStates);
+    }
+
+    return prefixes;
+}
+
+std::vector<std::string> ParameterDescriptorRegistry::buildPrefixesFromParsed(
+    const ParsedParameterName& parsed
+) const
+{
+    const ParameterDescriptor* desc = descriptor(parsed.component);
+    if (!desc) {
+        return {};
+    }
+
+    // ── Compute variant string and active state strings ────────────────────
+    // Variant string: concatenation of matched variant-kind values in variant order.
+    // State strings: matched values of State-kind variants (0 or 1 per variant).
+    std::string variantStr;
+    std::vector<std::string> activeStates;
+
+    for (const std::string& variantName : desc->variants) {
+        const auto variantIt = _variants.find(variantName);
+        if (variantIt == _variants.end()) {
+            continue;
+        }
+
+        const ParameterVariant& variant = variantIt->second;
+        const auto valueIt = parsed.variants.find(variantName);
+        if (valueIt == parsed.variants.end()) {
+            continue;  // variant absent → default (no contribution)
+        }
+
+        if (variant.kind == ParameterVariantKind::Variant) {
+            variantStr += valueIt->second;
+        }
+        else {
+            activeStates.push_back(valueIt->second);
+        }
+    }
+
+    // ── Build prefixes across the full inheritance chain ───────────────────
+    const std::vector<std::string> chain = resolveChainNames(parsed.component);
+
+    std::vector<std::string> prefixes;
+    for (const std::string& componentBase : chain) {
+        appendPrefixEntries(prefixes, componentBase, variantStr, activeStates);
+    }
+
+    return prefixes;
+}
+
+std::span<const std::string> ParameterDescriptorRegistry::chain(StyleComponent component) const
+{
+    const auto it = _componentChains.find(component);
+    if (it == _componentChains.end()) {
+        static const std::vector<std::string> empty;
+        return empty;
+    }
+    return it->second;
+}
+
+const ParameterDescriptor* ParameterDescriptorRegistry::descriptor(const std::string& name) const
+{
+    const auto it = _descriptors.find(name);
+    return it != _descriptors.end() ? &it->second : nullptr;
+}
+
+const std::map<std::string, ParameterVariant>& ParameterDescriptorRegistry::variants() const
+{
+    return _variants;
+}
+
+// ─── Private helpers ──────────────────────────────────────────────────────────
+
+const std::vector<std::string>& ParameterDescriptorRegistry::sortedNames() const
+{
+    if (_sortedNamesDirty) {
+        _sortedNames.clear();
+        _sortedNames.reserve(_descriptors.size());
+        for (const auto& [name, _] : _descriptors) {
+            _sortedNames.push_back(name);
+        }
+        // Longest name first to ensure greedy prefix matching is unambiguous.
+        std::ranges::sort(_sortedNames, [](const std::string& lhs, const std::string& rhs) {
+            return lhs.size() > rhs.size();
+        });
+        _sortedNamesDirty = false;
+    }
+    return _sortedNames;
+}
+
+void ParameterDescriptorRegistry::appendPrefixEntries(
+    std::vector<std::string>& prefixes,
+    const std::string& componentBase,
+    const std::string& variantStr,
+    const std::vector<std::string>& activeStates
+) const
+{
+    if (!variantStr.empty()) {
+        for (const std::string& stateStr : activeStates) {
+            prefixes.push_back(componentBase + variantStr + stateStr);
+        }
+        prefixes.push_back(componentBase + variantStr);
+    }
+
+    for (const std::string& stateStr : activeStates) {
+        prefixes.push_back(componentBase + stateStr);
+    }
+
+    prefixes.push_back(componentBase);
+}
+
+std::vector<std::string> ParameterDescriptorRegistry::resolveChainNames(const std::string& name) const
+{
+    std::vector<std::string> chain;
+    chain.push_back(name);
+
+    const ParameterDescriptor* desc = descriptor(name);
+    if (!desc) {
+        return chain;
+    }
+
+    for (const std::string& parent : desc->inherits) {
+        chain.push_back(parent);
+    }
+
+    return chain;
+}
+
+// ─── Registry population ─────────────────────────────────────────────────────
+
+void registerBuiltinVariants(ParameterDescriptorRegistry& registry)
+{
+    // Variant-kind dimensions — derived from the canonical variantSlotNames tables.
+    for (size_t index = 0; index < variantSlotDisplayNames.size(); ++index) {
+        const auto variantSlot = static_cast<VariantSlot>(index);
+        const auto& valueMap = lookup(variantSlotNames, variantSlot);
+
+        ParameterVariant variant;
+        variant.name = std::string(variantSlotDisplayNames.at(index));
+        variant.kind = ParameterVariantKind::Variant;
+        variant.values.reserve(valueMap.size());
+        for (const auto& [key, name] : valueMap) {
+            variant.values.emplace_back(name);
+        }
+        registry.registerVariant(std::move(variant));
+    }
+
+    // State-kind dimension — derived from the canonical stateNames table.
+    // Order matches statePriorityOrder (highest priority first).
+    ParameterVariant stateVariant;
+    stateVariant.name = "State";
+    stateVariant.kind = ParameterVariantKind::State;
+    stateVariant.values.reserve(statePriorityOrder.size());
+    for (const StyleState stateFlag : statePriorityOrder) {
+        stateVariant.values.emplace_back(stateNames.at(stateFlag));
+    }
+    registry.registerVariant(std::move(stateVariant));
+}
+
+void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
+{
+    // clang-format off
+    registerBuiltinVariants(registry);
+
+    // Virtual bases (no StyleComponent mapping).
+    registry.registerDescriptor({
+        .name     = "FormControl",
+        .variants = {"ControlSize", "State"},
+        .inherits = {},
+    });
+
+    // Concrete components mapped to StyleComponent enum values.
+    registry.registerDescriptor({
+        .name     = "Button",
+        .variants = {"ButtonType", "ControlSize", "State"},
+        .inherits = {"FormControl"},
+    }, StyleComponent::PushButton);
+
+    registry.registerDescriptor({
+        .name     = "ToolButton",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"Button", "FormControl"},
+    }, StyleComponent::ToolButton);
+
+    registry.registerDescriptor({
+        .name     = "LineEdit",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"FormControl"},
+    }, StyleComponent::LineEdit);
+
+    registry.registerDescriptor({
+        .name     = "TextEdit",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"LineEdit", "FormControl"},
+    }, StyleComponent::TextEdit);
+
+    registry.registerDescriptor({
+        .name     = "Select",
+        .variants = {"ButtonType", "ControlSize", "State"},
+        .inherits = {"Button", "FormControl"},
+    }, StyleComponent::Select);
+
+    registry.registerDescriptor({
+        .name     = "ComboBox",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"LineEdit", "FormControl"},
+    }, StyleComponent::ComboBox);
+
+    registry.registerDescriptor({
+        .name     = "List",
+        .variants = {"ControlSize", "State"},
+        .inherits = {},
+    }, StyleComponent::List);
+
+    registry.registerDescriptor({
+        .name     = "DropdownList",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"List"},
+    }, StyleComponent::DropdownList);
+
+    registry.registerDescriptor({
+        .name     = "Tree",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"List"},
+    }, StyleComponent::Tree);
+
+    registry.registerDescriptor({
+        .name     = "CheckBox",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"FormControl"},
+    }, StyleComponent::CheckBox);
+
+    registry.registerDescriptor({
+        .name     = "RadioButton",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"CheckBox", "FormControl"},
+    }, StyleComponent::RadioButton);
+
+    registry.registerDescriptor({
+        .name     = "TabBar",
+        .variants = {"Position", "ControlSize", "State"},
+        .inherits = {},
+    }, StyleComponent::TabBar);
+
+    registry.registerDescriptor({
+        .name     = "TabWidget",
+        .variants = {"Position", "ControlSize", "State"},
+        .inherits = {},
+    }, StyleComponent::TabWidget);
+
+    registry.registerDescriptor({
+        .name     = "ToolBar",
+        .variants = {"State"},
+        .inherits = {},
+    }, StyleComponent::ToolBar);
+
+    registry.registerDescriptor({
+        .name     = "ToolBarButton",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"ToolButton", "Button", "FormControl"},
+    }, StyleComponent::ToolBarButton);
+
+    registry.registerDescriptor({
+        .name     = "MenuBar",
+        .variants = {"State"},
+        .inherits = {},
+    }, StyleComponent::MenuBar);
+    // clang-format on
+}
+
+}  // namespace Gui::StyleParameters

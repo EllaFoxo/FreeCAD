@@ -1347,7 +1347,6 @@ SET(FreeCADGui_CPP_SRCS
     FileHandler.h
     FCMenuBar.cpp
     FreeCADStyle.cpp
-    StyleToken.cpp
     ThemeReloadEvent.cpp
     GuiApplication.cpp
     GuiApplicationNativeEventAware.cpp
@@ -1375,6 +1374,9 @@ SET(FreeCADGui_CPP_SRCS
     StyleParameters/Value.cpp
     StyleParameters/Parser.cpp
     StyleParameters/ParameterManager.cpp
+    StyleParameters/ParameterDescriptorRegistry.cpp
+    StyleParameters/StyleContext.cpp
+    StyleParameters/StyleParameterResolver.cpp
 )
 SET(FreeCADGui_SRCS
     Application.h
@@ -1393,7 +1395,6 @@ SET(FreeCADGui_SRCS
     FCMenuBar.h
     FreeCADStyle.h
     ThemeReloadEvent.h
-    StyleToken.h
     GraphicsViewZoom.h
     GuiApplication.h
     GuiApplicationNativeEventAware.h
@@ -1428,6 +1429,9 @@ SET(FreeCADGui_SRCS
     StyleParameters/Value.h
     StyleParameters/Parser.h
     StyleParameters/ParameterManager.h
+    StyleParameters/ParameterDescriptorRegistry.h
+    StyleParameters/StyleContext.h
+    StyleParameters/StyleParameterResolver.h
     StyleParameters/Edges.h
     StyleParameters/Insets.h
     StyleParameters/Corners.h

@@ -154,6 +154,8 @@
 
 #include <FreeCADStyle.h>
 #include <ThemeReloadEvent.h>
+#include "StyleParameters/ParameterDescriptorRegistry.h"
+#include "StyleParameters/StyleParameterResolver.h"
 #include <OverlayManager.h>
 #include <ParamHandler.h>
 #include <Base/ServiceProvider.h>
@@ -468,6 +470,18 @@ void qtInvokeOnMain(std::function<void()>&& fn, bool blocking)
 
 }  // namespace Gui
 
+
+StyleParameters::StyleParameterResolver* Application::createStyleParameterResolver()
+{
+    auto* naiveResolver = new StyleParameters::NaiveParameterResolver();
+    auto* inheritingResolver = new StyleParameters::InheritingParameterResolver();
+    auto* chainedResolver = new StyleParameters::ChainedParameterResolver({
+        naiveResolver,
+        inheritingResolver,
+    });
+    return new StyleParameters::CachingParameterResolver(chainedResolver);
+}
+
 void Application::initStyleParameterManager()
 {
     static ParamHandlers handlers;
@@ -540,6 +554,9 @@ void Application::initStyleParameterManager()
     }
 
     Base::registerServiceImplementation(d->styleParameterManager);
+
+    StyleParameters::populateBuiltinDescriptors(d->styleParameterManager->descriptorRegistry());
+    d->styleParameterManager->setResolver(createStyleParameterResolver());
 
     // Install the handler that performs the actual reload when ThemeReloadEvent is received.
     // Must be installed after FreeCADStyle (if already set) so this handler runs first (LIFO).
@@ -2278,7 +2295,6 @@ Gui::StyleParameters::ParameterManager* Application::styleParameterManager()
 {
     return d->styleParameterManager;
 }
-
 
 //**************************************************************************
 // Init, Destruct and singleton
