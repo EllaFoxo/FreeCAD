@@ -43,6 +43,7 @@ namespace Gui::StyleParameters
  */
 enum class StyleComponent : uint8_t
 {
+    None,
     PushButton,
     ToolButton,
     LineEdit,       // QLineEdit + QAbstractSpinBox edit frame
@@ -237,7 +238,7 @@ enum class StyleProperty : uint8_t
  */
 struct GuiExport StyleContext
 {
-    StyleComponent component = StyleComponent::PushButton;
+    StyleComponent component = StyleComponent::None;
     StyleComponentElement element = StyleComponentElement::Root;
     VariantKey variant = {};
     Base::Flags<StyleState> state;

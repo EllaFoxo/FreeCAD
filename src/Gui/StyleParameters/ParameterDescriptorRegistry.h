@@ -190,6 +190,14 @@ public:
     const ParameterDescriptor* descriptor(const std::string& name) const;
 
     /**
+     * @brief Returns the StyleComponent enum for a named component, or nullopt if not registered.
+     *
+     * Only components registered with an explicit StyleComponent enum value are found here.
+     * Components registered without an enum association (StyleComponent::COUNT) are not included.
+     */
+    std::optional<StyleComponent> findComponent(std::string_view name) const;
+
+    /**
      * @brief Returns all registered variant definitions.
      */
     const std::map<std::string, ParameterVariant>& variants() const;
@@ -202,6 +210,10 @@ private:
     // (component's own name + all inherited names), built lazily when the
     // descriptor is registered with an explicit component enum value.
     std::map<StyleComponent, std::vector<std::string>> _componentChains;
+
+    // Reverse map: component name → StyleComponent enum value, for widgets that
+    // opt into a specific component via the "component" property.
+    std::map<std::string, StyleComponent, std::less<>> _componentByName;
 
     // Sorted list of component names (longest first) for greedy prefix matching.
     mutable std::vector<std::string> _sortedNames;

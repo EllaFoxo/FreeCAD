@@ -200,6 +200,7 @@ void ParameterDescriptorRegistry::registerDescriptor(
         // the inherits list when building the full chain.
         _descriptors[name] = std::move(descriptor);
         _componentChains[component] = resolveChainNames(name);
+        _componentByName[name] = component;
     }
     else {
         _descriptors[name] = std::move(descriptor);
@@ -345,6 +346,15 @@ const ParameterDescriptor* ParameterDescriptorRegistry::descriptor(const std::st
 {
     const auto it = _descriptors.find(name);
     return it != _descriptors.end() ? &it->second : nullptr;
+}
+
+std::optional<StyleComponent> ParameterDescriptorRegistry::findComponent(std::string_view name) const
+{
+    const auto iterator = _componentByName.find(name);
+    if (iterator == _componentByName.end()) {
+        return std::nullopt;
+    }
+    return iterator->second;
 }
 
 const std::map<std::string, ParameterVariant>& ParameterDescriptorRegistry::variants() const
