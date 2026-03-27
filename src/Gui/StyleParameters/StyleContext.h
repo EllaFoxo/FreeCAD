@@ -26,9 +26,13 @@
 #include <array>
 #include <cstdint>
 #include <string>
-#include <Base/Bitmask.h>
+#include <string_view>
+#include <unordered_map>
 
-namespace Gui
+#include <Base/Bitmask.h>
+#include <FCGlobal.h>
+
+namespace Gui::StyleParameters
 {
 
 /**
@@ -147,41 +151,6 @@ enum class StyleState : uint8_t
 };
 
 /**
- * @brief Style properties that can be resolved from tokens.
- *
- * Each value corresponds to a token suffix (e.g. Padding → "Padding").
- * Add new properties before COUNT.
- */
-enum class StyleProperty : uint8_t
-{
-    Width,
-    MinWidth,
-    MaxWidth,
-    Height,
-    MinHeight,
-    MaxHeight,
-    BorderThickness,
-    BorderRadius,
-    BorderColor,
-    Padding,
-    Margin,
-    Spacing,
-    Overlap,
-    IconSize,
-    IconSpacing,
-    FontSize,
-    FontWeight,
-    Background,
-    TextColor,
-    InnerShadow,
-    IconColor,
-    BackgroundEffect,
-    BorderColorEffect,
-    // Add new properties before COUNT
-    COUNT,
-};
-
-/**
  * @brief Registry of variant dimensions used in token names.
  *
  * Each slot corresponds to one enum dimension (ButtonType, ControlSize, …).
@@ -226,12 +195,47 @@ struct VariantKey
 };
 
 /**
+ * @brief Style properties that can be resolved from tokens.
+ *
+ * Each value corresponds to a token suffix (e.g. Padding → "Padding").
+ * Add new properties before COUNT.
+ */
+enum class StyleProperty : uint8_t
+{
+    Width,
+    MinWidth,
+    MaxWidth,
+    Height,
+    MinHeight,
+    MaxHeight,
+    BorderThickness,
+    BorderRadius,
+    BorderColor,
+    Padding,
+    Margin,
+    Spacing,
+    Overlap,
+    IconSize,
+    IconSpacing,
+    FontSize,
+    FontWeight,
+    Background,
+    TextColor,
+    InnerShadow,
+    IconColor,
+    BackgroundEffect,
+    BorderColorEffect,
+    // Add new properties before COUNT
+    COUNT,
+};
+
+/**
  * @brief Fully describes the styling context for a widget in a given state.
  *
  * Built once per draw call via FreeCADStyle::contextOf(), then passed to
  * resolve() and resolveBoxBackground() for cached token lookup.
  */
-struct StyleContext
+struct GuiExport StyleContext
 {
     StyleComponent component = StyleComponent::PushButton;
     StyleComponentElement element = StyleComponentElement::Root;
@@ -247,8 +251,53 @@ struct StyleContext
     std::string componentOverride;
 
     bool operator==(const StyleContext&) const = default;
+
+    /**
+     * @brief Interns componentOverride strings to compact uint8_t IDs for cache key packing.
+     *
+     * Id 0 is reserved for "no override". Each unique string is assigned a new id
+     * starting from 1 on first encounter. Call clear() when invalidating caches
+     * that embed these ids (e.g. on theme change).
+     */
+    struct GuiExport Intern
+    {
+        /// Returns the process-wide singleton intern table.
+        static Intern& global();
+
+        uint8_t intern(const std::string& name);
+        void clear();
+
+    private:
+        std::unordered_map<std::string, uint8_t> ids;
+        uint8_t nextId = 1;
+    };
+
+    /// Returns a 64-bit context-only cache key (property bits left zero).
+    uint64_t cacheKey() const;
+
+    /// Returns a full 64-bit cache key including the property dimension.
+    uint64_t cacheKey(StyleProperty property) const;
+
+private:
+    // clang-format off
+    static constexpr uint8_t componentBitOffset = 0;
+    static constexpr uint8_t elementBitOffset   = 8;
+    static constexpr uint8_t stateBitOffset     = 12;
+    static constexpr uint8_t propertyBitOffset  = 17;
+    static constexpr uint8_t overrideBitOffset  = 24;
+    static constexpr uint8_t variantBitOffset   = 32;
+    // clang-format on
+
+    static uint64_t packVariant(const VariantKey& variant);
 };
 
-}  // namespace Gui
+/**
+ * @brief Returns the token-name suffix string for a style property.
+ *
+ * Returns an empty string_view for unknown properties.
+ */
+GuiExport std::string_view propertyString(StyleProperty property);
 
-ENABLE_BITMASK_OPERATORS(Gui::StyleState)
+}  // namespace Gui::StyleParameters
+
+ENABLE_BITMASK_OPERATORS(Gui::StyleParameters::StyleState)

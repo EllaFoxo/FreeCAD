@@ -41,9 +41,10 @@
 #include <QTabBar>
 #include <QToolButton>
 
-class QTextDocument;
 #include "StyleParameters/Value.h"
-#include "StyleToken.h"
+#include "StyleParameters/StyleContext.h"
+
+class QTextDocument;
 
 namespace Gui
 {
@@ -403,8 +404,8 @@ private:
      * whenever the active theme changes.
      */
     std::optional<StyleParameters::Value> resolve(
-        const StyleContext& context,
-        StyleProperty property
+        const StyleParameters::StyleContext& context,
+        StyleParameters::StyleProperty property
     ) const;
 
     /**
@@ -447,7 +448,10 @@ private:
     }
 
     template<typename T>
-    std::optional<T> resolve(const StyleContext& context, StyleProperty property) const
+    std::optional<T> resolve(
+        const StyleParameters::StyleContext& context,
+        StyleParameters::StyleProperty property
+    ) const
     {
         return StyleParameters::valueAs<T>(resolve(context, property));
     }
@@ -455,12 +459,12 @@ private:
     /**
      * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
      */
-    BoxStyleDefinition resolveBoxStyle(const StyleContext& context) const;
+    BoxStyleDefinition resolveBoxStyle(const StyleParameters::StyleContext& context) const;
 
     /**
      * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
      */
-    BoxGeometryDefinition resolveBoxGeometry(const StyleContext& context) const;
+    BoxGeometryDefinition resolveBoxGeometry(const StyleParameters::StyleContext& context) const;
 
     /**
      * @brief Builds a StyleContext from a widget and its current style option.
@@ -469,15 +473,18 @@ private:
      * (controlSize, isDefault, isFlat, autoRaise, property("flat")), and state
      * from option->state flags. Passing @p option as nullptr yields Normal state.
      */
-    static StyleContext contextOf(
+    static StyleParameters::StyleContext contextOf(
         const QWidget* widget,
         const QStyleOption* option = nullptr,
-        const StyleComponentElement& element = StyleComponentElement::Root
+        const StyleParameters::StyleComponentElement& element
+        = StyleParameters::StyleComponentElement::Root
     );
 
-    static StyleContext withNorthPosition(const StyleContext& context);
+    static StyleParameters::StyleContext withNorthPosition(
+        const StyleParameters::StyleContext& context
+    );
 
-    static Position tabPositionOf(QTabBar::Shape shape);
+    static StyleParameters::Position tabPositionOf(QTabBar::Shape shape);
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
 
@@ -502,21 +509,21 @@ private:
     void drawRadioButtonDot(
         QPainter* painter,
         const QRect& rect,
-        const StyleContext& context,
+        const StyleParameters::StyleContext& context,
         const QPalette& palette
     ) const;
 
     void drawCheckMark(
         QPainter* painter,
         const QRect& rect,
-        const StyleContext& context,
+        const StyleParameters::StyleContext& context,
         const QPalette& palette
     ) const;
 
     void drawIndeterminateMark(
         QPainter* painter,
         const QRect& rect,
-        const StyleContext& context,
+        const StyleParameters::StyleContext& context,
         const QPalette& palette
     ) const;
 
@@ -545,7 +552,11 @@ private:
      * This is the primary entry point for painting any box-model component — both
      * Qt-native widgets overridden here and custom components outside the Qt style system.
      */
-    void drawComponent(QPainter* painter, const QRect& rect, const StyleContext& context) const;
+    void drawComponent(
+        QPainter* painter,
+        const QRect& rect,
+        const StyleParameters::StyleContext& context
+    ) const;
 
     void drawComponent(
         QPainter* painter,
@@ -573,8 +584,8 @@ private:
      * unchanged.
      */
     BoxStyleDefinition seamedBoxStyle(
-        const StyleContext& context,
-        StyleComponentElement element,
+        const StyleParameters::StyleContext& context,
+        StyleParameters::StyleComponentElement element,
         bool hasMenuButton,
         bool isVertical
     ) const;
@@ -619,7 +630,7 @@ private:
     void clearTokenCache();
 
     // Dynamic widget property names used to tag combo box internals.
-    // Defined here so both FreeCADStyle.cpp and StyleToken.cpp can share them.
+    // Defined here so both FreeCADStyle.cpp and its helpers can share them.
     // clang-format off
     static constexpr const char* comboDropdownProperty  = "_fc_comboDropdown";
     static constexpr const char* comboContainerProperty = "_fc_comboContainer";
@@ -654,7 +665,7 @@ private:
      *
      * Tries IconColor token, then TextColor token, then falls back to palette.buttonText().
      */
-    QColor resolveIconColor(const StyleContext& context, const QPalette& palette) const;
+    QColor resolveIconColor(const StyleParameters::StyleContext& context, const QPalette& palette) const;
 
     /**
      * @brief Renders @p icon via IconManager with the resolved color.
@@ -668,7 +679,7 @@ private:
         const QSize& maxSize,
         QIcon::Mode mode,
         QIcon::State state,
-        const StyleContext& context,
+        const StyleParameters::StyleContext& context,
         const QPalette& palette
     ) const;
 
@@ -680,7 +691,7 @@ private:
         const QIcon& icon,
         const QSize& maxSize,
         const QStyleOption* option,
-        const StyleContext& context
+        const StyleParameters::StyleContext& context
     ) const;
 
     /**
@@ -735,27 +746,6 @@ private:
     // Keyed by context-only uint64_t (property bits left zero).
     mutable StyleContextCache<BoxStyleDefinition> boxStyleCache;
     mutable StyleContextCache<BoxGeometryDefinition> boxGeometryCache;
-
-    /**
-     * @brief Interns a component override string and returns its stable uint8_t id.
-     *
-     * Id 0 is reserved for "no override". Each unique string is assigned a new id
-     * starting from 1 on first encounter. The id is used in packCacheKey() so that
-     * the override string participates in cache-key discrimination without requiring
-     * a string hash in the hot path.
-     *
-     * The intern table is cleared together with tokenCache in clearTokenCache().
-     */
-    uint8_t internComponentOverride(const std::string& name) const;
-
-    /** @brief Packs a context-only 64-bit cache key (property bits left zero). */
-    uint64_t packContextKey(const StyleContext& context) const;
-
-    /** @brief Packs a full 64-bit cache key including the property dimension. */
-    uint64_t packCacheKey(const StyleContext& context, StyleProperty property) const;
-
-    mutable std::unordered_map<std::string, uint8_t> componentOverrideIds;
-    mutable uint8_t nextComponentOverrideId = 1;
 };
 
 }  // namespace Gui
