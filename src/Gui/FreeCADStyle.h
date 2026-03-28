@@ -91,6 +91,24 @@ public:
             bottomLeft = bottomRight = {.value = bottom, .unit = "px"};
         }
 
+        CornerRadii enlarged(qreal amount) const
+        {
+            CornerRadii result = *this;
+
+            result.topLeft.value += amount;
+            result.topRight.value += amount;
+            result.bottomRight.value += amount;
+            result.bottomLeft.value += amount;
+
+            return result;
+        }
+
+        bool isRounded() const
+        {
+            return topLeft.value > 0 || topRight.value > 0 || bottomRight.value > 0
+                || bottomLeft.value > 0;
+        }
+
         /**
          * @brief Resolves any percent-unit radii to absolute pixel values.
          *
@@ -577,7 +595,7 @@ private:
 
     /// Recomputes and applies the rounded-rect clip mask on a scroll area's viewport.
     /// Must be called after polish and on every viewport resize.
-    void updateScrollAreaViewportMask(QAbstractScrollArea* scrollArea) const;
+    void updateScrollAreaMask(QAbstractScrollArea* scrollArea) const;
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
     void drawToolButton(

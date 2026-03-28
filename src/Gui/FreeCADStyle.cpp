@@ -2275,7 +2275,7 @@ void FreeCADStyle::drawSeparatorLine(QPainter* painter, const QRect& rect, bool 
     }
 }
 
-void FreeCADStyle::updateScrollAreaViewportMask(QAbstractScrollArea* scrollArea) const
+void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
 {
     if (scrollArea->size().isEmpty()) {
         return;
@@ -2284,12 +2284,10 @@ void FreeCADStyle::updateScrollAreaViewportMask(QAbstractScrollArea* scrollArea)
     const StyleContext context = contextOf(scrollArea, nullptr);
     const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
 
-    const CornerRadii outerRadii = boxStyle.borderRadius.resolve(scrollArea->size());
+    CornerRadii outerRadii = boxStyle.borderRadius.resolve(scrollArea->size());
+    outerRadii.setBottom(0);
 
-    const bool hasRoundedCorners = outerRadii.topLeft.value > 0 || outerRadii.topRight.value > 0
-        || outerRadii.bottomLeft.value > 0 || outerRadii.bottomRight.value > 0;
-
-    if (!hasRoundedCorners) {
+    if (!outerRadii.isRounded()) {
         scrollArea->clearMask();
         return;
     }
@@ -2334,9 +2332,10 @@ void FreeCADStyle::polish(QWidget* widget)
         scrollArea->installEventFilter(this);
 
         const auto disableDefaultBackground = [](QWidget* widget) {
-            // do not disable background if it was changed from default
-            if (widget->backgroundRole() != QPalette::Button
-                && widget->backgroundRole() != QPalette::Window) {
+            // Only suppress auto-fill for the standard default roles (Button, Window, Base).
+            // If the caller set a non-default role, leave the background alone.
+            const QPalette::ColorRole role = widget->backgroundRole();
+            if (role != QPalette::Button && role != QPalette::Window && role != QPalette::Base) {
                 return;
             }
 
@@ -2350,7 +2349,7 @@ void FreeCADStyle::polish(QWidget* widget)
             disableDefaultBackground
         );
 
-        updateScrollAreaViewportMask(scrollArea);
+        updateScrollAreaMask(scrollArea);
     }
 }
 
@@ -2511,7 +2510,7 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
 
     if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
         if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(obj)) {
-            updateScrollAreaViewportMask(scrollArea);
+            updateScrollAreaMask(scrollArea);
         }
     }
 
