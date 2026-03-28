@@ -376,3 +376,6 @@ MenuBarItemPressedInnerShadow: "@ButtonPressedInnerShadow"
 MenuBarItemPressedTextColor: "@BaseTextColor"
 
 MenuBarItemDisabledTextColor: "@BaseDisabledTextColor"
+
+ReportOutputBackground: "reset()"
+ReportOutputBorderColor: "reset()"
