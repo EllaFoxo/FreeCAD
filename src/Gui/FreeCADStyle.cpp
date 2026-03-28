@@ -77,6 +77,7 @@
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
+#include "TaskView/TaskView.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -2321,6 +2322,10 @@ void FreeCADStyle::polish(QWidget* widget)
         constrainComboDropdown(comboBox);
     }
 
+    if (qobject_cast<TaskView::TaskBox*>(widget)) {
+        widget->setAutoFillBackground(false);
+    }
+
     if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
         auto viewport = scrollArea->viewport();
 
@@ -2332,13 +2337,6 @@ void FreeCADStyle::polish(QWidget* widget)
         scrollArea->installEventFilter(this);
 
         const auto disableDefaultBackground = [](QWidget* widget) {
-            // Only suppress auto-fill for the standard default roles (Button, Window, Base).
-            // If the caller set a non-default role, leave the background alone.
-            const QPalette::ColorRole role = widget->backgroundRole();
-            if (role != QPalette::Button && role != QPalette::Window && role != QPalette::Base) {
-                return;
-            }
-
             widget->setAttribute(Qt::WA_NoSystemBackground);
             widget->setAutoFillBackground(false);
         };
