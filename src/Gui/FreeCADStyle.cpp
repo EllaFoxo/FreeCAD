@@ -782,6 +782,61 @@ void FreeCADStyle::drawIndeterminateMark(
 }
 
 
+void FreeCADStyle::drawChevronArrow(
+    QPainter* painter,
+    const QRect& rect,
+    Qt::ArrowType direction,
+    const QColor& color
+) const
+{
+    constexpr qreal arrowMaxSize = 6.0;
+    constexpr qreal arrowPenWidthRatio = 0.18;
+    constexpr qreal arrowMinPenWidth = 1.0;
+    // For down/up: width=side, height=side*ratio. For left/right: proportions swap.
+    constexpr qreal arrowHeightRatio = 0.5;
+
+    const qreal side = qMin(static_cast<qreal>(qMin(rect.width(), rect.height())), arrowMaxSize);
+    const qreal penWidth = qMax(arrowMinPenWidth, side * arrowPenWidthRatio);
+    const qreal halfW = side / 2.0;
+    const qreal halfH = side * arrowHeightRatio / 2.0;
+
+    // Use QRectF centre to avoid the 0.5 px truncation of QRect::center().
+    const QPointF center = QRectF(rect).center();
+
+    // Each direction is computed directly — no painter rotation, no rounding accumulation.
+    QPainterPath chevronPath;
+    // clang-format off
+    switch (direction) {
+        case Qt::UpArrow:
+            chevronPath.moveTo(center.x() - halfW, center.y() + halfH);
+            chevronPath.lineTo(center.x(),         center.y() - halfH);
+            chevronPath.lineTo(center.x() + halfW, center.y() + halfH);
+            break;
+        case Qt::LeftArrow:
+            chevronPath.moveTo(center.x() + halfH, center.y() - halfW);
+            chevronPath.lineTo(center.x() - halfH, center.y());
+            chevronPath.lineTo(center.x() + halfH, center.y() + halfW);
+            break;
+        case Qt::RightArrow:
+            chevronPath.moveTo(center.x() - halfH, center.y() - halfW);
+            chevronPath.lineTo(center.x() + halfH, center.y());
+            chevronPath.lineTo(center.x() - halfH, center.y() + halfW);
+            break;
+        default:  // Qt::DownArrow
+            chevronPath.moveTo(center.x() - halfW, center.y() - halfH);
+            chevronPath.lineTo(center.x(),         center.y() + halfH);
+            chevronPath.lineTo(center.x() + halfW, center.y() - halfH);
+            break;
+    }
+    // clang-format on
+
+    painter->save();
+    painter->setRenderHint(QPainter::Antialiasing);
+    painter->setPen(Qt::NoPen);
+    painter->strokePath(chevronPath, QPen(color, penWidth, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter->restore();
+}
+
 void FreeCADStyle::drawTabCloseButton(
     QPainter* painter,
     const QStyleOption* option,
@@ -908,6 +963,25 @@ void FreeCADStyle::drawPrimitive(
 
     if (element == PE_IndicatorTabClose) {
         drawTabCloseButton(painter, option, widget);
+        return;
+    }
+
+    if (element == PE_IndicatorArrowDown || element == PE_IndicatorArrowUp
+        || element == PE_IndicatorArrowLeft || element == PE_IndicatorArrowRight) {
+        // clang-format off
+        const Qt::ArrowType direction = [&] {
+            switch (element) {
+                case PE_IndicatorArrowUp:    return Qt::UpArrow;
+                case PE_IndicatorArrowLeft:  return Qt::LeftArrow;
+                case PE_IndicatorArrowRight: return Qt::RightArrow;
+                default:                     return Qt::DownArrow;
+            }
+        }();
+        // clang-format on
+        const StyleContext context = contextOf(widget, option);
+        QColor arrowColor = resolveIconColor(context, option->palette);
+        arrowColor.setAlpha(160);
+        drawChevronArrow(painter, option->rect, direction, arrowColor);
         return;
     }
 

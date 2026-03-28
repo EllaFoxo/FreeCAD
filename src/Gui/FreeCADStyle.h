@@ -528,6 +528,13 @@ private:
         const QPalette& palette
     ) const;
 
+    void drawChevronArrow(
+        QPainter* painter,
+        const QRect& rect,
+        Qt::ArrowType direction,
+        const QColor& color
+    ) const;
+
     void drawPushButtonLabel(
         QPainter* painter,
         const QStyleOptionButton* option,

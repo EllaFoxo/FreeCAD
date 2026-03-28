@@ -216,25 +216,6 @@ QSint--ActionGroup QToolButton[class="header"] {
   font-weight: bold;
   border-style: none;
 }
-QSint--ActionGroup QFrame[class="header"] QLabel[fold="false"] {
-  padding: 2px;
-  image: url(qss:@IconsLocationFolderName/arrow-down-lightgray.svg);
-}
-
-QSint--ActionGroup QFrame[class="header"] QLabel:hover[fold="false"] {
-  padding: 2px;
-  image: url(qss:@IconsLocationFolderName/arrow-down-@StylesheetIconsColor.svg);
-}
-
-QSint--ActionGroup QFrame[class="header"] QLabel[fold="true"] {
-  padding: 2px;
-  image: url(qss:@IconsLocationFolderName/arrow-up-lightgray.svg);
-}
-
-QSint--ActionGroup QFrame[class="header"] QLabel[fold="true"]:hover {
-  padding: 2px;
-  image: url(qss:@IconsLocationFolderName/arrow-up-@StylesheetIconsColor.svg);
-}
 
 QSint--ActionGroup QFrame[class="content"] {
   background-color: @DialogBackground;/* Task Panel background color */
