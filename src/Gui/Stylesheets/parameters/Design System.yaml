@@ -287,7 +287,7 @@ DocumentTreeItemPadding: "padding(0)"
 # BorderThickness) are auto-rotated to South/East/West; theme authors only need
 # to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
 
-TabBarTabCheckedBackground: "@Background.100"
+TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @Background.100, @Background.000)"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
@@ -306,6 +306,8 @@ TabBarTabDisabledBackground: "@BaseDisabledBackground"
 TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
 
 WbTabBarBaseBackground: "reset()"
+WbTabBarTabBorderRadius: "border_radius(0px)"
+WbTabBarTabBorderThickness: "border_thickness(0px, left: 1px, right: 1px)"
 
 # ── Tab Bar Base ─────────────────────────────────────────────────────────────
 # TabBarBaseHeight:  visible strip height below the tabs (PM_TabBarBaseHeight - PM_TabBarBaseOverlap).
