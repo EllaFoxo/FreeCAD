@@ -1003,6 +1003,16 @@ QSize FreeCADStyle::toolButtonSizeFromContents(
         geometry.minWidth = *geometry.minWidth + menuWidth;
     }
 
+    // For instant/delayed popup buttons the arrow indicator is drawn inline within the
+    // button body (no separate strip). Reserve width for it so the icon does not overlap.
+    const bool hasInlineIndicator = (option->features & QStyleOptionToolButton::HasMenu) && !hasMenu;
+    if (hasInlineIndicator) {
+        contentSize.rwidth() += menuWidth;
+        if (geometry.minWidth) {
+            geometry.minWidth = *geometry.minWidth + menuWidth;
+        }
+    }
+
     return geometry.sizeFromContents(contentSize);
 }
 
@@ -1239,28 +1249,29 @@ QRect FreeCADStyle::toolButtonSubControlRect(
     const QWidget* widget
 ) const
 {
-    if (!(option->features & QStyleOptionToolButton::MenuButtonPopup)) {
-        return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
-    }
-
     const QRect rect = option->rect;
-    const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
-    const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
 
-    switch (subControl) {
-        case SC_ToolButton:
-            if (isVertical) {
-                return {rect.left(), rect.top(), rect.width(), rect.height() - menuWidth};
-            }
-            return {rect.left(), rect.top(), rect.width() - menuWidth, rect.height()};
-        case SC_ToolButtonMenu:
-            if (isVertical) {
-                return {rect.left(), rect.bottom() - menuWidth + 1, rect.width(), menuWidth};
-            }
-            return {rect.right() - menuWidth + 1, rect.top(), menuWidth, rect.height()};
-        default:
-            return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
+    if (option->features & QStyleOptionToolButton::MenuButtonPopup) {
+        const int menuWidth = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+        const bool isVertical = toolbarOrientationOf(widget) == Qt::Vertical;
+
+        switch (subControl) {
+            case SC_ToolButton:
+                if (isVertical) {
+                    return {rect.left(), rect.top(), rect.width(), rect.height() - menuWidth};
+                }
+                return {rect.left(), rect.top(), rect.width() - menuWidth, rect.height()};
+            case SC_ToolButtonMenu:
+                if (isVertical) {
+                    return {rect.left(), rect.bottom() - menuWidth + 1, rect.width(), menuWidth};
+                }
+                return {rect.right() - menuWidth + 1, rect.top(), menuWidth, rect.height()};
+            default:
+                return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
+        }
     }
+
+    return QProxyStyle::subControlRect(CC_ToolButton, option, subControl, widget);
 }
 
 QRect FreeCADStyle::subControlRect(
@@ -1393,24 +1404,38 @@ void FreeCADStyle::drawToolButton(
         arrowOption.rect = menuRect;
         proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
     }
-    else if (option->features & QStyleOptionToolButton::HasMenu) {
-        // Instant/delayed popup: draw a small arrow indicator in the bottom-right corner.
+    QRect labelRect = mainRect;
+
+    if (option->features & QStyleOptionToolButton::HasMenu && !hasMenuButton) {
+        // Instant/delayed popup: draw a small arrow indicator on the right, vertically
+        // centered within the content area (respecting margin and padding).
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
+        const QRect contentArea = geometry.contentRect(option->rect);
         const int arrowSize = proxy()->pixelMetric(PM_MenuButtonIndicator, option, widget);
+
         QStyleOptionToolButton arrowOption = *option;
         arrowOption.rect = QRect(
-            option->rect.right() - arrowSize + 1,
-            option->rect.bottom() - arrowSize + 1,
+            contentArea.right() - arrowSize + 1,
+            contentArea.top() + ((contentArea.height() - arrowSize) / 2),
             arrowSize,
             arrowSize
         );
         proxy()->drawPrimitive(PE_IndicatorArrowDown, &arrowOption, painter, widget);
+
+        // Narrow the label rect by arrowSize only. The sizeFromContents adds
+        // arrowSize + iconSpacing to the button width, so the content rect inside
+        // CE_ToolButtonLabel ends up iconSpacing wider than the icon — the icon
+        // centers within it, placing iconSpacing/2 of buffer between the icon and
+        // the arrow rect. Do not subtract iconSpacing here as well, which would
+        // cancel its effect entirely.
+        labelRect.setRight(mainRect.right() - arrowSize);
     }
 
     // Draw label (icon + text). Restrict to SC_ToolButton so it does not bleed into
     // the menu strip. Also clear SC_ToolButtonMenu so QCommonStyle::CE_ToolButtonLabel
     // does not draw its own menu indicator arrow on top of ours.
     QStyleOptionToolButton labelOption = *option;
-    labelOption.rect = mainRect;
+    labelOption.rect = labelRect;
     labelOption.subControls &= ~SC_ToolButtonMenu;
     proxy()->drawControl(CE_ToolButtonLabel, &labelOption, painter, widget);
 }
