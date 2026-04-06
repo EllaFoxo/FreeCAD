@@ -55,6 +55,7 @@ auto lookup(const Map& map, const typename Map::key_type& key) -> const typename
 // clang-format off
 const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Item,        "Item"},
+    {StyleComponentElement::Row,         "Row"},
     {StyleComponentElement::Indicator,   "Indicator"},
     {StyleComponentElement::Tab,         "Tab"},
     {StyleComponentElement::Base,        "Base"},

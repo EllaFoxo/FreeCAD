@@ -1,30 +1,12 @@
-/* fix for column items background when a link is present */
-Gui--PropertyEditor--PropertyEditor > QWidget > QFrame:focus {
-  background-color: @AccentColor;/* same as focused background color */}
-/* hack to hide weird redundant information inside cells with links and no editable data (but editable via "..." button) */
-Gui--PropertyEditor--PropertyEditor > QWidget > QWidget > QLabel {
-  background-color: @{@Background.200};/* same as focused background color */
-  /* border-radius: @FormControlBorderRadius; */
-}
-
 /*==================================================================================================
 Main window
 ==================================================================================================*/
-
 Gui--Dialog--DlgPreferencesImp #sidebar {
   background-color: @{@Background.200};
 }
 
-
-/*navgation src/Mod/Tux/NavigationIndicatorGui.py */
-Gui--NavigationIndicatorGui--BlenderNavigationStyle {
-  qproperty-icon: url(:/icons/icons/NavigationBlender_light.svg);
-}
-
 /* QGroupBox --------------------------------------------------------------
-
 https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qgroupbox
-
 --------------------------------------------------------------------------- */
 QGroupBox {
   background-color: transparent;
@@ -164,53 +146,6 @@ QSint--ActionGroup QFrame[class="content"] {
   border-bottom-right-radius: 3px;
 }
 
-/* QTreeView QListView QTableView -----------------------------------------
-
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qtreeview
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qlistview
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qtableview
-
---------------------------------------------------------------------------- */
-
-QListView:selected,
-QTableView:selected,
-QColumnView:selected {}
-QListView:focus,
-QTableView:focus,
-QColumnView:focus {}
-QListView::item:pressed,
-QTableView::item:pressed,
-QColumnView::item:pressed {
-  background-color: @GeneralBackgroundHoverColor;
-}
-
-QListView::item:selected,
-QTableView::item:selected,
-QTreeView::item:selected,
-QColumnView::item:selected {
-  background-color: @AccentBackgroundColor;
-  color: @BaseTextColor;
-}
-
-QTableView::item:hover,
-QColumnView::item:hover,
-QListView::item:hover {
-  background-color: @AccentHoverColor;
-}
-
-/* QTreeView::item:!selected:hover, */
-QListView::item:!selected:hover,
-QTableView::item:!selected:hover,
-QColumnView::item:!selected:hover {
-  background-color: @AccentHoverColor;
-}
-
-QTreeView::item:!selected:hover{
-  outline: 0;
-  color: @BaseTextColor;
-  background-color: @AccentHoverColor;
-}
-
 QScrollBar {
   background-color: @ScrollBarBackground;
 }
@@ -240,22 +175,6 @@ QScrollBar::handle:horizontal {
 
 QScrollBar::handle:vertical {
   min-height: @ScrollBarThumbMinLength;
-}
-
-
-
-/* QAbstractView ----------------------------------------------------------
-
---------------------------------------------------------------------------- */
-QAbstractView:selected {
-  background-color: @AccentColor;
-}
-
-/* PlotWidget -------------------------------------------------------------
-
---------------------------------------------------------------------------- */
-PlotWidget {
-  color: @BaseDisabledTextColor;
 }
 
 /*==================================================================================================

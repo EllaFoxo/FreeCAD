@@ -691,6 +691,13 @@ int FreeCADStyle::styleHint(
         return 0;
     }
 
+    // Extend selection/hover highlighting to the full row width, including the
+    // indentation and branches area. Without this, Qt clips PE_PanelItemViewItem
+    // to the post-indentation content rect and the branches area stays uncolored.
+    if (hint == SH_ItemView_ShowDecorationSelected) {
+        return 1;
+    }
+
     return QProxyStyle::styleHint(hint, option, widget, returnData);
 }
 
@@ -914,6 +921,17 @@ void FreeCADStyle::drawPrimitive(
         if (option->state & QStyle::State_Item) {
             return;
         }
+    }
+
+    if (element == PE_PanelItemViewRow) {
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+        const BoxStyleDefinition style = resolveBoxStyle(context);
+        drawBoxBackground(painter, option->rect, style);
+        return;
+    }
+
+    if (element == PE_PanelItemViewItem) {
+        return;
     }
 
     if (element == PE_IndicatorRadioButton) {
@@ -1687,6 +1705,24 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    if (element == CE_ItemViewItem) {
+        if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
+            // Patch HighlightedText so QCommonStyle uses the token-defined text color for
+            // selected items rather than the palette's default (typically white/near-white).
+            const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+            QStyleOptionViewItem adjusted = *vopt;
+            if (const auto textColor = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+                adjusted.palette.setColor(
+                    QPalette::All,
+                    QPalette::HighlightedText,
+                    textColor->asValue<QColor>()
+                );
+            }
+            QProxyStyle::drawControl(CE_ItemViewItem, &adjusted, painter, widget);
+            return;
+        }
+    }
+
     // CE_HeaderSection is the actual background element called when QStyleSheetStyle
     // intercepts CE_Header and decomposes it via QCommonStyle's
     // proxy()->drawControl(CE_HeaderSection). CE_Header is also handled for direct callers (Qt
@@ -2383,6 +2419,10 @@ void FreeCADStyle::polish(QWidget* widget)
         widget->setAutoFillBackground(false);
     }
 
+    if (qobject_cast<QAbstractItemView*>(widget)) {
+        widget->setAttribute(Qt::WA_MouseTracking);
+    }
+
     if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
         auto viewport = scrollArea->viewport();
 
@@ -2970,13 +3010,16 @@ StyleContext FreeCADStyle::contextOf(
 
         // State_Sunken means "button is being pressed" for buttons, but "has a sunken
         // frame appearance" for input widgets (QLineEdit always sets it). Only map it
-        // to Pressed for button components to avoid masking the Focused state on inputs.
+        // to Pressed for button-like and item-view components to avoid masking the
+        // Focused state on inputs.
         const bool isButton = context.component == StyleComponent::PushButton
             || context.component == StyleComponent::ToolButton
             || context.component == StyleComponent::Select
             || context.component == StyleComponent::CheckBox
             || context.component == StyleComponent::RadioButton
-            || context.component == StyleComponent::Header;
+            || context.component == StyleComponent::Header
+            || context.component == StyleComponent::List || context.component == StyleComponent::Tree
+            || context.component == StyleComponent::DropdownList;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }
@@ -2984,6 +3027,14 @@ StyleContext FreeCADStyle::contextOf(
             context.state |= StyleState::Hovered;
         }
         if (option->state & QStyle::State_On) {
+            context.state |= StyleState::Checked;
+        }
+        // For item views, State_Selected marks the currently selected item.
+        // Map it to Checked — same convention used for active tabs.
+        const bool isItemView = context.component == StyleComponent::List
+            || context.component == StyleComponent::Tree
+            || context.component == StyleComponent::DropdownList;
+        if (isItemView && (option->state & QStyle::State_Selected)) {
             context.state |= StyleState::Checked;
         }
         if (option->state & QStyle::State_HasFocus) {

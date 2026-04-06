@@ -210,6 +210,16 @@ ListBorderThickness: "@FormControlBorderThickness"
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 ListItemIconSpacing: "@Spacing.150"
 
+# ── Item state backgrounds (hover / selection) ────────────────────────────
+# State_Selected maps to Checked in the token system (same as active tab).
+# State_Sunken (pressed) and State_MouseOver (hovered) map directly.
+# No explicit token = transparent (falls through to alternating-row fill).
+ListItemCheckedBackground: "opacity(@Accent.500, 40%)"
+ListItemCheckedTextColor: "@BaseTextColor"
+
+ListItemHoveredBackground: "opacity(@Accent.500, 20%)"
+ListItemPressedBackground: "@Background.200"
+
 # ── Dropdown List (QComboBox popup) ────────────────────────────────────────
 DropdownListMaxHeight: "250px"
 
