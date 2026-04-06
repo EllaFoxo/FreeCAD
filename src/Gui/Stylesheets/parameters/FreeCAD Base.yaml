@@ -151,6 +151,7 @@ DialogBackground: "@Background.050"
 GroupBoxBackground: "@Background.050"
 GroupBoxBorderColor: "@Neutral.300"
 GroupBoxBorderRadius: "@BaseRadius.medium"
+GroupBoxBorderThickness: 1px
 GroupBoxPadding: "padding(@Spacing.300, top: @Spacing.400)"
 
 GroupBoxTitlePadding: "padding(horizontal: @Spacing.150, vertical: 0)"

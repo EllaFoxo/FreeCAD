@@ -1,75 +1,10 @@
-/*
-ABOUT
-============================================================================================================
-Revised stylesheet based on the original from Pablo Gil Fernández made by MisterMaker
-
-KNOWN BUGS and TO DO
-=============================================================================================================
-- The stylesheet is not compatible with older <1.1 versions of FreeCAD.
-Please, follow the link to get updated information:
-https://forum.freecad.org/viewtopic.php?t=78431
-
-INSTALLATION WHEN NECESSARY
-============================================================================================================
-1) Place the .qss file and associated images folder inside the `Gui/Stylesheets/` directory (capitalization matters). This directory is located within FreeCAD's user-data folder, which varies by operating system. You can find your user data folder in one of two ways:
-   a. In FreeCAD, open the Python console and run: App.getUserAppDataDir()
-   b. From the command line, run: FreeCAD --get-config UserAppData
-2) Start FreeCAD and go to Preferences > Display > UI > Theme Customization > Style sheet (advanced)
-3) Select the stylesheet you want to use from the dropdown menu
-4) Click Apply and then OK
-5) You need to set the theme to implement the token system.
-6) Restart FreeCAD to apply the changes.
-============================================================================================================
-
-FOLLOWING CODES ARE CHANGED IN THE SETTINGS:
-@PrimaryColor
-@AccentColor
-@GeneralAlternateBackgroundColor
-@GeneralBackgroundColor
-@GeneralBorderColor
-@GeneralDisabledBackgroundColor
-@GeneralGridLinesColor
-@3DViewBackgroundRefColor
-@ButtonBottomBackgroundColor
-@ButtonTopBackgroundColor
-@GroupboxBackgroundColor
-@GroupboxBorderColor
-@StylesheetIconsColor
-@IconsLocationFolderName
-@MenuBackgroundColor
-@ScrollbarBackgroundColor
-@SketcherConflictingConstraintsColor
-@SketcherEmptySketchColor
-@SketcherFullyConstrainedColor
-@SketcherMalformedConstraintsColor
-@SketcherPartiallyRedundantConstraintsColor
-@SketcherRedundantConstraintsColor
-@SketcherSolverFailedColor
-@SketcherUnderConstrainedColor
-@TabbarBackgroundColor
-@TextDisabledColor
-@TextEditFieldBackgroundColor
-@TextForegroundColor
-@TextUrlColor
-@ToolbarButtonsPadding
-
-------------------------------------------------------------------------------------------------------
-
-  See Qt documentation:
-
-  - https://doc.qt.io/qt-5/stylesheet.html
-  - https://doc.qt.io/qt-5/stylesheet-reference.html
-  - https://doc.qt.io/qt-5/stylesheet-examples.html
-
---------------------------------------------------------------------------- */
-
 /* fix for column items background when a link is present */
 Gui--PropertyEditor--PropertyEditor > QWidget > QFrame:focus {
   background-color: @AccentColor;/* same as focused background color */}
 /* hack to hide weird redundant information inside cells with links and no editable data (but editable via "..." button) */
 Gui--PropertyEditor--PropertyEditor > QWidget > QWidget > QLabel {
-  background-color: @PrimaryColor;/* same as focused background color */
-  /* border-radius: @InputFieldBorderRadius; */
+  background-color: @{@Background.200};/* same as focused background color */
+  /* border-radius: @FormControlBorderRadius; */
 }
 
 /*==================================================================================================
@@ -126,15 +61,15 @@ QToolBar {
 }
 
 QToolBar:horizontal {
-  border-bottom: 1px solid @GeneralBorderColor;
+  border-bottom: 1px solid @BaseBorderColor;
 }
 
 QToolBar:vertical {
-  border-left: 1px solid @GeneralBorderColor;
+  border-left: 1px solid @BaseBorderColor;
 }
 
 MRichTextEdit[floating="true"] {
-  border: 1px solid @GeneralBorderColor;
+  border: 1px solid @BaseBorderColor;
   border-radius: 2px;
   padding: 1px;
 }
@@ -177,8 +112,8 @@ Gui--SplitButton QToolButton::menu-indicator {
 Tasks panel (custom FreeCAD class)
 ==================================================================================================*/
 Gui--PropertyEditor--PropertyEditor {
-  qproperty-groupTextColor: @TextForegroundColor;
-  qproperty-groupBackground: @GeneralHeaderBackgroundColor;
+  qproperty-groupTextColor: @BaseTextColor;
+  qproperty-groupBackground: @{@Background.200}
 }
 
 Gui--TaskView--TaskPanel QSint--ActionPanel {
@@ -189,7 +124,7 @@ Gui--TaskView--TaskPanel QSint--ActionPanel {
 QFrame[class="panel"] {}
 QSint--ActionGroup {
 /* if not reset, it might create problems with QPushButtons and other elements */
-  border-radius: @InputFieldBorderRadius;
+  border-radius: @FormControlBorderRadius;
 }
 
 /* Separator line */
@@ -199,13 +134,13 @@ QSint--ActionGroup QFrame[height="1"],
 QSint--ActionGroup QFrame[width="1"],
 QSint--ActionGroup QFrame[width="1"],
 QSint--ActionGroup QFrame[width="1"] {
-  border-color: @GeneralBorderColor;
+  border-color: @BaseBorderColor;
 }
 
 /* Panel header */
 QSint--ActionGroup QFrame[class="header"] {
-  border: 1px solid @GeneralBorderColor;
-  background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 @ButtonTopBackgroundColor,stop:1 @ButtonBottomBackgroundColor );
+  border: 1px solid @BaseBorderColor;
+  background-color: @ButtonBackground;
   border-top-left-radius: 3px;
   border-top-right-radius: 3px;
   border-bottom-left-radius: 0px;
@@ -220,100 +155,13 @@ QSint--ActionGroup QToolButton[class="header"] {
 QSint--ActionGroup QFrame[class="content"] {
   background-color: @DialogBackground;/* Task Panel background color */
 
-  border-bottom: 1px solid @GeneralBorderColor;
-  border-left: 1px solid @GeneralBorderColor;
-  border-right: 1px solid @GeneralBorderColor;
+  border-bottom: 1px solid @BaseBorderColor;
+  border-left: 1px solid @BaseBorderColor;
+  border-right: 1px solid @BaseBorderColor;
   border-top-left-radius: 0px;
   border-top-right-radius: 0px;
   border-bottom-left-radius: 3px;
   border-bottom-right-radius: 3px;
-}
-
-/* Fixs for tabs inside Task Panel */
-
-/* QSlider ----------------------------------------------------------------
-
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qslider
-
---------------------------------------------------------------------------- */
-QSlider:disabled {
-  /*  background-color: @GeneralDisabledBackgroundColor;disabled because this is the frame of the slider, not the slider itself.*/}
-QSlider:focus {}
-QSlider::groove:horizontal {
-  background-color: @PrimaryColor;
-  border: 1px solid @GeneralBorderColor;
-  height: 4px;
-
-  border-radius: 3px;
-}
-
-QSlider::groove:vertical {
-  background-color: @AccentColor;
-  border: 1px solid @GeneralBorderColor;
-  width: 4px;
-
-  border-radius: 3px;
-}
-
-QSlider::add-page:vertical {
-  background-color: @AccentColor;
-  border: 1px solid @GeneralBorderColor;
-  width: 4px;
-
-  border-radius: 3px;
-}
-
-QSlider::add-page:vertical :disabled {
-  background-color: @GeneralDisabledBackgroundColor;
-}
-
-QSlider::sub-page:horizontal {
-  background-color: @AccentColor;
-  border: 1px solid @GeneralBorderColor;
-  height: 4px;
-
-  border-radius: 3px;
-}
-
-QSlider::sub-page:horizontal:disabled {
-  background-color: @GeneralDisabledBackgroundColor;
-}
-
-QSlider::handle:horizontal {
-  background-color: @AccentColor;
-  border: 1px solid @GeneralBorderColor;
-  width: 10px;
-  height: 8px;
-  margin: -4px 0px;
-  border-radius: 6px;
-}
-
-QSlider::handle:horizontal:hover {
-  background-color: @GeneralBackgroundHoverColor;
-  border: 1px solid @GeneralBackgroundHoverColor;
-}
-
-QSlider::handle:horizontal:focus {
-  background-color: @AccentColor;
-  border: 1px solid @AccentColor;
-}
-
-QSlider::handle:vertical {
-  background-color: @AccentColor;
-  border: 1px solid @GeneralBorderColor;
-  width: 10px;
-  height: 8px;
-  margin: 0px -4px;
-  border-radius: 6px;
-}
-
-QSlider::handle:vertical:hover {
-  background-color: @GeneralBackgroundHoverColor;
-  border: 1px solid @GeneralBackgroundHoverColor;
-}
-
-QSlider::handle:vertical:focus {
-  border: 1px solid @AccentColor;
 }
 
 /* QTreeView QListView QTableView -----------------------------------------
@@ -359,13 +207,9 @@ QColumnView::item:!selected:hover {
 
 QTreeView::item:!selected:hover{
   outline: 0;
-  color:@TextForegroundColor;
+  color: @BaseTextColor;
   background-color: @AccentHoverColor;
 }
-
-QTableCornerButton::section {
-  background-color: @PrimaryColor;
-  border-radius: 0px;/*if you remove this line it breaks it */}
 
 QScrollBar {
   background-color: @ScrollBarBackground;
@@ -411,7 +255,7 @@ QAbstractView:selected {
 
 --------------------------------------------------------------------------- */
 PlotWidget {
-  color: @TextDisabledColor;
+  color: @BaseDisabledTextColor;
 }
 
 /*==================================================================================================
@@ -419,36 +263,38 @@ SKETCHER
 ==================================================================================================*/
 
 Gui--StatefulLabel[state="empty"] {
-  color : @SketcherEmptySketchColor}
+  color: @SketcherEmptySketchColor
+}
+
 Gui--StatefulLabel[state="under_constrained"] {
-  color : @SketcherUnderConstrainedColor;
-  }
+  color: @SketcherUnderConstrainedColor;
+}
 
 Gui--StatefulLabel[state="conflicting_constraints"] {
-  color : @SketcherConflictingConstraintsColor;
+  color: @SketcherConflictingConstraintsColor;
   font-weight: bold;
 }
 
 Gui--StatefulLabel[state="malformed_constraints"] {
-  color : @SketcherMalformedConstraintsColor;
+  color: @SketcherMalformedConstraintsColor;
   font-weight: bold;
 }
 
 Gui--StatefulLabel[state="redundant_constraints"] {
-  color : @SketcherRedundantConstraintsColor;
+  color: @SketcherRedundantConstraintsColor;
 }
 
 Gui--StatefulLabel[state="partially_redundant_constraints"] {
-  color : @SketcherPartiallyRedundantConstraintsColor;
+  color: @SketcherPartiallyRedundantConstraintsColor;
 }
 
 Gui--StatefulLabel[state="solver_failed"] {
-  color : @SketcherSolverFailedColor;
+  color: @SketcherSolverFailedColor;
   font-weight: bold;
 }
 
 Gui--StatefulLabel[state="fully_constrained"] {
-  color : @SketcherFullyConstrainedColor;
+  color: @SketcherFullyConstrainedColor;
   font-weight: bold;
 }
 
@@ -468,10 +314,6 @@ QGroupBox[objectName="matOpsGrpBox"] QPushButton {
 
 QTreeView#groupsTreeView {
   border: none;
-}
-
-QTreeView::item#groupsTreeView {
-  /* background-color: @AccentColor; */
 }
 
 /*==================================================================================================

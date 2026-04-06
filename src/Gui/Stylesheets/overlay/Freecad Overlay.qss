@@ -6,7 +6,7 @@ Gui--TaskView--TaskView QScrollArea {
 
 Gui--OverlayTitleBar,
 Gui--OverlaySplitterHandle {
-  background-color: @PrimaryColor;
+  background-color: @{@Background.200};
  }
 
 Gui--OverlaySplitter {
@@ -16,38 +16,46 @@ Gui--OverlaySplitter {
 /* Overwrites Properties panel to use white text. */
 Gui--TreePanel QTreeView {
   background-color: transparent;
-  border: 0px solid   @TextForegroundColor;
-  color: @TextForegroundColor;
+  border: 0px solid   @BaseTextColor;
+  color: @BaseTextColor;
   gridline-color: @GeneralGridLinesColor;
   border-radius: 0px;
 }
 
 Gui--TreePanel QTreeView::item {
-  color: @TextForegroundColor;
+  color: @BaseTextColor;
 }
 
 Gui--TreePanel QTreeView::item:disabled {
-  color: @TextDisabledColor;
+  color: @BaseDisabledTextColor;
 }
 
  Gui--TreePanel QTreeView:disabled  {
-  color: @TextDisabledColor;
+  color: @BaseDisabledTextColor;
 }
 
 Gui--PropertyEditor--PropertyEditor {
-  qproperty-itemBackground: @TextEditFieldBackgroundColor;
+  qproperty-itemBackground: @InputBackground;
 }
 
 Gui--OverlayTabWidget Gui--TreePanel QTreeView::item {
-  color: @TextForegroundColor;
+  color: @BaseTextColor;
 }
 
-Gui--OverlayTabWidget Gui--TreePanel QTreeView::item:disabled {
-  color: @TextDisabledColor;
+Gui--OverlayTabWidget[transparent="false"]  Gui--TreePanel QTreeView::item:disabled {
+  color: @BaseDisabledTextColor;
+}
+
+Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item {
+  color: @BaseTextColor;
+}
+
+Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item:disabled {
+  color: @BaseDisabledTextColor;
 }
 
 Gui--OverlayTabWidget {
-  qproperty-effectColor: @3DViewBackgroundRefColor;
+  qproperty-effectColor: @BackgroundColor;
   qproperty-effectBlurRadius: 0;
   qproperty-effectOffsetX: 0;
   qproperty-effectOffsetY: 0;
@@ -57,7 +65,7 @@ Gui--OverlayTabWidget {
 }
 
  Gui--OverlayTabWidget#OverlayBottom {
-  qproperty-effectColor: @3DViewBackgroundRefColor;
+  qproperty-effectColor: @BackgroundColor;
   qproperty-effectBlurRadius: 0;
   qproperty-effectOffsetX: 0.0;
   qproperty-effectOffsetY: 0.0;
@@ -73,9 +81,9 @@ Gui--OverlayTabWidget::pane {
 }
 
 QSint--ActionGroup QFrame[class="content"] {
-  border-bottom: 1px solid @GeneralBorderColor;
-  border-left: 1px solid @GeneralBorderColor;
-  border-right: 1px solid @GeneralBorderColor;
+  border-bottom: 1px solid @BaseBorderColor;
+  border-left: 1px solid @BaseBorderColor;
+  border-right: 1px solid @BaseBorderColor;
   border-top-left-radius: 0px;
   border-top-right-radius: 0px;
   border-bottom-left-radius: 3px;
@@ -83,8 +91,8 @@ QSint--ActionGroup QFrame[class="content"] {
 }
 
 QSint--ActionGroup QFrame[class="header"] {
-  border: 1px solid @GeneralBorderColor;
-  /* border-bottom: 0px solid @GeneralBorderColor; */
+  border: 1px solid @BaseBorderColor;
+  /* border-bottom: 0px solid @BaseBorderColor; */
   border-top-left-radius: 3px;
   border-top-right-radius: 3px;
   border-bottom-left-radius: 0px;

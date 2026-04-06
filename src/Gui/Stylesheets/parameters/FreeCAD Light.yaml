@@ -1,2 +1,11 @@
 _inherits:
   - FreeCAD Base.yaml
+
+SketcherConflictingConstraintsColor: "#9d0000"
+SketcherEmptySketchColor: "#000000"
+SketcherFullyConstrainedColor: "#278100"
+SketcherMalformedConstraintsColor: "#9d0000"
+SketcherPartiallyRedundantConstraintsColor: "#005991"
+SketcherRedundantConstraintsColor: "#ab4d00"
+SketcherSolverFailedColor: "#9d0000"
+SketcherUnderConstrainedColor: "#000000"
