@@ -39,6 +39,7 @@
 #include <QComboBox>
 #include <QPushButton>
 #include <QStyleOption>
+#include <QStyleOptionHeader>
 #include <QTabBar>
 #include <QToolButton>
 
@@ -510,6 +511,8 @@ private:
     static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
 
     void drawMenuBarItem(QPainter* painter, const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
+    void drawHeaderSection(QPainter* painter, const QStyleOptionHeader* option, const QWidget* widget) const;
 
     void drawTabCloseButton(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
 

@@ -558,6 +558,12 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
         .variants = {"State"},
         .inherits = {},
     }, StyleComponent::MenuBar);
+
+    registry.registerDescriptor({
+        .name     = "Header",
+        .variants = {"State"},
+        .inherits = {},
+    }, StyleComponent::Header);
     // clang-format on
 }
 

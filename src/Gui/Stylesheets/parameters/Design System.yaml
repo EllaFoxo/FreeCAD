@@ -282,6 +282,21 @@ TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
 DocumentTreeItemPadding: "padding(0)"
 
+# ── Header / QHeaderView ─────────────────────────────────────────────────────
+# Section background — button-like but flat (no border radius)
+HeaderItemBackground: "@ButtonBackground"
+HeaderItemHoveredBackgroundEffect: "@ButtonHoveredBackgroundEffect"
+HeaderItemPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
+HeaderItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
+HeaderItemTextColor: "@ButtonTextColor"
+HeaderItemDisabledTextColor: "@ButtonDisabledTextColor"
+
+# Border: bottom only (content separator). Side separators are transparent by default
+# but can be enabled by overriding these tokens with a "left:" named argument.
+HeaderItemBorderColor: "border_colors(@Colors.transparent, bottom: @FormControlBorderColor)"
+HeaderItemBorderThickness: "border_thickness(0px, bottom: 1px)"
+HeaderItemBorderRadius: "border_radius(0px)"
+
 # ── Tab Bar ─────────────────────────────────────────────────────────────────
 # TabPosition = North is canonical (default). Geometric tokens (BorderRadius,
 # BorderThickness) are auto-rotated to South/East/West; theme authors only need

@@ -474,17 +474,6 @@ QTreeView::item#groupsTreeView {
   /* background-color: @AccentColor; */
 }
 
-QHeaderView {
-    border: none;
-    border-bottom: 1px @BaseBorderColor solid;
-    border-top-left-radius: 2px;
-    border-top-right-radius: 2px;
-}
-
-QHeaderView::section {
-    padding: @{padding(horizontal: @Spacing.200, vertical: @Spacing.100)};
-}
-
 /*==================================================================================================
 Input validation
 ==================================================================================================*/

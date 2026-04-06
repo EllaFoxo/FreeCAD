@@ -60,6 +60,7 @@ enum class StyleComponent : uint8_t
     ToolBar,        // QToolBar
     ToolBarButton,  // QToolButton in QToolBar - semantically different
     MenuBar,        // QMenuBar
+    Header,         // QHeaderView sections
     // Add new components before COUNT
     COUNT
 };

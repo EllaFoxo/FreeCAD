@@ -47,8 +47,10 @@
 #include <QStyleOption>
 #include <QAbstractItemView>
 #include <QCheckBox>
+#include <QHeaderView>
 #include <QRadioButton>
 #include <QListView>
+#include <QStyleOptionHeader>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
 #include <QPointer>
@@ -1177,6 +1179,15 @@ QSize FreeCADStyle::sizeFromContents(
         return itemViewItemSizeFromContents(option, size, widget);
     }
 
+    if (type == CT_HeaderSection) {
+        if (const auto* headerOption = qstyleoption_cast<const QStyleOptionHeader*>(option)) {
+            const StyleContext itemContext
+                = contextOf(widget, headerOption, StyleComponentElement::Item);
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+            return geometry.sizeFromContents(QProxyStyle::sizeFromContents(type, option, size, widget));
+        }
+    }
+
     return QProxyStyle::sizeFromContents(type, option, size, widget);
 }
 
@@ -1212,6 +1223,18 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
 
     if (element == SE_ItemViewItemText) {
         return itemViewInsetRect(SE_ItemViewItemText);
+    }
+
+    if (element == SE_HeaderLabel) {
+        const auto* headerOption = qstyleoption_cast<const QStyleOptionHeader*>(option);
+        if (!headerOption) {
+            return QProxyStyle::subElementRect(element, option, widget);
+        }
+        const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+        const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+        QStyleOptionHeader adjustedOption = *headerOption;
+        adjustedOption.rect = geometry.contentRect(headerOption->rect);
+        return QProxyStyle::subElementRect(element, &adjustedOption, widget);
     }
 
     if (element == SE_TabWidgetTabContents) {
@@ -1664,6 +1687,30 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    // CE_HeaderSection is the actual background element called when QStyleSheetStyle
+    // intercepts CE_Header and decomposes it via QCommonStyle's
+    // proxy()->drawControl(CE_HeaderSection). CE_Header is also handled for direct callers (Qt
+    // versions that skip QStyleSheetStyle).
+    if (element == CE_HeaderSection || element == CE_Header) {
+        if (const auto* headerOption = qstyleoption_cast<const QStyleOptionHeader*>(option)) {
+            drawHeaderSection(painter, headerOption, widget);
+
+            if (element == CE_Header) {
+                // Delegate label (text, icon, sort indicator) to the base style.
+                // Patch the palette so ButtonText picks up the token text color.
+                const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+                QStyleOptionHeader adjusted = *headerOption;
+                if (const auto textColor = resolve<Base::Color>(itemContext, StyleProperty::TextColor)) {
+                    adjusted.palette
+                        .setColor(QPalette::All, QPalette::ButtonText, textColor->asValue<QColor>());
+                }
+                QProxyStyle::drawControl(CE_HeaderLabel, &adjusted, painter, widget);
+            }
+
+            return;
+        }
+    }
+
     QProxyStyle::drawControl(element, option, painter, widget);
 }
 
@@ -2065,6 +2112,16 @@ void FreeCADStyle::drawMenuBarItem(
     painter->drawText(contentRect, textFlags, option->text);
 
     painter->restore();
+}
+
+void FreeCADStyle::drawHeaderSection(
+    QPainter* painter,
+    const QStyleOptionHeader* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    drawBoxBackground(painter, option->rect, resolveBoxStyle(itemContext));
 }
 
 void FreeCADStyle::drawTabBarBase(
@@ -2537,7 +2594,6 @@ void FreeCADStyle::resetTaskPanelMargins(QObject* obj)
     }
 
 
-
     // Apply token padding to QTextEdit / QPlainTextEdit via the document margin.
     // This pads the text content relative to the viewport while leaving scrollbars
     // flush with the frame edge (unlike viewport-margin approaches).
@@ -2798,6 +2854,10 @@ StyleContext FreeCADStyle::contextOf(
         context.component = isDropdown ? StyleComponent::DropdownList : StyleComponent::List;
         context.element = element;
     }
+    else if (qobject_cast<const QHeaderView*>(widget)) {
+        context.component = StyleComponent::Header;
+        context.element = element;
+    }
     else if (qobject_cast<const QAbstractItemView*>(widget)) {
         // Catches QTableView, QColumnView, and other item-view subclasses not matched above.
         context.component = StyleComponent::List;
@@ -2819,8 +2879,10 @@ StyleContext FreeCADStyle::contextOf(
             context.state |= StyleState::Pressed;
         }
     }
-    else if (qobject_cast<const QAbstractButton*>(widget) && widget->parent()
-             && qobject_cast<const QTabBar*>(widget->parent())) {
+    else if (
+        qobject_cast<const QAbstractButton*>(widget) && widget->parent()
+        && qobject_cast<const QTabBar*>(widget->parent())
+    ) {
         // Qt's tab close buttons are private QAbstractButton children of QTabBar.
         // They must be detected before the generic QAbstractButton fallthrough below.
         context.component = StyleComponent::TabBar;
@@ -2861,8 +2923,10 @@ StyleContext FreeCADStyle::contextOf(
     else if (buttonOption && (buttonOption->features & QStyleOptionButton::Flat)) {
         context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
     }
-    else if (const auto* toolButton = qobject_cast<const QToolButton*>(widget);
-             toolButton && toolButton->autoRaise()) {
+    else if (
+        const auto* toolButton = qobject_cast<const QToolButton*>(widget);
+        toolButton && toolButton->autoRaise()
+    ) {
         context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
     }
     else if (widget && widget->property("flat").toBool()) {
@@ -2911,7 +2975,8 @@ StyleContext FreeCADStyle::contextOf(
             || context.component == StyleComponent::ToolButton
             || context.component == StyleComponent::Select
             || context.component == StyleComponent::CheckBox
-            || context.component == StyleComponent::RadioButton;
+            || context.component == StyleComponent::RadioButton
+            || context.component == StyleComponent::Header;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }
