@@ -317,6 +317,10 @@ public:
  *
  * This class maintains an in-memory map of parameters loaded from a YAML file.
  * Any changes through define() or remove() will also update the file.
+ *
+ * A YAML file may declare an `_inherits` key listing sibling files to load first.
+ * Parameters from inherited files appear in the merged map but are not written
+ * back on flush() — only parameters defined directly in this file are persisted.
  */
 class GuiExport YamlParameterSource: public ParameterSource
 {
@@ -343,8 +347,18 @@ public:
     void flush() override;
 
 private:
+    struct ParameterEntry
+    {
+        Parameter parameter;
+        bool inherited = false;
+    };
+
     std::string filePath;
-    std::map<std::string, Parameter> parameters;
+    std::vector<std::string> inheritPaths;  // relative paths from _inherits (preserved for flush)
+    std::map<std::string, ParameterEntry> parameters;  // merged: inherited entries then own on top
+
+    void rebuildMergedView(const std::map<std::string, ParameterEntry>& ownEntries);
+    void rebuildMergedView();
 };
 
 /**
