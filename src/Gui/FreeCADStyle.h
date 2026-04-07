@@ -333,6 +333,25 @@ public:
     void polish(QWidget* widget) override;
     void unpolish(QWidget* widget) override;
 
+    /**
+     * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
+     */
+    BoxGeometryDefinition resolveBoxGeometry(const StyleParameters::StyleContext& context) const;
+
+    /**
+     * @brief Builds a StyleContext from a widget and its current style option.
+     *
+     * Derives component from the widget type, variant slots from widget properties
+     * (controlSize, isDefault, isFlat, autoRaise, property("flat")), and state
+     * from option->state flags. Passing @p option as nullptr yields Normal state.
+     */
+    static StyleParameters::StyleContext contextOf(
+        const QWidget* widget,
+        const QStyleOption* option = nullptr,
+        const StyleParameters::StyleComponentElement& element
+        = StyleParameters::StyleComponentElement::Root
+    );
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,
@@ -495,25 +514,7 @@ private:
      */
     BoxStyleDefinition resolveBoxStyle(const StyleParameters::StyleContext& context) const;
 
-    /**
-     * @brief Resolves a BoxGeometryDefinition from a @p context using the token cache.
-     */
-    BoxGeometryDefinition resolveBoxGeometry(const StyleParameters::StyleContext& context) const;
-
-    /**
-     * @brief Builds a StyleContext from a widget and its current style option.
-     *
-     * Derives component from the widget type, variant slots from widget properties
-     * (controlSize, isDefault, isFlat, autoRaise, property("flat")), and state
-     * from option->state flags. Passing @p option as nullptr yields Normal state.
-     */
-    static StyleParameters::StyleContext contextOf(
-        const QWidget* widget,
-        const QStyleOption* option = nullptr,
-        const StyleParameters::StyleComponentElement& element
-        = StyleParameters::StyleComponentElement::Root
-    );
-
+private:
     static StyleParameters::StyleContext withNorthPosition(
         const StyleParameters::StyleContext& context
     );
