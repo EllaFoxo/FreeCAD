@@ -235,12 +235,18 @@ TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
 DocumentTreeRowBackground: "reset()"
 
-DocumentTreeItemBackground: "@Background.050"
-DocumentTreeItemBorderRadius: "@BaseRadius.small"
+DocumentTreeItemBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Background.050, @Background.100)"
+DocumentTreeItemBorderRadius: "@BaseRadius.medium"
 DocumentTreeItemBorderThickness: 1px
 DocumentTreeItemBorderColor: "@BaseBorderColor"
 
-DocumentTreeItemPadding: "padding(horizontal: @Spacing.300, vertical: @Spacing.000)"
+DocumentTreeItemPadding: "padding(horizontal: @Spacing.100, vertical: 3px)"
+DocumentTreeItemMargin: "padding(0, vertical: @Spacing.050)"
+
+DocumentTreeItemHoveredBackgroundEffect: "effect(lighten: 0.05)"
+
+DocumentTreeItemCheckedBackground: "blend(@DocumentTreeItemBackground, @Accent.500, 20%)"
+DocumentTreeItemCheckedBorderColor: "blend(@DocumentTreeItemBorderColor, @Accent.500, 20%)"
 
 # ── Header / QHeaderView ─────────────────────────────────────────────────────
 # Section background — button-like but flat (no border radius)
