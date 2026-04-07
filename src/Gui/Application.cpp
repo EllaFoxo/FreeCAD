@@ -279,6 +279,8 @@ struct ApplicationP
             macroMngr = nullptr;
         }
 
+        // Create the FreeCAD Style - even if not used by app, components can call it
+        freeCADStyle = new FreeCADStyle();
         // Create the Theme Manager
         prefPackManager = new PreferencePackManager();
         // Create the Style Parameter Manager
@@ -296,6 +298,8 @@ struct ApplicationP
     /// Active document
     Gui::Document* activeDocument {nullptr};
     std::vector<Gui::Document*> editDocuments;
+
+    FreeCADStyle* freeCADStyle;
 
     MacroManager* macroMngr;
     PreferencePackManager* prefPackManager;
@@ -2296,6 +2300,11 @@ Gui::StyleParameters::ParameterManager* Application::styleParameterManager()
     return d->styleParameterManager;
 }
 
+Gui::FreeCADStyle* Application::freeCADStyle()
+{
+    return d->freeCADStyle;
+}
+
 //**************************************************************************
 // Init, Destruct and singleton
 
@@ -2942,9 +2951,9 @@ QString Application::replaceVariablesInQss(const QString& qssText)
 
 void Application::setStyle(const QString& name)
 {
-    const auto createStyleFromName = [](const QString& name) -> QStyle* {
+    const auto createStyleFromName = [this](const QString& name) -> QStyle* {
         if (name == QStringLiteral("FreeCAD")) {
-            return new FreeCADStyle();
+            return freeCADStyle();
         }
 
         if (name.compare(QStringLiteral("System"), Qt::CaseInsensitive) == 0) {

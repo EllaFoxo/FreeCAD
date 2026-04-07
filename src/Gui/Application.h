@@ -23,6 +23,9 @@
 
 #pragma once
 
+#include "FreeCADStyle.h"
+
+
 #include <QPixmap>
 #include <map>
 #include <string>
@@ -269,6 +272,7 @@ public:
 
     Gui::PreferencePackManager* prefPackManager();
     Gui::StyleParameters::ParameterManager* styleParameterManager();
+    Gui::FreeCADStyle* freeCADStyle();
 
     /** @name Init, Destruct an Access methods */
     //@{
