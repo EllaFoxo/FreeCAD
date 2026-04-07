@@ -89,6 +89,9 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
         {static_cast<uint8_t>(Position::South), "South"},
         {static_cast<uint8_t>(Position::West),  "West"},
     }},
+    {VariantSlot::RowType, {
+        {static_cast<uint8_t>(RowType::Alternate), "Alternate"},
+    }},
 };
 // clang-format on
 
@@ -140,6 +143,7 @@ constexpr std::array<std::string_view, size_t(VariantSlot::COUNT)> variantSlotDi
     "ButtonType",   // VariantSlot::ButtonType
     "ControlSize",  // VariantSlot::ControlSize
     "Position",     // VariantSlot::Position
+    "RowType",      // VariantSlot::RowType
 };
 // clang-format on
 
@@ -502,7 +506,7 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
 
     registry.registerDescriptor({
         .name     = "List",
-        .variants = {"ControlSize", "State"},
+        .variants = {"ControlSize", "State", "RowType"},
         .inherits = {},
     }, StyleComponent::List);
 
@@ -514,7 +518,7 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
 
     registry.registerDescriptor({
         .name     = "Tree",
-        .variants = {"ControlSize", "State"},
+        .variants = {"ControlSize", "State", "RowType"},
         .inherits = {"List"},
     }, StyleComponent::Tree);
 

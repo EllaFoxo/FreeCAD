@@ -154,13 +154,30 @@ enum class StyleState : uint8_t
 };
 
 /**
+ * @brief Row parity variant for item-view components.
+ *
+ * Set to Alternate when QStyleOptionViewItem::Alternate is active so that
+ * alternate-row tokens (e.g. ListAlternateRowBackground) are tried before
+ * falling back to the default-row tokens.
+ *
+ * Add new types before COUNT.
+ */
+enum class RowType : uint8_t
+{
+    Default,
+    Alternate,
+    // Add new row types before COUNT
+    COUNT
+};
+
+/**
  * @brief Registry of variant dimensions used in token names.
  *
  * Each slot corresponds to one enum dimension (ButtonType, ControlSize, …).
  * Adding a new variant dimension requires:
  *   1. Adding a slot entry before COUNT here.
  *   2. Defining the values enum with Default = 0 and COUNT as the last value.
- *   3. Adding a string table and entry in FreeCADStyle.cpp::variantSlotNames.
+ *   3. Adding a string table and entry in ParameterDescriptorRegistry.cpp::variantSlotNames.
  *   4. Setting the slot in FreeCADStyle.cpp::contextOf().
  */
 enum class VariantSlot : uint8_t
@@ -168,6 +185,7 @@ enum class VariantSlot : uint8_t
     ButtonType,
     ControlSize,
     Position,
+    RowType,  // Alternate row parity for item-view components
     // Add new variant dimensions before COUNT
     COUNT
 };

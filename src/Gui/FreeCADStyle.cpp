@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <map>
 #include <span>
@@ -691,13 +692,6 @@ int FreeCADStyle::styleHint(
         return 0;
     }
 
-    // Extend selection/hover highlighting to the full row width, including the
-    // indentation and branches area. Without this, Qt clips PE_PanelItemViewItem
-    // to the post-indentation content rect and the branches area stays uncolored.
-    if (hint == SH_ItemView_ShowDecorationSelected) {
-        return 1;
-    }
-
     return QProxyStyle::styleHint(hint, option, widget, returnData);
 }
 
@@ -879,6 +873,32 @@ void FreeCADStyle::drawTabCloseButton(
     painter->restore();
 }
 
+void FreeCADStyle::drawItemViewRow(
+    QPainter* painter,
+    const QStyleOptionViewItem* vopt,
+    const QWidget* widget
+) const
+{
+    const StyleContext rowContext = contextOf(widget, vopt, StyleComponentElement::Row);
+
+    // Expand to the full viewport width so branch/indent areas of QTreeView and
+    // leading decoration regions receive the same background as the cell columns.
+    QRect rowRect = vopt->rect;
+    if (const auto* view = qobject_cast<const QAbstractItemView*>(widget)) {
+        if (const QWidget* viewport = view->viewport()) {
+            rowRect.setLeft(0);
+            rowRect.setWidth(viewport->width());
+        }
+    }
+
+    // Qt installs a per-cell clip before calling PE_PanelItemViewItem; replace it
+    // temporarily so the wider fill is not clipped to the cell column.
+    painter->save();
+    painter->setClipRect(rowRect, Qt::ReplaceClip);
+    drawBoxBackground(painter, rowRect, resolveBoxStyle(rowContext));
+    painter->restore();
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,
@@ -924,13 +944,35 @@ void FreeCADStyle::drawPrimitive(
     }
 
     if (element == PE_PanelItemViewRow) {
+        // All background painting is handled by PE_PanelItemViewItem (which always
+        // carries correct per-cell selection state). Suppress the row-level primitive
+        // for recognised item views so Fusion's row-level drawing does not paint a
+        // second time on top of PE_PanelItemViewItem's full-width stripe.
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        const BoxStyleDefinition style = resolveBoxStyle(context);
-        drawBoxBackground(painter, option->rect, style);
-        return;
+        if (context.element == StyleComponentElement::Item) {
+            return;
+        }
     }
 
     if (element == PE_PanelItemViewItem) {
+        const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+        if (!vopt) {
+            return;
+        }
+
+        // For multi-column views the first (or only) column owns the full-width row
+        // stripe; subsequent columns suppress to avoid painting over it.
+        const bool isFirstCell = vopt->viewItemPosition == QStyleOptionViewItem::Beginning
+            || vopt->viewItemPosition == QStyleOptionViewItem::OnlyOne
+            || vopt->viewItemPosition == QStyleOptionViewItem::Invalid;
+
+        if (isFirstCell) {
+            drawItemViewRow(painter, vopt, widget);
+        }
+
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+        drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+
         return;
     }
 
@@ -2419,8 +2461,8 @@ void FreeCADStyle::polish(QWidget* widget)
         widget->setAutoFillBackground(false);
     }
 
-    if (qobject_cast<QAbstractItemView*>(widget)) {
-        widget->setAttribute(Qt::WA_MouseTracking);
+    if (auto* itemView = qobject_cast<QAbstractItemView*>(widget)) {
+        itemView->setAttribute(Qt::WA_MouseTracking);
     }
 
     if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
@@ -3060,6 +3102,18 @@ StyleContext FreeCADStyle::contextOf(
         if (const QLineEdit* lineEdit = comboBox->lineEdit()) {
             if (lineEdit->hasFocus()) {
                 context.state |= StyleState::Focused;
+            }
+        }
+    }
+
+    // RowType — set only for the normal (no active state) case so that interaction
+    // states (hover, selection, pressed, disabled) use their own tokens without the
+    // Alternate variant prefix interfering (e.g. hovered alternate rows resolve via
+    // ListRowHovered*, not ListRowAlternateHovered*).
+    if (context.state == StyleState::Normal) {
+        if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
+            if (vopt->features & QStyleOptionViewItem::Alternate) {
+                context.variant.set(VariantSlot::RowType, RowType::Alternate);
             }
         }
     }

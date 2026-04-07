@@ -380,6 +380,20 @@ protected:
      */
     static void drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& style);
 
+    /**
+     * @brief Paints the full-width row background for an item view row.
+     *
+     * Expands the rect to the full viewport width so the branch and indent areas of
+     * QTreeView receive the same background as the cell columns. The painter clip is
+     * temporarily replaced with Qt::ReplaceClip to escape the per-cell clip that
+     * CE_ItemViewItem installs before calling PE_PanelItemViewItem.
+     *
+     * Called from PE_PanelItemViewItem for the first cell of each row. The context for
+     * the Row element (including the RowType::Alternate variant when applicable) is
+     * built inside this function from the provided option and widget.
+     */
+    void drawItemViewRow(QPainter* painter, const QStyleOptionViewItem* vopt, const QWidget* widget) const;
+
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:

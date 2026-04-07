@@ -109,11 +109,12 @@ void PropertyItemDelegate::paint(
 
     QPen savedPen = painter->pen();
 
+
+    QStyle* style = option.widget ? option.widget->style() : QApplication::style();
+
     if (index.column() == 1 && property && dynamic_cast<PropertyBoolItem*>(property)) {
         bool checked = index.data(Qt::EditRole).toBool();
         bool readonly = property->isReadOnly();
-
-        QStyle* style = option.widget ? option.widget->style() : QApplication::style();
         QPalette palette = option.widget ? option.widget->palette() : QApplication::palette();
 
         QStyleOptionButton checkboxOption;
@@ -157,6 +158,16 @@ void PropertyItemDelegate::paint(
         painter->drawText(textRect, Qt::AlignVCenter | Qt::AlignLeft, labelText);
     }
     else {
+        QStyleOptionViewItem override = option;
+
+        // default QItemDelegate painting is quite bad - it does not respect style but does paint
+        // some random backgrounds, instead of using the PanelItemViewItem. This is the way to
+        // circumvent it by forcing drawing of item.
+        if (property && !property->isSeparator()) {
+            style->drawPrimitive(QStyle::PE_PanelItemViewItem, &option, painter, option.widget);
+            option.state &= ~QStyle::State_Selected;
+        }
+
         QItemDelegate::paint(painter, option, index);
     }
 
