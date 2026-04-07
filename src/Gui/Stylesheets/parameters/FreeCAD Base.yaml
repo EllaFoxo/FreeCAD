@@ -210,15 +210,22 @@ ListBorderThickness: "@FormControlBorderThickness"
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 ListItemIconSpacing: "@Spacing.150"
 
+# ── List Row ───────────────────────────────────────────────────────────────
+# Default rows are transparent; alternate rows use the QPalette AlternateBase
+# color. The Alternate variant prefix (ListRowAlternate*) is tried before the
+# plain ListRow* fallback when QStyleOptionViewItem::Alternate is set.
+ListRowAlternateBackground: "@BaseAlternateBackground"
+
+
 # ── Item state backgrounds (hover / selection) ────────────────────────────
 # State_Selected maps to Checked in the token system (same as active tab).
 # State_Sunken (pressed) and State_MouseOver (hovered) map directly.
-# No explicit token = transparent (falls through to alternating-row fill).
-ListItemCheckedBackground: "opacity(@Accent.500, 40%)"
+# No explicit token = transparent (falls through to row background).
+ListRowCheckedBackground: "opacity(@Accent.500, 40%)"
 ListItemCheckedTextColor: "@BaseTextColor"
 
-ListItemHoveredBackground: "opacity(@Accent.500, 20%)"
-ListItemPressedBackground: "@Background.200"
+ListRowHoveredBackground: "opacity(@Accent.500, 20%)"
+ListRowPressedBackground: "@Background.200"
 
 # ── Dropdown List (QComboBox popup) ────────────────────────────────────────
 DropdownListMaxHeight: "250px"
@@ -226,7 +233,14 @@ DropdownListMaxHeight: "250px"
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
-DocumentTreeItemPadding: "padding(0)"
+DocumentTreeRowBackground: "reset()"
+
+DocumentTreeItemBackground: "@Background.050"
+DocumentTreeItemBorderRadius: "@BaseRadius.small"
+DocumentTreeItemBorderThickness: 1px
+DocumentTreeItemBorderColor: "@BaseBorderColor"
+
+DocumentTreeItemPadding: "padding(horizontal: @Spacing.300, vertical: @Spacing.000)"
 
 # ── Header / QHeaderView ─────────────────────────────────────────────────────
 # Section background — button-like but flat (no border radius)

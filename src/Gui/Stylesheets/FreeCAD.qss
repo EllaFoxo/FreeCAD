@@ -229,12 +229,6 @@ QGroupBox[objectName="matOpsGrpBox"] QPushButton {
   min-width: 235px;
 }
 
-/* Below is a fix for indentation in properties*/
-
-QTreeView#groupsTreeView {
-  border: none;
-}
-
 /*==================================================================================================
 Input validation
 ==================================================================================================*/

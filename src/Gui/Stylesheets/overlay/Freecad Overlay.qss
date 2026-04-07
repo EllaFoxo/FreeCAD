@@ -18,7 +18,7 @@ Gui--TreePanel QTreeView {
   background-color: transparent;
   border: 0px solid   @BaseTextColor;
   color: @BaseTextColor;
-  gridline-color: @GeneralGridLinesColor;
+  gridline-color: @BaseBorderColor;
   border-radius: 0px;
 }
 
@@ -35,7 +35,7 @@ Gui--TreePanel QTreeView::item:disabled {
 }
 
 Gui--PropertyEditor--PropertyEditor {
-  qproperty-itemBackground: @InputBackground;
+  qproperty-itemBackground: @LineEditBackground;
 }
 
 Gui--OverlayTabWidget Gui--TreePanel QTreeView::item {
