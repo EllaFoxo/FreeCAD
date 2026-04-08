@@ -603,6 +603,16 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
     };
 
     switch (metric) {
+        // Reset FrameWidth applied to SpinBoxes on some platforms. Using the default can cause the
+        // SpinBox to be inflated, which is not intended as the style handles all the necessary
+        // size calculations.
+        case PM_SpinBoxFrameWidth:
+        case PM_DefaultFrameWidth:
+            if (qobject_cast<const QAbstractSpinBox*>(widget)) {
+                return 0;
+            }
+            return {};
+
         // PM_TabBarTabOverlap is a pure painting hint: it tells CE_TabBarTabShape how many pixels
         // to extend (positive) or shrink (negative) the trailing edge of each non-last tab's paint
         // rect. QTabBar's layoutTabs() does NOT query this metric; the visual spacing is achieved
