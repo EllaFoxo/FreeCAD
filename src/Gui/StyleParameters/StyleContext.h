@@ -171,6 +171,23 @@ enum class RowType : uint8_t
 };
 
 /**
+ * @brief Transparency variant for container components such as ToolBar.
+ *
+ * Transparent is applied to toolbars hosted in the status bar or as
+ * QMenuBar corner widgets. Those containers blend into the host surface
+ * and should not render a background.
+ *
+ * Add new modes before COUNT.
+ */
+enum class TransparencyMode : uint8_t
+{
+    Normal,
+    Transparent,
+    // Add new modes before COUNT
+    COUNT
+};
+
+/**
  * @brief Registry of variant dimensions used in token names.
  *
  * Each slot corresponds to one enum dimension (ButtonType, ControlSize, …).
@@ -185,7 +202,8 @@ enum class VariantSlot : uint8_t
     ButtonType,
     ControlSize,
     Position,
-    RowType,  // Alternate row parity for item-view components
+    RowType,           // Alternate row parity for item-view components
+    TransparencyMode,  // Transparent background for status bar / menu bar corner toolbars
     // Add new variant dimensions before COUNT
     COUNT
 };

@@ -92,6 +92,9 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
     {VariantSlot::RowType, {
         {static_cast<uint8_t>(RowType::Alternate), "Alternate"},
     }},
+    {VariantSlot::TransparencyMode, {
+        {static_cast<uint8_t>(TransparencyMode::Transparent), "Transparent"},
+    }},
 };
 // clang-format on
 
@@ -140,10 +143,11 @@ constexpr auto statePriorityOrder = std::to_array({
 // Maps each VariantSlot to its display name (used in token names), in enum order.
 // clang-format off
 constexpr std::array<std::string_view, size_t(VariantSlot::COUNT)> variantSlotDisplayNames = {
-    "ButtonType",   // VariantSlot::ButtonType
-    "ControlSize",  // VariantSlot::ControlSize
-    "Position",     // VariantSlot::Position
-    "RowType",      // VariantSlot::RowType
+    "ButtonType",       // VariantSlot::ButtonType
+    "ControlSize",      // VariantSlot::ControlSize
+    "Position",         // VariantSlot::Position
+    "RowType",          // VariantSlot::RowType
+    "TransparencyMode", // VariantSlot::TransparencyMode
 };
 // clang-format on
 
