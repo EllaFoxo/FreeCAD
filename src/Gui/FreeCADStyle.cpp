@@ -1380,7 +1380,7 @@ QRect FreeCADStyle::spinBoxSubControlRect(
         ? QProxyStyle::subControlRect(CC_SpinBox, option, SC_SpinBoxUp, widget).size()
         : QSize {};
 
-    const int buttonLeft = contentRect.right() - buttonSize.width() + 1;
+    const int buttonLeft = contentRect.right() - buttonSize.width();
     const int editRight = hasButtons ? buttonLeft - 1 : contentRect.right();
     const int centerY = contentRect.center().y();
 
@@ -1689,6 +1689,15 @@ void FreeCADStyle::drawControl(
     const QWidget* widget
 ) const
 {
+    if (element == CE_PushButton || element == CE_PushButtonBevel) {
+        if (auto btnOpt = qstyleoption_cast<const QStyleOptionButton*>(option)) {
+            QStyleOptionButton modified = *btnOpt;
+            modified.features &= ~QStyleOptionButton::Flat;
+            QProxyStyle::drawControl(element, &modified, painter, widget);
+            return;
+        }
+    }
+
     if (element == CE_PushButtonLabel) {
         if (const auto* btnOption = qstyleoption_cast<const QStyleOptionButton*>(option)) {
             drawPushButtonLabel(painter, btnOption, widget);
@@ -2903,6 +2912,22 @@ QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
 
 // ─── Context building ────────────────────────────────────────────────────────
 
+static bool isFlat(const QWidget* widget, const QStyleOption* option)
+{
+    if (const auto* buttonOption = qstyleoption_cast<const QStyleOptionButton*>(option)) {
+        if (buttonOption->features & QStyleOptionButton::Flat) {
+            return true;
+        }
+    }
+    if (const auto* button = qobject_cast<const QPushButton*>(widget)) {
+        return button->isFlat();
+    }
+    if (const auto* toolButton = qobject_cast<const QToolButton*>(widget)) {
+        return toolButton->autoRaise();
+    }
+    return widget && widget->property("flat").toBool();
+}
+
 StyleContext FreeCADStyle::contextOf(
     const QWidget* widget,
     const QStyleOption* option,
@@ -3012,16 +3037,7 @@ StyleContext FreeCADStyle::contextOf(
     if (buttonOption && (buttonOption->features & QStyleOptionButton::DefaultButton)) {
         context.variant.set(VariantSlot::ButtonType, ButtonType::Primary);
     }
-    else if (buttonOption && (buttonOption->features & QStyleOptionButton::Flat)) {
-        context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
-    }
-    else if (
-        const auto* toolButton = qobject_cast<const QToolButton*>(widget);
-        toolButton && toolButton->autoRaise()
-    ) {
-        context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
-    }
-    else if (widget && widget->property("flat").toBool()) {
+    else if (isFlat(widget, option)) {
         context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
     }
 
