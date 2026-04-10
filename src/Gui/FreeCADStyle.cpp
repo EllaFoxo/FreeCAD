@@ -59,6 +59,8 @@
 #include <QScreen>
 #include <QCursor>
 #include <QMenuBar>
+#include <QMainWindow>
+#include <QStatusBar>
 #include <QTabBar>
 #include <QTimer>
 #include <QToolBar>
@@ -1749,6 +1751,12 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    if (element == CE_ToolBar) {
+        const StyleContext context = contextOf(widget, option);
+        drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+        return;
+    }
+
     if (element == CE_MenuBarEmptyArea) {
         // Draw the bar background for the empty area of the menu bar. Qt sets the painter
         // clip to the region not occupied by items before calling this, so we simply draw
@@ -2910,6 +2918,35 @@ QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
     }
 }
 
+/**
+ * @brief Maps a QToolBar's dock area to a Position for token resolution.
+ *
+ * Walks up the widget hierarchy to find the owning QMainWindow, then queries
+ * toolBarArea(). Returns North for toolbars not managed by a QMainWindow.
+ */
+/*static*/ Position FreeCADStyle::toolbarPositionOf(const QToolBar* toolbar)
+{
+    const QWidget* ancestor = toolbar ? toolbar->parentWidget() : nullptr;
+    while (ancestor) {
+        if (const auto* mainWindow = qobject_cast<const QMainWindow*>(ancestor)) {
+            switch (mainWindow->toolBarArea(const_cast<QToolBar*>(toolbar))) {
+                case Qt::TopToolBarArea:
+                    return Position::North;
+                case Qt::BottomToolBarArea:
+                    return Position::South;
+                case Qt::RightToolBarArea:
+                    return Position::East;
+                case Qt::LeftToolBarArea:
+                    return Position::West;
+                default:
+                    return Position::North;
+            }
+        }
+        ancestor = ancestor->parentWidget();
+    }
+    return Position::North;
+}
+
 // ─── Context building ────────────────────────────────────────────────────────
 
 static bool isFlat(const QWidget* widget, const QStyleOption* option)
@@ -2980,9 +3017,19 @@ StyleContext FreeCADStyle::contextOf(
         context.component = StyleComponent::List;
         context.element = element;
     }
-    else if (qobject_cast<const QToolBar*>(widget)) {
+    else if (const auto* toolbar = qobject_cast<const QToolBar*>(widget)) {
         context.component = StyleComponent::ToolBar;
         context.element = element;
+        context.variant.set(VariantSlot::Position, toolbarPositionOf(toolbar));
+
+        // Toolbars hosted in the status bar or as menu bar corner widgets blend into
+        // their host surface — use the Transparent variant to suppress background and border.
+        for (const QObject* ancestor = widget->parent(); ancestor; ancestor = ancestor->parent()) {
+            if (qobject_cast<const QStatusBar*>(ancestor) || qobject_cast<const QMenuBar*>(ancestor)) {
+                context.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
+                break;
+            }
+        }
     }
     else if (qobject_cast<const QMenuBar*>(widget)) {
         context.component = StyleComponent::MenuBar;

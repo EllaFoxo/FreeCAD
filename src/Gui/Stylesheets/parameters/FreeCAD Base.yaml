@@ -118,6 +118,14 @@ ToolBarItemMargin: "@Spacing.100"
 
 ToolBarButtonHeight: "reset()" # Do not enforce height for toolbar buttons
 
+ToolBarBackground: "@Background.100"
+ToolBarBorderColor: "@BaseBorderColor"
+ToolBarBorderThickness: "border_thickness(0px, bottom: 1px)" # Canonical North: bottom edge; rotated for other positions
+
+# Transparent variant — toolbars in status bar and menu bar corner (no background, no border)
+ToolBarTransparentBackground: "reset()"
+ToolBarTransparentBorderColor: "reset()"
+
 # ── Select Padding overrides
 SelectPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
 SelectSmallPadding: "@FormControlSmallPadding"

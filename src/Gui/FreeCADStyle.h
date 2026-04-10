@@ -41,6 +41,7 @@
 #include <QStyleOption>
 #include <QStyleOptionHeader>
 #include <QTabBar>
+#include <QToolBar>
 #include <QToolButton>
 
 #include "StyleParameters/Value.h"
@@ -520,6 +521,7 @@ private:
     );
 
     static StyleParameters::Position tabPositionOf(QTabBar::Shape shape);
+    static StyleParameters::Position toolbarPositionOf(const QToolBar* toolbar);
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
 

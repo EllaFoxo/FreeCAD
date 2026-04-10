@@ -31,25 +31,6 @@ QGroupBox::title {
 }
 
 
-/* QToolBar ---------------------------------------------------------------
-
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qtoolbar
-
---------------------------------------------------------------------------- */
-QToolBar {
-  background-color: @{@Background.100};
-  border: none;
-  outline: none;
-}
-
-QToolBar:horizontal {
-  border-bottom: 1px solid @BaseBorderColor;
-}
-
-QToolBar:vertical {
-  border-left: 1px solid @BaseBorderColor;
-}
-
 MRichTextEdit[floating="true"] {
   border: 1px solid @BaseBorderColor;
   border-radius: 2px;
