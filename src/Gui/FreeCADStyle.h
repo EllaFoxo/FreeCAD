@@ -24,10 +24,12 @@
 #pragma once
 
 #include <initializer_list>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 #include <FCGlobal.h>
 #include <Base/Color.h>
 #include <QBrush>
@@ -679,6 +681,9 @@ private:
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 
+    /** @brief Returns the cache bin for a widget */
+    static const QWidget* cacheBinFor(const QWidget* widget);
+
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.
     // clang-format off
@@ -769,32 +774,41 @@ private:
     template<typename T>
     class StyleContextCache
     {
-        mutable std::unordered_map<uint64_t, T> entries;
+        using ContextCache = std::unordered_map<uint64_t, T>;
+
+        mutable std::unordered_map<const QWidget*, ContextCache> bins;
 
     public:
-        const T* find(uint64_t key) const
+        const T* find(const QWidget* bin, uint64_t key) const
         {
-            const auto found = entries.find(key);
-            return found != entries.end() ? &found->second : nullptr;
+            const auto binIt = bins.find(bin);
+            if (binIt == bins.end()) {
+                return nullptr;
+            }
+            const auto found = binIt->second.find(key);
+            return found != binIt->second.end() ? &found->second : nullptr;
         }
 
-        void store(uint64_t key, T value) const
+        void store(const QWidget* bin, uint64_t key, T value) const
         {
-            entries.emplace(key, std::move(value));
+            bins[bin].emplace(key, std::move(value));
+        }
+
+        void clear(const QWidget* bin)
+        {
+            bins.erase(bin);
         }
 
         void clear()
         {
-            entries.clear();
+            bins.clear();
         }
     };
 
-    // tokenCache: key is a bit-packed uint64_t; value includes nullopt for confirmed misses.
     // Mutable so const draw methods can populate the cache.
     mutable StyleContextCache<std::optional<StyleParameters::Value>> tokenCache;
 
     // Aggregate caches for resolveBoxStyle / resolveBoxGeometry.
-    // Keyed by context-only uint64_t (property bits left zero).
     mutable StyleContextCache<BoxStyleDefinition> boxStyleCache;
     mutable StyleContextCache<BoxGeometryDefinition> boxGeometryCache;
 };

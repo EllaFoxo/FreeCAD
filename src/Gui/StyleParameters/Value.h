@@ -39,6 +39,8 @@
 #include <Base/Exception.h>
 #include <FCGlobal.h>
 
+#include <QMetaType>
+
 namespace Gui::StyleParameters
 {
 
@@ -447,5 +449,7 @@ std::optional<T> valueAs(const std::optional<Value>& value)
 }
 
 }  // namespace Gui::StyleParameters
+
+Q_DECLARE_METATYPE(Gui::StyleParameters::Value)
 
 #endif  // STYLEPARAMETERS_VALUE_H

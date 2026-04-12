@@ -32,6 +32,8 @@
 #include <Base/Bitmask.h>
 #include <FCGlobal.h>
 
+class QWidget;
+
 namespace Gui::StyleParameters
 {
 
@@ -280,6 +282,7 @@ struct GuiExport StyleContext
     StyleComponentElement element = StyleComponentElement::Root;
     VariantKey variant = {};
     Base::Flags<StyleState> state;
+
     /**
      * @brief Optional component name override, read from the widget's "component" dynamic property.
      *
@@ -289,7 +292,26 @@ struct GuiExport StyleContext
      */
     std::string componentOverride;
 
-    bool operator==(const StyleContext&) const = default;
+    /**
+     * @brief Widget being painted, if known.
+     *
+     * Deliberately excluded from equality and cache-key computation: two paints on
+     * the same widget class with identical style state are still equivalent for
+     * cached token lookups. If widget does require special handling it goes through
+     * separate cache bin.
+     */
+    const QWidget* widget = nullptr;
+
+    bool operator==(const StyleContext& other) const
+    {
+        // clang-format off
+        return component == other.component &&
+               element == other.element &&
+               variant == other.variant &&
+               state == other.state &&
+               componentOverride == other.componentOverride;
+        // clang-format on
+    }
 
     /**
      * @brief Interns componentOverride strings to compact uint8_t IDs for cache key packing.

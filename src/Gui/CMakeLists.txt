@@ -1377,6 +1377,7 @@ SET(FreeCADGui_CPP_SRCS
     StyleParameters/ParameterDescriptorRegistry.cpp
     StyleParameters/StyleContext.cpp
     StyleParameters/StyleParameterResolver.cpp
+    StyleParameters/DynamicStyleParameterProvider.cpp
 )
 SET(FreeCADGui_SRCS
     Application.h
@@ -1437,6 +1438,7 @@ SET(FreeCADGui_SRCS
     StyleParameters/Corners.h
     StyleParameters/Gradient.h
     StyleParameters/InnerShadow.h
+    StyleParameters/DynamicStyleParameterProvider.h
 )
 
 SET(FreeCADGui_SRCS

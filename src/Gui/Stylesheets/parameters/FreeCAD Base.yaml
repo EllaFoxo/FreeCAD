@@ -276,7 +276,8 @@ HeaderItemBorderRadius: "border_radius(0px)"
 # BorderThickness) are auto-rotated to South/East/West; theme authors only need
 # to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
 
-TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @Background.100, @Background.000)"
+CurrentPaneBackground: "@TabWidgetBackground" # default for the dynamic property
+TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @CurrentPaneBackground, @Background.000)"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
