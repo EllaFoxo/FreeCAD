@@ -676,6 +676,7 @@ protected:
 
         QHBoxLayout* layout = new QHBoxLayout(notificationsWidget);
         notificationsWidget->setLayout(layout);
+        layout->setContentsMargins({});
 
         tableWidget = new QTreeWidget(parent);
         tableWidget->setColumnCount(3);
