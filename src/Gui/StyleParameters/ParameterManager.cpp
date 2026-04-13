@@ -22,7 +22,6 @@
  ***************************************************************************/
 
 #include "ParameterManager.h"
-#include "DynamicStyleParameterProvider.h"
 #include "Parser.h"
 
 #include <QFile>
@@ -30,13 +29,8 @@
 #include <yaml-cpp/yaml.h>
 #include <fmt/ranges.h>
 
-#include <QApplication>
-#include <QEvent>
-#include <QObject>
 #include <QRegularExpression>
 #include <QString>
-#include <QVariant>
-#include <QWidget>
 #include <ranges>
 #include <utility>
 #include <variant>
@@ -47,67 +41,6 @@ FC_LOG_LEVEL_INIT("Gui", true, true)
 
 namespace Gui::StyleParameters
 {
-
-/**
- * App-level event filter that intercepts QEvent::Polish on every widget and
- * drives override computation in ParameterManager. Installing on QApplication
- * means ParameterManager owns the full lifecycle — FreeCADStyle only needs to
- * call clearOverrideCache on unpolish.
- */
-class OverrideComputeEventListener: public QObject
-{
-    Q_OBJECT
-
-public:
-    explicit OverrideComputeEventListener(ParameterManager* manager)
-        : QObject(nullptr)
-        , _manager(manager)
-    {
-        QApplication::instance()->installEventFilter(this);
-    }
-
-    ~OverrideComputeEventListener() override
-    {
-        if (QApplication::instance()) {
-            QApplication::instance()->removeEventFilter(this);
-        }
-    }
-
-    FC_DEFAULT_COPY_MOVE(OverrideComputeEventListener);
-
-    bool eventFilter(QObject* obj, QEvent* event) override
-    {
-        if (event->type() == QEvent::Polish) {
-            if (auto* widget = qobject_cast<QWidget*>(obj)) {
-                _manager->ensureOverridesAreComputed(widget);
-
-                disconnect(
-                    widget,
-                    &QObject::destroyed,
-                    this,
-                    &OverrideComputeEventListener::handleWidgetDestroy
-                );
-                connect(
-                    widget,
-                    &QObject::destroyed,
-                    this,
-                    &OverrideComputeEventListener::handleWidgetDestroy
-                );
-            }
-        }
-
-        return false;
-    }
-
-public Q_SLOTS:
-    void handleWidgetDestroy(QObject* widget)
-    {
-        _manager->clearOverrideCache(static_cast<QWidget*>(widget));
-    }
-
-private:
-    ParameterManager* _manager;
-};
 
 namespace
 {
@@ -491,8 +424,6 @@ void YamlParameterSource::flush()
 }
 
 ParameterManager::ParameterManager() = default;
-ParameterManager::~ParameterManager() = default;
-ParameterManager::ParameterManager(ParameterManager&&) noexcept = default;
 
 void ParameterManager::setResolver(StyleParameterResolver* resolver)
 {
@@ -512,8 +443,6 @@ const ParameterDescriptorRegistry& ParameterManager::descriptorRegistry() const
 void ParameterManager::reload()
 {
     _resolved.clear();
-    _widgetResolved.clear();
-    _widgetOverrides.clear();
     if (_resolver) {
         _resolver->refresh();
     }
@@ -625,31 +554,15 @@ std::optional<Value> ParameterManager::resolve(const std::string& name) const
 
 std::optional<Value> ParameterManager::resolve(const std::string& name, ResolveContext context) const
 {
-    if (context.visited.contains(name)) {
-        Base::Console().warning("The style parameter '%s' contains circular-reference.\n", name);
-        return expression(name);
-    }
-
-    // Widget-aware path: the widget's override set (computed at polish time)
-    // drives both resolution and caching. Once a widget owns any override
-    // every resolution in its context lands in the per-widget cache so
-    // widget-scoped values never leak into the global _resolved map.
-    if (context.widget && hasOverrides(context.widget)) {
-        const auto it = _widgetOverrides.find(context.widget);
-        if (it != _widgetOverrides.end() && !it->second.empty()) {
-            return resolveForWidget(name, std::move(context), it->second);
-        }
-    }
-
-    return resolveFlat(name, std::move(context));
-}
-
-std::optional<Value> ParameterManager::resolveFlat(const std::string& name, ResolveContext context) const
-{
     std::optional<Parameter> maybeParameter = this->parameter(name);
 
     if (!maybeParameter) {
         return std::nullopt;
+    }
+
+    if (context.visited.contains(name)) {
+        Base::Console().warning("The style parameter '%s' contains circular-reference.\n", name);
+        return expression(name);
     }
 
     const Parameter& token = *maybeParameter;
@@ -667,48 +580,6 @@ std::optional<Value> ParameterManager::resolveFlat(const std::string& name, Reso
     }
 
     return _resolved[token.name];
-}
-
-std::optional<Value> ParameterManager::resolveForWidget(
-    const std::string& name,
-    ResolveContext context,
-    const std::unordered_map<std::string, Value>& overrides
-) const
-{
-    auto& widgetCache = _widgetResolved[context.widget];
-    if (const auto it = widgetCache.find(name); it != widgetCache.end()) {
-        return it->second;
-    }
-
-    // Direct override wins — no source lookup, no expression evaluation.
-    if (const auto it = overrides.find(name); it != overrides.end()) {
-        widgetCache[name] = it->second;
-        return it->second;
-    }
-
-    // Normal source lookup + expression evaluation, but cached per widget.
-    // Nested @refs recurse through the same widget-bearing context (Parser
-    // forwards ResolveContext through evaluation), so they too land in the
-    // widget cache and never pollute _resolved.
-    std::optional<Parameter> maybeParameter = this->parameter(name);
-    if (!maybeParameter) {
-        widgetCache[name] = std::nullopt;
-        return std::nullopt;
-    }
-
-    const Parameter& token = *maybeParameter;
-    context.visited.insert(token.name);
-    std::optional<Value> result;
-    try {
-        result = evaluate(token.value, context);
-    }
-    catch (Base::Exception&) {
-        result = replacePlaceholders(token.value, context);
-    }
-    context.visited.erase(token.name);
-
-    widgetCache[name] = result;
-    return result;
 }
 
 Value ParameterManager::evaluate(const std::string& expression, ResolveContext context) const
@@ -738,113 +609,4 @@ std::list<ParameterSource*> ParameterManager::sources() const
     return _sources;
 }
 
-namespace
-{
-/// Marker dynamic property set by FreeCADStyle::polish after buildOverrides
-/// finds at least one override for the widget. Read by hasApplicableProviders
-/// as a constant-time gate on the resolve hot path — no provider iteration.
-constexpr const char* overridesMarkerProperty = "hasStyleOverrides";
-}  // namespace
-
-void ParameterManager::addDynamicProvider(std::shared_ptr<DynamicStyleParameterProvider> provider)
-{
-    if (!provider) {
-        return;
-    }
-    const int priority = provider->priority();
-    const auto insertionPoint
-        = std::ranges::upper_bound(_dynamicProviders, priority, {}, [](const auto& existing) {
-              return existing->priority();
-          });
-    _dynamicProviders.insert(insertionPoint, std::move(provider));
-
-    if (!_polishObserver) {
-        _polishObserver = std::make_unique<OverrideComputeEventListener>(this);
-    }
-
-    // Per-widget state was built from a stale provider list; drop it so the
-    // next polish sweep rebuilds correctly. Global _resolved is unaffected
-    // because widget-scoped values never land there.
-    _widgetResolved.clear();
-    _widgetOverrides.clear();
-}
-
-void ParameterManager::removeDynamicProvider(const DynamicStyleParameterProvider* provider)
-{
-    const auto erased = std::erase_if(_dynamicProviders, [provider](const auto& stored) {
-        return stored.get() == provider;
-    });
-
-    if (erased > 0) {
-        _widgetResolved.clear();
-        _widgetOverrides.clear();
-    }
-}
-
-void ParameterManager::ensureOverridesAreComputed(const QWidget* widget) const
-{
-    if (!widget) {
-        return;
-    }
-
-    if (_widgetOverrides.contains(widget)) {
-        return;
-    }
-
-    // Merge in ascending priority: first writer wins so lower-priority
-    // providers (explicit user overrides) beat higher-priority computed
-    // fallbacks on name collisions.
-    std::unordered_map<std::string, Value> merged;
-    for (const auto& provider : _dynamicProviders) {
-        for (auto&& [name, value] : provider->overridesFor(widget)) {
-            merged.try_emplace(name, std::move(value));
-        }
-    }
-
-    // The const_cast is considered bad practice in general, but here we consider the marker
-    // as essentially `mutable` property as it is used to improve performance.
-    const_cast<QWidget*>(widget)->setProperty(overridesMarkerProperty, !merged.empty());
-
-    if (merged.empty()) {
-        _widgetOverrides.erase(widget);
-        _widgetResolved.erase(widget);
-        return;
-    }
-
-    _widgetOverrides[widget] = std::move(merged);
-    _widgetResolved.erase(widget);  // previously cached evals may be stale
-}
-
-bool ParameterManager::hasOverrides(const QWidget* widget) const
-{
-    if (!widget) {
-        return false;
-    }
-    return widget->property(overridesMarkerProperty).toBool();
-}
-
-StyleParameterOverrides ParameterManager::getOverrides(const QWidget* widget) const
-{
-    ensureOverridesAreComputed(widget);
-
-    if (!hasOverrides(widget)) {
-        return {};
-    }
-
-    return _widgetOverrides.at(widget);
-}
-
-void ParameterManager::clearOverrideCache(const QWidget* widget)
-{
-    // The const_cast is considered bad practice in general, but here we are removing the marker
-    // used for improving performance that we essentially consider as part of caching strategy and
-    // hence safe to mutate.
-    const_cast<QWidget*>(widget)->setProperty(overridesMarkerProperty, QVariant {});
-
-    _widgetResolved.erase(widget);
-    _widgetOverrides.erase(widget);
-}
-
 }  // namespace Gui::StyleParameters
-
-#include "ParameterManager.moc"

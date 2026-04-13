@@ -285,9 +285,6 @@ struct ApplicationP
         prefPackManager = new PreferencePackManager();
         // Create the Style Parameter Manager
         styleParameterManager = new StyleParameters::ParameterManager();
-
-        styleParameterManager->addDynamicProvider<StyleParameters::DynamicPropertyProvider>();
-        styleParameterManager->addDynamicProvider<StyleParameters::ComputedBackgroundProvider>();
     }
 
     ~ApplicationP()

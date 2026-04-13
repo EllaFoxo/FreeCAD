@@ -27,7 +27,6 @@
 #include <QColor>
 #include <QLinearGradient>
 #include <QMarginsF>
-#include <QMetaType>
 #include <QRadialGradient>
 #include <App/Material.h>
 #include <Base/Console.h>
@@ -520,59 +519,6 @@ inline QBrush convertTo<QBrush, Gui::StyleParameters::Value>(const Gui::StylePar
     }
 
     return Qt::NoBrush;
-}
-
-template<>
-inline Gui::StyleParameters::Value convertTo<Gui::StyleParameters::Value, QBrush>(const QBrush& brush)
-{
-    using namespace Gui::StyleParameters;
-
-    auto makeStopsElement = [](const QGradientStops& qtStops) {
-        Tuple stopsTuple;
-        for (const auto& stop : qtStops) {
-            Tuple stopEntry({
-                Tuple::Element::unnamed(Numeric {.value = stop.first, .unit = ""}),
-                Tuple::Element::unnamed(Color::fromValue(stop.second)),
-            });
-            stopsTuple.elements.push_back(Tuple::Element::unnamed(std::move(stopEntry)));
-        }
-        return Tuple::Element::named("stops", std::move(stopsTuple));
-    };
-
-    auto makeGeometryElement = [](const char* name, double value) {
-        return Tuple::Element::named(name, Numeric {.value = value, .unit = ""});
-    };
-
-    if (brush.style() == Qt::LinearGradientPattern) {
-        const auto* gradient = static_cast<const QLinearGradient*>(brush.gradient());
-        return Tuple(
-            {
-                makeGeometryElement("x1", gradient->start().x()),
-                makeGeometryElement("y1", gradient->start().y()),
-                makeGeometryElement("x2", gradient->finalStop().x()),
-                makeGeometryElement("y2", gradient->finalStop().y()),
-                makeStopsElement(gradient->stops()),
-            },
-            TupleKind::LinearGradient
-        );
-    }
-
-    if (brush.style() == Qt::RadialGradientPattern) {
-        const auto* gradient = static_cast<const QRadialGradient*>(brush.gradient());
-        return Tuple(
-            {
-                makeGeometryElement("cx", gradient->center().x()),
-                makeGeometryElement("cy", gradient->center().y()),
-                makeGeometryElement("radius", gradient->radius()),
-                makeGeometryElement("fx", gradient->focalPoint().x()),
-                makeGeometryElement("fy", gradient->focalPoint().y()),
-                makeStopsElement(gradient->stops()),
-            },
-            TupleKind::RadialGradient
-        );
-    }
-
-    return Color::fromValue(brush.color());
 }
 
 }  // namespace Base

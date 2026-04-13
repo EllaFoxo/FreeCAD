@@ -23,17 +23,11 @@
 
 #pragma once
 
-#include "DynamicStyleParameterProvider.h"
-
-
 #include <list>
 #include <map>
-#include <memory>
 #include <optional>
 #include <set>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 #include <App/Application.h>
 #include <Base/Bitmask.h>
@@ -42,8 +36,6 @@
 #include "ParameterDescriptorRegistry.h"
 #include "StyleParameterResolver.h"
 #include "Value.h"
-
-class QWidget;
 
 // That macro uses inline const because some older compilers to not properly support constexpr
 // for std::string. It should be changed into static constepxr once we migrate to newer compiler.
@@ -58,9 +50,6 @@ namespace Gui::StyleParameters
 
 // Forward declaration for Parser
 class Parser;
-
-// Forward declaration for dynamic providers
-class DynamicStyleParameterProvider;
 
 /**
  * @brief A structure to define parameters which can be referenced in the code.
@@ -381,68 +370,23 @@ private:
  * - Caching resolved values for performance
  * - Handling circular references
  */
-// Forward-declared so ParameterManager can own it via unique_ptr without
-// pulling QObject into this header. Defined in ParameterManager.cpp.
-class OverrideComputeEventListener;
-
 class GuiExport ParameterManager
 {
+    std::list<ParameterSource*> _sources;
+    mutable std::map<std::string, Value> _resolved;
+
+    StyleParameterResolver* _resolver = nullptr;
+    ParameterDescriptorRegistry _descriptorRegistry;
+
 public:
     struct ResolveContext
     {
         /// Names of parameters currently being resolved.
         std::set<std::string> visited;
-
-        /// Widget this resolution is being performed for, if any.
-        const QWidget* widget {nullptr};
-
-        // User-provided default constructor — avoids a clang NSDMI/default-arg
-        // parsing bug where `ResolveContext context = {}` on later member
-        // functions cannot see a default member initializer declared above.
-        ResolveContext()
-        {}
     };
 
-private:
-    std::list<ParameterSource*> _sources;
-    mutable std::map<std::string, Value> _resolved;
-
-    /// Per-widget resolution cache. Populated only for widgets that carry
-    /// at least one provider-supplied override (see _widgetOverrides). Keyed
-    /// on raw pointer; the pointer is never dereferenced here, invalidation
-    /// happens via clearWidgetCache() (called from FreeCADStyle::unpolish)
-    /// and reload().
-    mutable std::unordered_map<const QWidget*, std::unordered_map<std::string, std::optional<Value>>>
-        _widgetResolved;
-
-    /// Merged overrides per widget, produced by buildOverrides() at polish
-    /// time. Empty entry (or missing entry) means "no dynamic overrides apply
-    /// to this widget" — resolve() then takes the fast flat path.
-    mutable std::unordered_map<const QWidget*, std::unordered_map<std::string, Value>> _widgetOverrides;
-
-    /// Dynamic providers, sorted by ascending priority.
-    std::vector<std::shared_ptr<DynamicStyleParameterProvider>> _dynamicProviders;
-
-    /// QObject event-filter that intercepts QEvent::Polish on every widget and
-    /// triggers ensureOverridesAreComputed. Created lazily on first addDynamicProvider call.
-    std::unique_ptr<OverrideComputeEventListener> _polishObserver;
-
-    StyleParameterResolver* _resolver = nullptr;
-    ParameterDescriptorRegistry _descriptorRegistry;
-
-    std::optional<Value> resolveFlat(const std::string& name, ResolveContext context) const;
-    std::optional<Value> resolveForWidget(
-        const std::string& name,
-        ResolveContext context,
-        const std::unordered_map<std::string, Value>& overrides
-    ) const;
-
-public:
     ParameterManager();
-    ~ParameterManager();
-
-    ParameterManager(ParameterManager&&) noexcept;
-
+    ParameterManager(ParameterManager&&) = default;
     FC_DISABLE_COPY(ParameterManager);
 
     /**
@@ -570,62 +514,6 @@ public:
      * @return List of parameter sources in order of registration
      */
     std::list<ParameterSource*> sources() const;
-
-    /**
-     * @brief Registers a dynamic style parameter provider.
-     *
-     * Providers are consulted at polish time (via buildOverrides) to produce
-     * the per-widget override set. Insertion is priority-ordered (lower
-     * priority runs first and wins on name collision). All per-widget state
-     * is cleared so existing values do not mask the new provider.
-     */
-    void addDynamicProvider(std::shared_ptr<DynamicStyleParameterProvider> provider);
-
-    /**
-     * @brief Utility method for easier addition of dynamic providers.
-     *
-     * @see addDynamicProvider
-     */
-    template<typename T, typename... Args>
-    void addDynamicProvider(Args&&... args)
-    {
-        addDynamicProvider(std::make_shared<T>(std::forward<Args>(args)...));
-    }
-
-    /**
-     * @brief Unregisters a previously-registered provider by raw pointer identity.
-     */
-    void removeDynamicProvider(const DynamicStyleParameterProvider* provider);
-
-    /**
-     * @brief Builds and caches the merged override set for a widget.
-     *
-     * Iterates the registered providers, merges their overridesFor(widget)
-     * results (lower priority wins), and stores the outcome in the per-widget
-     * cache. Intended to be called from FreeCADStyle::polish.
-     */
-    void ensureOverridesAreComputed(const QWidget* widget) const;
-
-    /**
-     * @brief Whether the widget has any provider-supplied overrides.
-     *
-     * Reads the marker dynamic property set by the style's polish hook after
-     * buildOverrides() — no provider iteration or map walk in the hot path.
-     */
-    bool hasOverrides(const QWidget* widget) const;
-
-
-    /**
-     * @brief returns all overrides of a given widget.
-     */
-    StyleParameterOverrides getOverrides(const QWidget* widget) const;
-
-    /**
-     * @brief Drops per-widget override and resolution entries for the widget.
-     *
-     * Call from FreeCADStyle::unpolish so entries die with the widget.
-     */
-    void clearOverrideCache(const QWidget* widget);
 };
 
 }  // namespace Gui::StyleParameters

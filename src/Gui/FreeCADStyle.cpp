@@ -46,10 +46,13 @@
 #include <QTextEdit>
 #include <QPainterPath>
 #include <QStyleOption>
+#include <QAbstractItemView>
 #include <QCheckBox>
 #include <QHeaderView>
 #include <QRadioButton>
 #include <QListView>
+#include <QStyleOptionHeader>
+#include <QStyleOptionViewItem>
 #include <QTreeView>
 #include <QPointer>
 #include <QScrollBar>
@@ -59,6 +62,7 @@
 #include <QMainWindow>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QTimer>
 #include <QToolBar>
 
 #include <Base/Color.h>
@@ -2465,7 +2469,6 @@ void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
 void FreeCADStyle::polish(QWidget* widget)
 {
     QProxyStyle::polish(widget);
-
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
         widget->installEventFilter(this);
@@ -2570,20 +2573,13 @@ void FreeCADStyle::unpolish(QWidget* widget)
     if (qobject_cast<QTabBar*>(widget)) {
         widget->removeEventFilter(this);
     }
-
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
         restoreComboDropdownDefaults(comboBox);
     }
-
     if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(widget)) {
         scrollArea->removeEventFilter(this);
         scrollArea->clearMask();
     }
-
-    tokenCache.clear(widget);
-    boxStyleCache.clear(widget);
-    boxGeometryCache.clear(widget);
-
     QProxyStyle::unpolish(widget);
 }
 
@@ -3195,11 +3191,6 @@ StyleContext FreeCADStyle::contextOf(
         }
     }
 
-    // Widget pointer rides along for dynamic provider queries. Not hashed into
-    // cacheKey() — two paints on different instances of the same widget class
-    // still share cache entries when no provider claims them.
-    context.widget = widget;
-
     return context;
 }
 
@@ -3207,29 +3198,24 @@ StyleContext FreeCADStyle::contextOf(
 
 std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StyleProperty property) const
 {
-    auto* manager = Application::Instance->styleParameterManager();
-
     const uint64_t key = context.cacheKey(property);
-    const QWidget* cacheBin = cacheBinFor(context.widget);
 
-    if (const auto* cached = tokenCache.find(cacheBin, key)) {
+    if (const auto* cached = tokenCache.find(key)) {
         return *cached;
     }
+
+    auto* manager = Application::Instance->styleParameterManager();
 
     const std::string propertySuffix(propertyString(property));
     std::optional<Value> result;
 
-    StyleParameters::ParameterManager::ResolveContext resolveContext;
-    resolveContext.widget = context.widget;
-
     for (const std::string& prefix : manager->descriptorRegistry().buildPrefixes(context)) {
-        const std::string candidate = prefix + propertySuffix;
-
         // Use the flat resolver per prefix: the prefix list IS the inheritance
-        // walk, so name-based chain synthesis must not run here. Widget-aware
-        // provider consultation (for this candidate and every nested @ref)
-        // happens inside ParameterManager::resolve.
-        result = manager->resolve(candidate, resolveContext);
+        // walk, so name-based chain synthesis must not run here.
+        result = manager->resolve(
+            prefix + propertySuffix,
+            StyleParameters::ParameterManager::ResolveContext {}
+        );
         if (!result) {
             continue;
         }
@@ -3240,17 +3226,15 @@ std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StylePro
         break;
     }
 
-    tokenCache.store(cacheBin, key, result);
-
+    tokenCache.store(key, result);
     return result;
 }
 
 FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContext& context) const
 {
     const uint64_t key = context.cacheKey();
-    const QWidget* cacheBin = cacheBinFor(context.widget);
 
-    if (const auto* cached = boxStyleCache.find(cacheBin, key)) {
+    if (const auto* cached = boxStyleCache.find(key)) {
         return *cached;
     }
 
@@ -3295,16 +3279,15 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
         }
     }
 
-    boxStyleCache.store(cacheBin, key, result);
+    boxStyleCache.store(key, result);
     return result;
 }
 
 FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const StyleContext& context) const
 {
     const uint64_t key = context.cacheKey();
-    const QWidget* cacheBin = cacheBinFor(context.widget);
 
-    if (const auto* cached = boxGeometryCache.find(cacheBin, key)) {
+    if (const auto* cached = boxGeometryCache.find(key)) {
         return *cached;
     }
 
@@ -3346,13 +3329,8 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
         result.iconSpacing = static_cast<int>(*spacing);
     }
 
-    boxGeometryCache.store(cacheBin, key, result);
+    boxGeometryCache.store(key, result);
     return result;
-}
-
-const QWidget* FreeCADStyle::cacheBinFor(const QWidget* widget)
-{
-    return Application::Instance->styleParameterManager()->hasOverrides(widget) ? widget : nullptr;
 }
 
 void FreeCADStyle::clearTokenCache()
