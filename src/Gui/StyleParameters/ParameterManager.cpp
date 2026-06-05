@@ -423,7 +423,10 @@ void YamlParameterSource::flush()
     out << QString::fromStdString(YAML::Dump(root));
 }
 
-ParameterManager::ParameterManager() = default;
+ParameterManager::ParameterManager()
+{
+    populateBuiltinDescriptors(_descriptorRegistry);
+}
 
 void ParameterManager::setResolver(StyleParameterResolver* resolver)
 {

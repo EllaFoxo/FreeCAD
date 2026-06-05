@@ -27,6 +27,7 @@
 #include "DlgThemeEditor.h"
 #include "ui_DlgThemeEditor.h"
 #include "BitmapFactory.h"
+#include "StyleParameters/TokenExporter.h"
 
 #include <Utilities.h>
 #include <Base/ServiceProvider.h>
@@ -35,6 +36,9 @@
 #include <StyleParameters/Gradient.h>
 
 #include <ranges>
+#include <QDialogButtonBox>
+#include <QFile>
+#include <QFileDialog>
 #include <QGraphicsEffect>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -425,8 +429,10 @@ public:
             painter->fillRect(option.rect, headerBackgroundColor);
             QStyledItemDelegate::paint(painter, option, index);
         }
-        else if (index.column() == StyleParametersModel::ParameterPreview
-                 && !index.data(Qt::UserRole).value<QPixmap>().isNull()) {
+        else if (
+            index.column() == StyleParametersModel::ParameterPreview
+            && !index.data(Qt::UserRole).value<QPixmap>().isNull()
+        ) {
             paintGradientPreview(painter, opt, index);
         }
         else {
@@ -483,6 +489,11 @@ StyleParametersModel::StyleParametersModel(
 }
 
 StyleParametersModel::~StyleParametersModel() = default;
+
+const StyleParameters::ParameterManager& StyleParametersModel::parameterManager() const
+{
+    return *manager;
+}
 
 std::list<StyleParameters::Parameter> StyleParametersModel::all() const
 {
@@ -954,6 +965,15 @@ DlgThemeEditor::DlgThemeEditor(QWidget* parent)
 
     connect(ui->buttonBox, &QDialogButtonBox::clicked, this, &DlgThemeEditor::handleButtonClick);
 
+    auto* exportButton = ui->buttonBox->addButton(tr("Export Tokens..."), QDialogButtonBox::ActionRole);
+    connect(exportButton, &QPushButton::clicked, this, &DlgThemeEditor::onExportTokens);
+
+    // Move "Export Tokens..." to the left side of the button box.
+    if (auto* boxLayout = qobject_cast<QHBoxLayout*>(ui->buttonBox->layout())) {
+        boxLayout->removeWidget(exportButton);
+        boxLayout->insertWidget(0, exportButton);
+    }
+
     connect(
         ui->tokensTreeView,
         &TokenTreeView::requestRemove,
@@ -978,6 +998,28 @@ DlgThemeEditor::DlgThemeEditor(QWidget* parent)
 }
 
 DlgThemeEditor::~DlgThemeEditor() = default;
+
+void DlgThemeEditor::onExportTokens()
+{
+    const QString path = QFileDialog::getSaveFileName(
+        this,
+        tr("Export Design Tokens"),
+        "tokens.json",
+        tr("Design Tokens (*.json)")
+    );
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const StyleParameters::TokenExporter exporter(model->parameterManager());
+    const QString json = exporter.exportW3CTokens();
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        return;
+    }
+    file.write(json.toUtf8());
+}
 
 void DlgThemeEditor::handleButtonClick(QAbstractButton* button)
 {

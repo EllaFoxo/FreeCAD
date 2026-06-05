@@ -90,6 +90,11 @@ struct GuiExport Numeric
 
     Numeric operator/(const Numeric& rhs) const;
     Numeric operator*(const Numeric& rhs) const;
+
+    bool operator==(const Numeric& rhs) const
+    {
+        return value == rhs.value && unit == rhs.unit;
+    }
     /// @}
 
     /**
