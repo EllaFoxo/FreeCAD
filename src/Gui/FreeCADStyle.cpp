@@ -589,7 +589,7 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
 
     const StyleContext context = element(StyleComponentElement::Root);
 
-    const std::map<PixelMetric, std::pair<StyleComponentElement, StyleProperty>> metrics = {
+    static const std::map<PixelMetric, std::pair<StyleComponentElement, StyleProperty>> metrics = {
         {PM_ExclusiveIndicatorWidth, {StyleComponentElement::Indicator, Width}},
         {PM_ExclusiveIndicatorHeight, {StyleComponentElement::Indicator, Height}},
         {PM_IndicatorWidth, {StyleComponentElement::Indicator, Width}},
