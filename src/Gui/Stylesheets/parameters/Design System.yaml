@@ -63,3 +63,11 @@ Background:
   200: "@Neutral.200"
 
 BaseTextColor: "@Contrast.900"
+
+WarningColor: "@Orange.700"
+NegativeColor: "@Red.700"
+PositiveColor: "@Green.800"
+
+AxisXColor: "@Red.700"
+AxisYColor: "@Green.700"
+AxisZColor: "@Blue.700"
