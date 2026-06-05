@@ -598,6 +598,7 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         {PM_RadioButtonLabelSpacing, {StyleComponentElement::Indicator, Spacing}},
         {PM_MenuButtonIndicator, {StyleComponentElement::Menu, Width}},
         {PM_ToolBarItemMargin, {StyleComponentElement::Item, Margin}},
+        {PM_ToolBarFrameWidth, {StyleComponentElement::Root, FrameWidth}},
         {PM_ToolBarItemSpacing, {StyleComponentElement::Item, Spacing}},
         {PM_MenuBarItemSpacing, {StyleComponentElement::Item, Spacing}},
         {PM_TabCloseIndicatorWidth, {StyleComponentElement::CloseButton, Width}},

@@ -159,6 +159,12 @@ WorkbenchTabWidget::WorkbenchTabWidget(WorkbenchGroup* aGroup, QWidget* parent)
     connect(tabBar, &QTabBar::currentChanged, this, &WorkbenchTabWidget::handleTabChange);
 
     if (auto toolBar = qobject_cast<QToolBar*>(parent)) {
+        // Give the toolbar the WbToolBar token namespace, whose ToolBarItemMargin/ToolBarFrameWidth
+        // resolve to zero, so the selector sits flush. Otherwise QToolBarLayout's
+        // updateMarginAndSpacing() rebuilds the contents margins from those metrics on every
+        // invalidate (e.g. a theme re-polish), re-padding the selector.
+        toolBar->setProperty("component", QStringLiteral("WbToolBar"));
+
         connect(toolBar, &QToolBar::topLevelChanged, this, &WorkbenchTabWidget::updateLayout);
         connect(toolBar, &QToolBar::orientationChanged, this, &WorkbenchTabWidget::updateLayout);
     }
@@ -228,6 +234,8 @@ void WorkbenchTabWidget::updateLayout()
     tabBar->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Preferred);
 
     if (auto toolBar = qobject_cast<QToolBar*>(parentWidget())) {
+        // Zero the margins for the current layout pass; the WbToolBar token namespace (set in the
+        // constructor) keeps them zero across later QToolBarLayout invalidations.
         toolBar->layout()->setContentsMargins({});
         if (toolBar->isFloating()) {
             setToolBarArea(

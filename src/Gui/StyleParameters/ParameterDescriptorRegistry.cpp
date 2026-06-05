@@ -178,6 +178,7 @@ const std::map<StyleProperty, std::string_view> propertyNames = {
     {StyleProperty::IconColor,          "IconColor"},
     {StyleProperty::BackgroundEffect,   "BackgroundEffect"},
     {StyleProperty::BorderColorEffect,  "BorderColorEffect"},
+    {StyleProperty::FrameWidth,         "FrameWidth"},
 };
 // clang-format on
 

@@ -264,6 +264,7 @@ enum class StyleProperty : uint8_t
     IconColor,
     BackgroundEffect,
     BorderColorEffect,
+    FrameWidth,
     // Add new properties before COUNT
     COUNT,
 };

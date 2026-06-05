@@ -126,6 +126,12 @@ ToolBarBorderThickness: "border_thickness(0px, bottom: 1px)" # Canonical North: 
 ToolBarTransparentBackground: "reset()"
 ToolBarTransparentBorderColor: "reset()"
 
+# WbToolBar — the toolbar hosting the workbench selector sits flush with no layout margins so the
+# tabs span its full extent. QToolBarLayout rebuilds its contents margins from ToolBarItemMargin +
+# ToolBarFrameWidth on every invalidate, so both must resolve to zero here.
+WbToolBarItemMargin: 0px
+WbToolBarFrameWidth: 0px
+
 # ── Select Padding overrides
 SelectPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
 SelectSmallPadding: "@FormControlSmallPadding"
