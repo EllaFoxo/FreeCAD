@@ -36,8 +36,9 @@ class Property;
 
 namespace Gui
 {
+class GeometrySelectorWidget;
 class ViewProvider;
-}
+}  // namespace Gui
 
 namespace PartDesignGui
 {
@@ -57,6 +58,8 @@ private:
     void onModeChanged(int index, Side side) override;
     void translateModeList(QComboBox* box, int index) override;
     void updateUI(Side side) override;
+
+    Gui::GeometrySelectorWidget* profileSelector {nullptr};
 };
 
 /// simulation dialog for the TaskView

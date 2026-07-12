@@ -24,9 +24,16 @@
 
 #include <Precision.hxx>
 
+#include <QLabel>
+#include <QVBoxLayout>
 
+#include <Gui/GeometrySelection.h>
+#include <Gui/GeometrySelectorWidget.h>
 #include <Mod/PartDesign/App/FeaturePad.h>
+#include <Mod/PartDesign/App/FeatureSketchBased.h>
 
+#include "EnumFlags.h"
+#include "ReferenceSelection.h"
 #include "ui_TaskPadPocketParameters.h"
 #include "TaskPadParameters.h"
 
@@ -58,6 +65,46 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
     ui->taperEdit2->setParamGrpPath(QByteArray("User parameter:BaseApp/History/PadTaperAngle2"));
 
     setupDialog();
+
+    // Profile selector — inserted above the shared extrude parameters proxy
+    profileSelector = new Gui::GeometrySelectorWidget(Gui::GeometryQuantity::Single, this);
+    auto* core = profileSelector->selection();
+
+    core->setSelectionGate([this]() -> std::unique_ptr<Gui::SelectionGate> {
+        auto* profileBased = getObject<PartDesign::ProfileBased>();
+        App::DocumentObject* base = profileBased ? profileBased->getBaseObject(/*silent=*/true)
+                                                 : nullptr;
+        return std::make_unique<PartDesignGui::ReferenceSelection>(
+            base,
+            PartDesignGui::AllowSelection::WHOLE | PartDesignGui::AllowSelection::FACE
+        );
+    });
+
+    core->bind(getObject<PartDesign::ProfileBased>()->Profile);
+
+    connect(core, &Gui::GeometrySelection::selectionModeEntered, this, [this] {
+        auto* profileBased = getObject<PartDesign::ProfileBased>();
+        startReferenceSelection(
+            profileBased,
+            profileBased ? profileBased->getBaseObject(/*silent=*/true) : nullptr
+        );
+    });
+    connect(core, &Gui::GeometrySelection::selectionModeExited, this, [this] {
+        auto* profileBased = getObject<PartDesign::ProfileBased>();
+        finishReferenceSelection(
+            profileBased,
+            profileBased ? profileBased->getBaseObject(/*silent=*/true) : nullptr
+        );
+    });
+    connect(core, &Gui::GeometrySelection::referencesChanged, this, [this] { recomputeFeature(); });
+
+    // Wrap selector under a "Profile" label and insert it at the top of the task panel
+    auto* profileContainer = new QWidget(this);
+    auto* profileLayout = new QVBoxLayout(profileContainer);
+    profileLayout->setContentsMargins(0, 0, 0, 0);
+    profileLayout->addWidget(new QLabel(tr("Profile"), profileContainer));
+    profileLayout->addWidget(profileSelector);
+    groupLayout()->insertWidget(0, profileContainer);
 
     // if it is a newly created object use the last value of the history
     if (newObj) {
