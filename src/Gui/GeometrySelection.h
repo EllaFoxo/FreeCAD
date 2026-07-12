@@ -9,6 +9,8 @@
 
 #include <QObject>
 
+#include <fastsignals/signal.h>
+
 #include <FCGlobal.h>
 #include <Gui/Selection/Selection.h>
 
@@ -16,8 +18,10 @@ class QString;
 
 namespace App
 {
+class Document;
 class DocumentObject;
-}
+class Property;
+}  // namespace App
 
 namespace Gui
 {
@@ -88,6 +92,22 @@ public:
         return _selecting;
     }
 
+    void bind(App::Property& prop);
+    void unbind();
+    bool isBound() const
+    {
+        return _boundProperty != nullptr;
+    }
+    void setAutoApply(bool on)
+    {
+        _autoApply = on;
+    }
+    bool autoApply() const
+    {
+        return _autoApply;
+    }
+    bool apply();
+
 Q_SIGNALS:
     void referencesChanged();
     void selectionModeEntered();
@@ -108,6 +128,14 @@ protected:
 private:
     GateFactory _gateFactory;
     bool _selecting = false;
+
+    App::Property* _boundProperty = nullptr;
+    bool _autoApply = true;
+    bool _writingBack = false;
+    fastsignals::scoped_connection _propertyChangedConnection;
+
+    void reloadFromProperty();
+    bool writeToProperty();
 };
 
 }  // namespace Gui

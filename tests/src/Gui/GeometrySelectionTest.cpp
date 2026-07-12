@@ -7,6 +7,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/PropertyLinks.h>
 #include <Gui/GeometrySelection.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
@@ -219,4 +220,50 @@ TEST_F(GeometrySelectionTest, startStopTogglesObserverAttachment)
 
     selection.stopSelecting();
     EXPECT_FALSE(selection.isSelectionAttached());
+}
+
+TEST_F(GeometrySelectionTest, bindReadsInitialPropertyValue)
+{
+    auto* prop = static_cast<App::PropertyLinkSub*>(
+        _objectA->addDynamicProperty("App::PropertyLinkSub", "TestLink")
+    );
+    prop->setValue(_objectB, std::vector<std::string> {"Edge1"});
+
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.bind(*prop);
+
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectB);
+    EXPECT_EQ(selection.references().front().subName, "Edge1");
+}
+
+TEST_F(GeometrySelectionTest, autoApplyWritesBackToProperty)
+{
+    auto* prop = static_cast<App::PropertyLinkSub*>(
+        _objectA->addDynamicProperty("App::PropertyLinkSub", "TestLink")
+    );
+
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.bind(*prop);
+    selection.setReferences({{.object = _objectB, .subName = "Face2"}});
+
+    EXPECT_EQ(prop->getValue(), _objectB);
+    ASSERT_EQ(prop->getSubValues().size(), 1U);
+    EXPECT_EQ(prop->getSubValues().front(), "Face2");
+}
+
+TEST_F(GeometrySelectionTest, stagedApplyDefersWrite)
+{
+    auto* prop = static_cast<App::PropertyLinkSub*>(
+        _objectA->addDynamicProperty("App::PropertyLinkSub", "TestLink")
+    );
+
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.bind(*prop);
+    selection.setAutoApply(false);
+    selection.setReferences({{.object = _objectB, .subName = ""}});
+
+    EXPECT_EQ(prop->getValue(), nullptr);  // not written yet
+    EXPECT_TRUE(selection.apply());
+    EXPECT_EQ(prop->getValue(), _objectB);
 }

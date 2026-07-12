@@ -11,6 +11,8 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <App/Property.h>
+#include <App/PropertyLinks.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
 
@@ -63,6 +65,9 @@ void GeometrySelection::clear()
 void GeometrySelection::updateReferences(std::vector<GeometryReference> references)
 {
     _references = std::move(references);
+    if (_autoApply && isBound()) {
+        writeToProperty();
+    }
     Q_EMIT referencesChanged();
 }
 
@@ -143,4 +148,101 @@ void GeometrySelection::onSelectionChanged(const Gui::SelectionChanges& msg)
         next.push_back(std::move(picked));
     }
     updateReferences(std::move(next));
+}
+
+void GeometrySelection::bind(App::Property& prop)
+{
+    unbind();
+    _boundProperty = &prop;
+
+    if (auto* container = dynamic_cast<App::DocumentObject*>(prop.getContainer())) {
+        _propertyChangedConnection = container->getDocument()->signalChangedObject.connect(
+            [this](const App::DocumentObject&, const App::Property& changed) {
+                if (&changed == _boundProperty && !_writingBack) {
+                    reloadFromProperty();
+                }
+            }
+        );
+    }
+    reloadFromProperty();
+}
+
+void GeometrySelection::unbind()
+{
+    _propertyChangedConnection.disconnect();
+    _boundProperty = nullptr;
+}
+
+bool GeometrySelection::apply()
+{
+    return writeToProperty();
+}
+
+void GeometrySelection::reloadFromProperty()
+{
+    std::vector<GeometryReference> loaded;
+    if (auto* link = dynamic_cast<App::PropertyLinkSub*>(_boundProperty)) {
+        App::DocumentObject* object = link->getValue();
+        if (object) {
+            const std::vector<std::string>& subs = link->getSubValues();
+            if (subs.empty()) {
+                loaded.push_back({.object = object, .subName = ""});
+            }
+            else {
+                for (const std::string& sub : subs) {
+                    loaded.push_back({.object = object, .subName = sub});
+                }
+            }
+        }
+    }
+    else if (auto* linkList = dynamic_cast<App::PropertyLinkSubList*>(_boundProperty)) {
+        const std::vector<App::DocumentObject*>& objects = linkList->getValues();
+        const std::vector<std::string>& subs = linkList->getSubValues();
+        for (std::size_t index = 0; index < objects.size(); ++index) {
+            loaded.push_back(
+                {.object = objects[index],
+                 .subName = index < subs.size() ? subs[index] : std::string()}
+            );
+        }
+    }
+    // Assign directly — not via updateReferences — so reloads never trigger a write-back.
+    _references = std::move(loaded);
+    Q_EMIT referencesChanged();
+}
+
+bool GeometrySelection::writeToProperty()
+{
+    if (!isBound()) {
+        return false;
+    }
+
+    _writingBack = true;
+    if (auto* link = dynamic_cast<App::PropertyLinkSub*>(_boundProperty)) {
+        if (_references.empty()) {
+            link->setValue(nullptr, std::vector<std::string> {});
+        }
+        else {
+            // PropertyLinkSub: single object; collect all sub names from the first object.
+            App::DocumentObject* object = _references.front().object;
+            std::vector<std::string> subNames;
+            subNames.reserve(_references.size());
+            for (const GeometryReference& ref : _references) {
+                subNames.push_back(ref.subName);
+            }
+            link->setValue(object, subNames);
+        }
+    }
+    else if (auto* linkList = dynamic_cast<App::PropertyLinkSubList*>(_boundProperty)) {
+        std::vector<App::DocumentObject*> objects;
+        std::vector<std::string> subNames;
+        objects.reserve(_references.size());
+        subNames.reserve(_references.size());
+        for (const GeometryReference& ref : _references) {
+            objects.push_back(ref.object);
+            subNames.push_back(ref.subName);
+        }
+        linkList->setValues(objects, subNames);
+    }
+    _writingBack = false;
+    return true;
 }
