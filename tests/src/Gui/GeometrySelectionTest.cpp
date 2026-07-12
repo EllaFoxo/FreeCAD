@@ -136,3 +136,87 @@ TEST_F(GeometrySelectionTest, destructionWhileSelectingEmitsExitedAndRemovesGate
     EXPECT_EQ(exited, 1);
     EXPECT_EQ(Gui::Selection().getSelectionGate(_doc), nullptr);
 }
+
+namespace
+{
+
+/// Test helper: exposes simulatePick() to call onSelectionChanged() directly,
+/// bypassing Gui::Selection().addSelection() which requires a live Gui::Application.
+class PickableSelection: public GeometrySelection
+{
+public:
+    using GeometrySelection::GeometrySelection;
+
+    void simulatePick(const std::string& docName, const char* objectName, const char* subName = "")
+    {
+        Gui::SelectionChanges
+            msg(Gui::SelectionChanges::AddSelection, docName.c_str(), objectName, subName);
+        onSelectionChanged(msg);
+    }
+};
+
+class AppendingSelection: public PickableSelection
+{
+public:
+    AppendingSelection()
+        : PickableSelection(GeometryQuantity::AllowMultiple)
+    {}
+
+protected:
+    bool appendRequested() const override
+    {
+        return true;  // simulate Ctrl held, headless
+    }
+};
+
+}  // namespace
+
+TEST_F(GeometrySelectionTest, singleModePickReplaces)
+{
+    PickableSelection selection(GeometryQuantity::Single);
+    selection.startSelecting();
+
+    selection.simulatePick(_docName, _objectA->getNameInDocument());
+    selection.simulatePick(_docName, _objectB->getNameInDocument());
+
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectB);
+
+    selection.stopSelecting();
+}
+
+TEST_F(GeometrySelectionTest, ignoresPicksWhenNotSelecting)
+{
+    PickableSelection selection(GeometryQuantity::Single);
+
+    selection.simulatePick(_docName, _objectA->getNameInDocument());
+
+    EXPECT_TRUE(selection.references().empty());
+}
+
+TEST_F(GeometrySelectionTest, allowMultipleAppendsWhenRequested)
+{
+    AppendingSelection selection;
+    selection.startSelecting();
+
+    selection.simulatePick(_docName, _objectA->getNameInDocument());
+    selection.simulatePick(_docName, _objectB->getNameInDocument());
+
+    ASSERT_EQ(selection.references().size(), 2U);
+    EXPECT_EQ(selection.references()[0].object, _objectA);
+    EXPECT_EQ(selection.references()[1].object, _objectB);
+
+    selection.stopSelecting();
+}
+
+TEST_F(GeometrySelectionTest, startStopTogglesObserverAttachment)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    EXPECT_FALSE(selection.isSelectionAttached());
+
+    selection.startSelecting();
+    EXPECT_TRUE(selection.isSelectionAttached());
+
+    selection.stopSelecting();
+    EXPECT_FALSE(selection.isSelectionAttached());
+}

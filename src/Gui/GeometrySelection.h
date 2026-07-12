@@ -10,6 +10,7 @@
 #include <QObject>
 
 #include <FCGlobal.h>
+#include <Gui/Selection/Selection.h>
 
 class QString;
 
@@ -50,7 +51,7 @@ struct GuiExport GeometryReference
  * model and quantity mode; later tasks add the selection session, gate, and
  * property binding. Emits referencesChanged() whenever the model changes.
  */
-class GuiExport GeometrySelection: public QObject
+class GuiExport GeometrySelection: public QObject, public Gui::SelectionObserver
 {
     Q_OBJECT
 
@@ -96,6 +97,10 @@ protected:
     // Single place every model mutation routes through, so later tasks (binding)
     // can react in one spot.
     void updateReferences(std::vector<GeometryReference> references);
+
+    void onSelectionChanged(const Gui::SelectionChanges& msg) override;
+    // Whether the current pick should append (AllowMultiple + modifier) vs replace.
+    virtual bool appendRequested() const;
 
     std::vector<GeometryReference> _references;
     GeometryQuantity _quantity;
