@@ -1185,6 +1185,7 @@ SET(Widget_CPP_SRCS
     FontScaledSVG.cpp
     SplitButton.cpp
     GeometrySelection.cpp
+    GeometrySelectionGate.cpp
 )
 if(WIN32)
     SET(Widget_CPP_SRCS
@@ -1219,6 +1220,7 @@ SET(Widget_HPP_SRCS
     FontScaledSVG.h
     SplitButton.h
     GeometrySelection.h
+    GeometrySelectionGate.h
 )
 SET(Widget_SRCS
     ${Widget_CPP_SRCS}

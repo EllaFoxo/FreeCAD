@@ -17,6 +17,7 @@
 #include <Gui/Selection/SelectionFilter.h>
 
 #include "GeometrySelection.h"
+#include "GeometrySelectionGate.h"
 
 using namespace Gui;
 
@@ -81,6 +82,13 @@ void GeometrySelection::setSelectionFilter(const QString& filter)
     const std::string filterString = filter.toStdString();
     _gateFactory = [filterString] {
         return std::make_unique<SelectionFilterGate>(filterString.c_str());
+    };
+}
+
+void GeometrySelection::setAllowedKinds(GeometryKinds kinds, App::DocumentObject* support)
+{
+    _gateFactory = [kinds, support] {
+        return std::make_unique<GeometryKindGate>(kinds, support);
     };
 }
 

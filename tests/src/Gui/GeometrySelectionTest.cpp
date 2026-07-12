@@ -9,6 +9,7 @@
 #include <App/DocumentObject.h>
 #include <App/PropertyLinks.h>
 #include <Gui/GeometrySelection.h>
+#include <Gui/GeometrySelectionGate.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
 
@@ -266,4 +267,18 @@ TEST_F(GeometrySelectionTest, stagedApplyDefersWrite)
     EXPECT_EQ(prop->getValue(), nullptr);  // not written yet
     EXPECT_TRUE(selection.apply());
     EXPECT_EQ(prop->getValue(), _objectB);
+}
+
+TEST_F(GeometrySelectionTest, kindGateAllowsFacesRejectsEdges)
+{
+    Gui::GeometryKindGate gate(Gui::GeometryKind::Face, nullptr);
+    EXPECT_TRUE(gate.allow(_doc, _objectA, "Face3"));
+    EXPECT_FALSE(gate.allow(_doc, _objectA, "Edge3"));
+}
+
+TEST_F(GeometrySelectionTest, kindGateWholeObjectAllowsEmptySub)
+{
+    Gui::GeometryKindGate gate(Gui::GeometryKind::WholeObject, nullptr);
+    EXPECT_TRUE(gate.allow(_doc, _objectA, ""));
+    EXPECT_FALSE(gate.allow(_doc, _objectA, "Face1"));
 }

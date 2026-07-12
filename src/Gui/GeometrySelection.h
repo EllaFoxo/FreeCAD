@@ -12,6 +12,7 @@
 #include <fastsignals/signal.h>
 
 #include <FCGlobal.h>
+#include <Gui/GeometrySelectionGate.h>
 #include <Gui/Selection/Selection.h>
 
 class QString;
@@ -84,6 +85,7 @@ public:
 
     void setSelectionGate(GateFactory factory);
     void setSelectionFilter(const QString& filter);
+    void setAllowedKinds(GeometryKinds kinds, App::DocumentObject* support = nullptr);
 
     void startSelecting();
     void stopSelecting();
