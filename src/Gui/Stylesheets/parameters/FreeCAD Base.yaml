@@ -122,6 +122,14 @@ ToolBarBackground: "@Background.100"
 ToolBarBorderColor: "@BaseBorderColor"
 ToolBarBorderThickness: "border_thickness(0px, bottom: 1px)" # Canonical North: bottom edge; rotated for other positions
 
+# ── SplitButton ───────────────────────────────────────────────────────────────
+# Each half of Gui::SplitButton sets component="SplitButtonMain" / "SplitButtonMenu"
+# so the token system can zero the inner corners and remove the shared border without
+# FreeCADStyle needing to know about SplitButton.
+SplitButtonMainBorderRadius: "border_radius(@FormControlBorderRadius, right: 0px)"
+SplitButtonMenuBorderRadius: "border_radius(@FormControlBorderRadius, left: 0px)"
+SplitButtonMenuBorderThickness: "border_thickness(@FormControlBorderThickness, left: 0px)"
+
 # Transparent variant — toolbars in status bar and menu bar corner (no background, no border)
 ToolBarTransparentBackground: "reset()"
 ToolBarTransparentBorderColor: "reset()"
