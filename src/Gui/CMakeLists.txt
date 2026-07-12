@@ -1184,6 +1184,7 @@ SET(Widget_CPP_SRCS
     ElideCheckBox.cpp
     FontScaledSVG.cpp
     SplitButton.cpp
+    GeometrySelection.cpp
 )
 if(WIN32)
     SET(Widget_CPP_SRCS
@@ -1217,6 +1218,7 @@ SET(Widget_HPP_SRCS
     ElideCheckBox.h
     FontScaledSVG.h
     SplitButton.h
+    GeometrySelection.h
 )
 SET(Widget_SRCS
     ${Widget_CPP_SRCS}

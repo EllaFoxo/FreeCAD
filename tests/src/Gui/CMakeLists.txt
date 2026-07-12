@@ -16,6 +16,7 @@ add_executable(Gui_tests_run
         StyleParameters/ColorEffectTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
+        GeometrySelectionTest.cpp
 )
 
 # Qt tests

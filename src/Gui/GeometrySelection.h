@@ -1,0 +1,81 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+
+#include <QObject>
+
+#include <FCGlobal.h>
+
+namespace App
+{
+class DocumentObject;
+}
+
+namespace Gui
+{
+
+enum class GeometryQuantity
+{
+    Single,         // exactly one reference
+    AllowMultiple,  // intent is one; Ctrl-pick forces more
+    // Multiple is a separate future widget that reuses this core.
+};
+
+/// One picked reference: a whole object (empty subName) or one of its subelements.
+struct GuiExport GeometryReference
+{
+    App::DocumentObject* object = nullptr;
+    std::string subName;
+
+    bool operator==(const GeometryReference& other) const
+    {
+        return object == other.object && subName == other.subName;
+    }
+};
+
+/**
+ * Widget-agnostic core of the geometry selector. Owns the selected-reference
+ * model and quantity mode; later tasks add the selection session, gate, and
+ * property binding. Emits referencesChanged() whenever the model changes.
+ */
+class GuiExport GeometrySelection: public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit GeometrySelection(
+        GeometryQuantity mode = GeometryQuantity::Single,
+        QObject* parent = nullptr
+    );
+    ~GeometrySelection() override;
+
+    GeometryQuantity quantity() const
+    {
+        return _quantity;
+    }
+    void setQuantity(GeometryQuantity mode);
+
+    const std::vector<GeometryReference>& references() const
+    {
+        return _references;
+    }
+    void setReferences(std::vector<GeometryReference> references);
+    void removeReference(std::size_t index);
+    void clear();
+
+Q_SIGNALS:
+    void referencesChanged();
+
+protected:
+    // Single place every model mutation routes through, so later tasks (binding)
+    // can react in one spot.
+    void updateReferences(std::vector<GeometryReference> references);
+
+    std::vector<GeometryReference> _references;
+    GeometryQuantity _quantity;
+};
+
+}  // namespace Gui
