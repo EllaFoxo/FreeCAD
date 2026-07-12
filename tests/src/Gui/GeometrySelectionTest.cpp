@@ -8,6 +8,8 @@
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <Gui/GeometrySelection.h>
+#include <Gui/Selection/Selection.h>
+#include <Gui/Selection/SelectionFilter.h>
 
 using Gui::GeometryQuantity;
 using Gui::GeometryReference;
@@ -86,4 +88,51 @@ TEST_F(GeometrySelectionTest, removeReferenceDropsByIndex)
 
     ASSERT_EQ(selection.references().size(), 1U);
     EXPECT_EQ(selection.references().front().object, _objectB);
+}
+
+TEST_F(GeometrySelectionTest, startSelectingInstallsGateAndEmitsEntered)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setSelectionFilter(QStringLiteral("SELECT App::FeatureTest"));
+
+    int entered = 0;
+    QObject::connect(&selection, &GeometrySelection::selectionModeEntered, [&entered] { ++entered; });
+
+    selection.startSelecting();
+
+    EXPECT_TRUE(selection.isSelecting());
+    EXPECT_EQ(entered, 1);
+    EXPECT_NE(Gui::Selection().getSelectionGate(_doc), nullptr);
+
+    selection.stopSelecting();
+}
+
+TEST_F(GeometrySelectionTest, stopSelectingRemovesGateAndEmitsExited)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setSelectionFilter(QStringLiteral("SELECT App::FeatureTest"));
+
+    int exited = 0;
+    QObject::connect(&selection, &GeometrySelection::selectionModeExited, [&exited] { ++exited; });
+
+    selection.startSelecting();
+    selection.stopSelecting();
+
+    EXPECT_FALSE(selection.isSelecting());
+    EXPECT_EQ(exited, 1);
+    EXPECT_EQ(Gui::Selection().getSelectionGate(_doc), nullptr);
+}
+
+TEST_F(GeometrySelectionTest, destructionWhileSelectingEmitsExitedAndRemovesGate)
+{
+    int exited = 0;
+    {
+        GeometrySelection selection(GeometryQuantity::Single);
+        selection.setSelectionFilter(QStringLiteral("SELECT App::FeatureTest"));
+        QObject::connect(&selection, &GeometrySelection::selectionModeExited, [&exited] { ++exited; });
+        selection.startSelecting();
+        ASSERT_NE(Gui::Selection().getSelectionGate(_doc), nullptr);
+    }
+    EXPECT_EQ(exited, 1);
+    EXPECT_EQ(Gui::Selection().getSelectionGate(_doc), nullptr);
 }

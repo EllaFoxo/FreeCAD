@@ -2,6 +2,8 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -9,9 +11,16 @@
 
 #include <FCGlobal.h>
 
+class QString;
+
 namespace App
 {
 class DocumentObject;
+}
+
+namespace Gui
+{
+class SelectionGate;
 }
 
 namespace Gui
@@ -66,8 +75,22 @@ public:
     void removeReference(std::size_t index);
     void clear();
 
+    using GateFactory = std::function<std::unique_ptr<Gui::SelectionGate>()>;
+
+    void setSelectionGate(GateFactory factory);
+    void setSelectionFilter(const QString& filter);
+
+    void startSelecting();
+    void stopSelecting();
+    bool isSelecting() const
+    {
+        return _selecting;
+    }
+
 Q_SIGNALS:
     void referencesChanged();
+    void selectionModeEntered();
+    void selectionModeExited();
 
 protected:
     // Single place every model mutation routes through, so later tasks (binding)
@@ -76,6 +99,10 @@ protected:
 
     std::vector<GeometryReference> _references;
     GeometryQuantity _quantity;
+
+private:
+    GateFactory _gateFactory;
+    bool _selecting = false;
 };
 
 }  // namespace Gui
