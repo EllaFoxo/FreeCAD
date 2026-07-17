@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>300</width>
-    <height>772</height>
+    <height>1189</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,126 +16,37 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <layout class="QGridLayout" name="gridLayout">
-     <item row="0" column="0">
-      <widget class="QLabel" name="sidesLabel">
-       <property name="text">
-        <string>Mode</string>
-       </property>
-      </widget>
-     </item>
-     <item row="0" column="1">
-      <widget class="QComboBox" name="sidesMode"/>
-     </item>
-     <item row="1" column="0" colspan="2">
-      <layout class="QHBoxLayout" name="verticalLayout_220">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QLabel" name="side1Label">
-         <property name="text">
-          <string>Side 1</string>
+     <item row="8" column="0" colspan="2">
+      <layout class="QGridLayout" name="gridLayout_5">
+       <item row="0" column="1">
+        <widget class="QLineEdit" name="lineFaceName">
+         <property name="readOnly">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
-       <item>
-        <widget class="Line" name="line1">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+       <item row="0" column="0">
+        <widget class="QToolButton" name="buttonFace">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>22</height>
+          </size>
          </property>
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
+         <property name="text">
+          <string>Select Face</string>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
          </property>
         </widget>
        </item>
       </layout>
      </item>
-     <item row="2" column="0">
-      <widget class="QLabel" name="textLabel1">
-       <property name="text">
-        <string>Type</string>
-       </property>
-      </widget>
-     </item>
-     <item row="2" column="1">
-      <widget class="QComboBox" name="changeMode">
-       <item>
-        <property name="text">
-         <string>Dimension</string>
-        </property>
-       </item>
-      </widget>
-     </item>
-     <item row="3" column="0">
-      <widget class="QLabel" name="labelLength">
-       <property name="text">
-        <string>Length</string>
-       </property>
-      </widget>
-     </item>
-     <item row="3" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="lengthEdit" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">mm</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="0">
-      <widget class="QLabel" name="labelOffset">
-       <property name="text">
-        <string>Offset to face</string>
-       </property>
-      </widget>
-     </item>
-     <item row="4" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="offsetEdit" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">mm</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="0">
-      <widget class="QLabel" name="labelTaperAngle">
-       <property name="toolTip">
-        <string>Angle to taper the extrusion</string>
-       </property>
-       <property name="text">
-        <string>Taper angle</string>
-       </property>
-      </widget>
-     </item>
-     <item row="5" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="taperEdit" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">deg</string>
-       </property>
-      </widget>
-     </item>
-     <item row="6" column="0" colspan="2">
+     <item row="7" column="0" colspan="2">
       <widget class="QFrame" name="upToShapeList">
        <property name="frameShadow">
-        <enum>QFrame::Plain</enum>
+        <enum>QFrame::Shadow::Plain</enum>
        </property>
        <property name="lineWidth">
         <number>0</number>
@@ -224,7 +135,7 @@
            <item>
             <widget class="QListWidget" name="listWidgetReferences">
              <property name="selectionMode">
-              <enum>QAbstractItemView::ExtendedSelection</enum>
+              <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
              </property>
             </widget>
            </item>
@@ -234,17 +145,24 @@
        </layout>
       </widget>
      </item>
-     <item row="7" column="0" colspan="2">
-      <layout class="QGridLayout" name="gridLayout_5">
+     <item row="11" column="0">
+      <widget class="QLabel" name="labelLength2">
+       <property name="text">
+        <string>Length</string>
+       </property>
+      </widget>
+     </item>
+     <item row="15" column="0" colspan="2">
+      <layout class="QGridLayout" name="gridLayout_52">
        <item row="0" column="1">
-        <widget class="QLineEdit" name="lineFaceName">
+        <widget class="QLineEdit" name="lineFaceName2">
          <property name="readOnly">
           <bool>true</bool>
          </property>
         </widget>
        </item>
        <item row="0" column="0">
-        <widget class="QToolButton" name="buttonFace">
+        <widget class="QToolButton" name="buttonFace2">
          <property name="minimumSize">
           <size>
            <width>0</width>
@@ -261,7 +179,20 @@
        </item>
       </layout>
      </item>
-     <item row="8" column="0" colspan="2">
+     <item row="1" column="1">
+      <widget class="QComboBox" name="sidesMode"/>
+     </item>
+     <item row="11" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="lengthEdit2">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">mm</string>
+       </property>
+      </widget>
+     </item>
+     <item row="9" column="0" colspan="2">
       <layout class="QHBoxLayout" name="verticalLayout_221">
        <property name="leftMargin">
         <number>0</number>
@@ -284,87 +215,23 @@
        </item>
        <item>
         <widget class="Line" name="line2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
            <horstretch>0</horstretch>
            <verstretch>0</verstretch>
           </sizepolicy>
          </property>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
         </widget>
        </item>
       </layout>
      </item>
-     <item row="9" column="0">
-      <widget class="QLabel" name="typeLabel2">
-       <property name="text">
-        <string>Type</string>
-       </property>
-      </widget>
-     </item>
-     <item row="9" column="1">
-      <widget class="QComboBox" name="changeMode2"/>
-     </item>
-     <item row="10" column="0">
-      <widget class="QLabel" name="labelLength2">
-       <property name="text">
-        <string>Length</string>
-       </property>
-      </widget>
-     </item>
-     <item row="10" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="lengthEdit2" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">mm</string>
-       </property>
-      </widget>
-     </item>
-     <item row="11" column="0">
-      <widget class="QLabel" name="labelOffset2">
-       <property name="text">
-        <string>Offset to face</string>
-       </property>
-      </widget>
-     </item>
-     <item row="11" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="offsetEdit2" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">mm</string>
-       </property>
-      </widget>
-     </item>
-     <item row="12" column="0">
-      <widget class="QLabel" name="labelTaperAngle2">
-       <property name="toolTip">
-        <string>Angle to taper the extrusion</string>
-       </property>
-       <property name="text">
-        <string>Taper angle</string>
-       </property>
-      </widget>
-     </item>
-     <item row="12" column="1">
-      <widget class="Gui::PrefQuantitySpinBox" name="taperEdit2" native="true">
-       <property name="keyboardTracking" stdset="0">
-        <bool>false</bool>
-       </property>
-       <property name="unit" stdset="0">
-        <string notr="true">deg</string>
-       </property>
-      </widget>
-     </item>
-     <item row="13" column="0" colspan="2">
+     <item row="14" column="0" colspan="2">
       <widget class="QFrame" name="upToShapeList2">
        <property name="frameShadow">
-        <enum>QFrame::Plain</enum>
+        <enum>QFrame::Shadow::Plain</enum>
        </property>
        <property name="lineWidth">
         <number>0</number>
@@ -453,7 +320,7 @@
            <item>
             <widget class="QListWidget" name="listWidgetReferences2">
              <property name="selectionMode">
-              <enum>QAbstractItemView::ExtendedSelection</enum>
+              <enum>QAbstractItemView::SelectionMode::ExtendedSelection</enum>
              </property>
             </widget>
            </item>
@@ -463,39 +330,183 @@
        </layout>
       </widget>
      </item>
-     <item row="14" column="0" colspan="2">
-      <layout class="QGridLayout" name="gridLayout_52">
-       <item row="0" column="1">
-        <widget class="QLineEdit" name="lineFaceName2">
-         <property name="readOnly">
-          <bool>true</bool>
+     <item row="4" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="lengthEdit">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">mm</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="textLabel1">
+       <property name="text">
+        <string>Type</string>
+       </property>
+      </widget>
+     </item>
+     <item row="13" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="taperEdit2">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">deg</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="taperEdit">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">deg</string>
+       </property>
+      </widget>
+     </item>
+     <item row="6" column="0">
+      <widget class="QLabel" name="labelTaperAngle">
+       <property name="toolTip">
+        <string>Angle to taper the extrusion</string>
+       </property>
+       <property name="text">
+        <string>Taper angle</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="0">
+      <widget class="QLabel" name="typeLabel2">
+       <property name="text">
+        <string>Type</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QComboBox" name="changeMode">
+       <item>
+        <property name="text">
+         <string>Dimension</string>
+        </property>
+       </item>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="sidesLabel">
+       <property name="text">
+        <string>Mode</string>
+       </property>
+      </widget>
+     </item>
+     <item row="10" column="1">
+      <widget class="QComboBox" name="changeMode2"/>
+     </item>
+     <item row="13" column="0">
+      <widget class="QLabel" name="labelTaperAngle2">
+       <property name="toolTip">
+        <string>Angle to taper the extrusion</string>
+       </property>
+       <property name="text">
+        <string>Taper angle</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="0">
+      <widget class="QLabel" name="labelOffset">
+       <property name="text">
+        <string>Offset to face</string>
+       </property>
+      </widget>
+     </item>
+     <item row="5" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="offsetEdit">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">mm</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="0">
+      <widget class="QLabel" name="sidesLabel_2">
+       <property name="text">
+        <string>Profile</string>
+       </property>
+      </widget>
+     </item>
+     <item row="12" column="1">
+      <widget class="Gui::PrefQuantitySpinBox" name="offsetEdit2">
+       <property name="keyboardTracking">
+        <bool>false</bool>
+       </property>
+       <property name="unit" stdset="0">
+        <string notr="true">mm</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="0" colspan="2">
+      <layout class="QHBoxLayout" name="verticalLayout_220">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QLabel" name="side1Label">
+         <property name="text">
+          <string>Side 1</string>
          </property>
         </widget>
        </item>
-       <item row="0" column="0">
-        <widget class="QToolButton" name="buttonFace2">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>22</height>
-          </size>
+       <item>
+        <widget class="Line" name="line1">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
          </property>
-         <property name="text">
-          <string>Select Face</string>
-         </property>
-         <property name="checkable">
-          <bool>true</bool>
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
          </property>
         </widget>
        </item>
       </layout>
+     </item>
+     <item row="12" column="0">
+      <widget class="QLabel" name="labelOffset2">
+       <property name="text">
+        <string>Offset to face</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="0">
+      <widget class="QLabel" name="labelLength">
+       <property name="text">
+        <string>Length</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="Gui::GeometrySelectorWidget" name="profileGeometrySelector">
+      </widget>
      </item>
     </layout>
    </item>
    <item>
     <widget class="Line" name="line">
      <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+      <enum>Qt::Orientation::Horizontal</enum>
      </property>
     </widget>
    </item>
@@ -687,7 +698,7 @@ the sketch plane's normal vector will be used</string>
  <customwidgets>
   <customwidget>
    <class>Gui::QuantitySpinBox</class>
-   <extends>QWidget</extends>
+   <extends>QAbstractSpinBox</extends>
    <header>Gui/QuantitySpinBox.h</header>
   </customwidget>
   <customwidget>
@@ -699,6 +710,11 @@ the sketch plane's normal vector will be used</string>
    <class>Gui::PrefQuantitySpinBox</class>
    <extends>Gui::QuantitySpinBox</extends>
    <header>Gui/PrefWidgets.h</header>
+  </customwidget>
+  <customwidget>
+   <class>Gui::GeometrySelectorWidget</class>
+   <extends>QWidget</extends>
+   <header>Gui/GeometrySelectorWidget.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

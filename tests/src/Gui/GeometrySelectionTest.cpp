@@ -125,7 +125,7 @@ TEST_F(GeometrySelectionTest, stopSelectingRemovesGateAndEmitsExited)
     EXPECT_EQ(Gui::Selection().getSelectionGate(_doc), nullptr);
 }
 
-TEST_F(GeometrySelectionTest, destructionWhileSelectingEmitsExitedAndRemovesGate)
+TEST_F(GeometrySelectionTest, destructionWhileSelectingRemovesGateWithoutEmitting)
 {
     int exited = 0;
     {
@@ -135,7 +135,10 @@ TEST_F(GeometrySelectionTest, destructionWhileSelectingEmitsExitedAndRemovesGate
         selection.startSelecting();
         ASSERT_NE(Gui::Selection().getSelectionGate(_doc), nullptr);
     }
-    EXPECT_EQ(exited, 1);
+    // Destruction must unwind the session (gate removed) but must NOT emit: the
+    // signals are wired to the owning widget, which during real teardown may already
+    // be half-destroyed, so emitting from the destructor would abort.
+    EXPECT_EQ(exited, 0);
     EXPECT_EQ(Gui::Selection().getSelectionGate(_doc), nullptr);
 }
 
@@ -153,6 +156,13 @@ public:
     {
         Gui::SelectionChanges
             msg(Gui::SelectionChanges::AddSelection, docName.c_str(), objectName, subName);
+        onSelectionChanged(msg);
+    }
+
+    void simulateDeselect(const std::string& docName, const char* objectName, const char* subName = "")
+    {
+        Gui::SelectionChanges
+            msg(Gui::SelectionChanges::RmvSelection, docName.c_str(), objectName, subName);
         onSelectionChanged(msg);
     }
 };
@@ -173,16 +183,77 @@ protected:
 
 }  // namespace
 
-TEST_F(GeometrySelectionTest, singleModePickReplaces)
+TEST_F(GeometrySelectionTest, singleModePickReplacesAndEndsSession)
 {
     PickableSelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = ""}});
     selection.startSelecting();
 
-    selection.simulatePick(_docName, _objectA->getNameInDocument());
     selection.simulatePick(_docName, _objectB->getNameInDocument());
+
+    // The replacing pick swaps the reference and completes the session.
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectB);
+    EXPECT_FALSE(selection.isSelecting());
+}
+
+TEST_F(GeometrySelectionTest, cancelSelectingRestoresPreviousReference)
+{
+    PickableSelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = ""}});
+    selection.startSelecting();
+
+    selection.cancelSelecting();
+
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectA);
+    EXPECT_FALSE(selection.isSelecting());
+}
+
+TEST_F(GeometrySelectionTest, cancelSelectingRevertsAppendedPicks)
+{
+    AppendingSelection selection;
+    selection.setReferences({{.object = _objectA, .subName = ""}});
+    selection.startSelecting();
+
+    selection.simulatePick(_docName, _objectB->getNameInDocument());
+    ASSERT_EQ(selection.references().size(), 2U);
+
+    selection.cancelSelecting();
+
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectA);
+    EXPECT_FALSE(selection.isSelecting());
+}
+
+TEST_F(GeometrySelectionTest, allowMultipleDeselectRemovesMatchingReference)
+{
+    PickableSelection selection(GeometryQuantity::AllowMultiple);
+    selection.setReferences({{.object = _objectA, .subName = ""}, {.object = _objectB, .subName = ""}});
+    selection.startSelecting();
+
+    // Ctrl-clicking an already-selected item deselects it in the 3D view, which
+    // must drop the matching reference while the session stays open.
+    selection.simulateDeselect(_docName, _objectA->getNameInDocument());
 
     ASSERT_EQ(selection.references().size(), 1U);
     EXPECT_EQ(selection.references().front().object, _objectB);
+    EXPECT_TRUE(selection.isSelecting());
+
+    selection.stopSelecting();
+}
+
+TEST_F(GeometrySelectionTest, singleModeIgnoresDeselect)
+{
+    PickableSelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = ""}});
+    selection.startSelecting();
+
+    // A single-value selector has no per-item toggle; a deselect is a no-op.
+    selection.simulateDeselect(_docName, _objectA->getNameInDocument());
+
+    ASSERT_EQ(selection.references().size(), 1U);
+    EXPECT_EQ(selection.references().front().object, _objectA);
 
     selection.stopSelecting();
 }
@@ -251,6 +322,42 @@ TEST_F(GeometrySelectionTest, autoApplyWritesBackToProperty)
     EXPECT_EQ(prop->getValue(), _objectB);
     ASSERT_EQ(prop->getSubValues().size(), 1U);
     EXPECT_EQ(prop->getSubValues().front(), "Face2");
+}
+
+TEST_F(GeometrySelectionTest, wholeObjectWritesEmptySubList)
+{
+    auto* prop = static_cast<App::PropertyLinkSub*>(
+        _objectA->addDynamicProperty("App::PropertyLinkSub", "TestLink")
+    );
+
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.bind(*prop);
+    selection.setReferences({{.object = _objectB, .subName = ""}});
+
+    // A whole-object reference must not leave a spurious empty subelement.
+    EXPECT_EQ(prop->getValue(), _objectB);
+    EXPECT_TRUE(prop->getSubValues().empty());
+}
+
+TEST_F(GeometrySelectionTest, bindDropsWhenOwningObjectDeleted)
+{
+    auto* prop = static_cast<App::PropertyLinkSub*>(
+        _objectA->addDynamicProperty("App::PropertyLinkSub", "TestLink")
+    );
+
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.bind(*prop);
+    ASSERT_TRUE(selection.isBound());
+
+    // Deleting the property's owning object (as an aborted create command would)
+    // must drop the binding, so no later signal can touch the freed property.
+    _doc->removeObject(_objectA->getNameInDocument());
+    _objectA = nullptr;
+
+    EXPECT_FALSE(selection.isBound());
+    // A subsequent model change must be a safe no-op rather than a stale write.
+    selection.setReferences({{.object = _objectB, .subName = ""}});
+    EXPECT_FALSE(selection.apply());
 }
 
 TEST_F(GeometrySelectionTest, stagedApplyDefersWrite)

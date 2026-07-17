@@ -327,6 +327,10 @@
         <file>tabler/outline/adjustments.svg</file>
         <file>tabler/outline/eye.svg</file>
         <file>tabler/outline/refresh.svg</file>
+        <file>tabler/outline/plus.svg</file>
+        <file>tabler/outline/replace.svg</file>
+        <file>tabler/outline/trash.svg</file>
+        <file>tabler/outline/check.svg</file>
     </qresource>
     <qresource prefix="/icons/FreeCAD-default">
         <file>index.theme</file>

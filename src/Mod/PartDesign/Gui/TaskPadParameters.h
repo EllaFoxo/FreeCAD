@@ -60,6 +60,12 @@ private:
     void updateUI(Side side) override;
 
     Gui::GeometrySelectorWidget* profileSelector {nullptr};
+
+    /// Transparent-preview and final-feature visibility captured when a profile pick
+    /// begins, restored when it ends, so selection mode can temporarily show only the
+    /// previous feature.
+    bool previewShownBeforeSelecting {false};
+    bool finalShownBeforeSelecting {false};
 };
 
 /// simulation dialog for the TaskView

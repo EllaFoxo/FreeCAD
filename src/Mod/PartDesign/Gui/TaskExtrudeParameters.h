@@ -237,6 +237,9 @@ protected:
     virtual void updateUI(Side side);
     void updateDirectionEdits();
     void setDirectionMode(int index);
+    /// Recomputes and refreshes every profile-dependent part of the UI (direction
+    /// combo, direction edits and draggers). Call after the Profile is changed.
+    void onProfileChanged();
     void handleLineFaceNameClick(QLineEdit*);
     void handleLineFaceNameNo(QLineEdit*);
 

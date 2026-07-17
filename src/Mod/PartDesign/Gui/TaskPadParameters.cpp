@@ -67,44 +67,37 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
     setupDialog();
 
     // Profile selector — inserted above the shared extrude parameters proxy
-    profileSelector = new Gui::GeometrySelectorWidget(Gui::GeometryQuantity::Single, this);
-    auto* core = profileSelector->selection();
+    profileSelector = ui->profileGeometrySelector;
+    profileSelector->setQuantity(GeometryQuantity::AllowMultiple);
 
-    core->setSelectionGate([this]() -> std::unique_ptr<Gui::SelectionGate> {
-        auto* profileBased = getObject<PartDesign::ProfileBased>();
-        App::DocumentObject* base = profileBased ? profileBased->getBaseObject(/*silent=*/true)
-                                                 : nullptr;
-        return std::make_unique<PartDesignGui::ReferenceSelection>(
-            base,
-            PartDesignGui::AllowSelection::WHOLE | PartDesignGui::AllowSelection::FACE
-        );
-    });
+    auto* core = profileSelector->selection();
 
     core->bind(getObject<PartDesign::ProfileBased>()->Profile);
 
+    // While picking a profile, show only the previous feature: hide this Pad's
+    // transparent preview and its final solid so the profile is selected against the
+    // geometry that precedes it (the visibility swap DressUp/Fillet use). The prior
+    // visibility is snapshotted and restored on exit so the Preview box's own
+    // checkboxes are respected.
     connect(core, &Gui::GeometrySelection::selectionModeEntered, this, [this] {
-        auto* profileBased = getObject<PartDesign::ProfileBased>();
-        startReferenceSelection(
-            profileBased,
-            profileBased ? profileBased->getBaseObject(/*silent=*/true) : nullptr
-        );
+        auto* viewObject = getViewObject<PartDesignGui::ViewProvider>();
+        if (!viewObject) {
+            return;
+        }
+        previewShownBeforeSelecting = viewObject->isPreviewEnabled();
+        finalShownBeforeSelecting = viewObject->isVisible();
+        viewObject->showPreview(false);
+        viewObject->showPreviousFeature(true);
     });
     connect(core, &Gui::GeometrySelection::selectionModeExited, this, [this] {
-        auto* profileBased = getObject<PartDesign::ProfileBased>();
-        finishReferenceSelection(
-            profileBased,
-            profileBased ? profileBased->getBaseObject(/*silent=*/true) : nullptr
-        );
+        auto* viewObject = getViewObject<PartDesignGui::ViewProvider>();
+        if (!viewObject) {
+            return;
+        }
+        viewObject->showPreview(previewShownBeforeSelecting);
+        viewObject->showPreviousFeature(!finalShownBeforeSelecting);
     });
-    connect(core, &Gui::GeometrySelection::referencesChanged, this, [this] { recomputeFeature(); });
-
-    // Wrap selector under a "Profile" label and insert it at the top of the task panel
-    auto* profileContainer = new QWidget(this);
-    auto* profileLayout = new QVBoxLayout(profileContainer);
-    profileLayout->setContentsMargins(0, 0, 0, 0);
-    profileLayout->addWidget(new QLabel(tr("Profile"), profileContainer));
-    profileLayout->addWidget(profileSelector);
-    groupLayout()->insertWidget(0, profileContainer);
+    connect(core, &Gui::GeometrySelection::referencesChanged, this, [this] { onProfileChanged(); });
 
     // if it is a newly created object use the last value of the history
     if (newObj) {

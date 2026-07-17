@@ -23,22 +23,131 @@
 
 #include "GeometrySelectorWidget.h"
 
+#include <QCoreApplication>
+#include <QEnterEvent>
+#include <QEvent>
+#include <QFont>
+#include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QPaintEvent>
+#include <QStringList>
 #include <QStyleOptionFrame>
+#include <QStyleOptionToolButton>
 #include <QStylePainter>
 #include <QToolButton>
+#include <QVariant>
 #include <QVBoxLayout>
 
 #include <App/DocumentObject.h>
 
 #include "Application.h"
 #include "Document.h"
+#include "ElideLabel.h"
+#include "FreeCADStyle.h"
 #include "IconManager.h"
 #include "ViewProvider.h"
 
 using namespace Gui;
+
+// ---------------------------------------------------------------------------
+// Local constants and helpers.
+// ---------------------------------------------------------------------------
+
+namespace
+{
+/// Standard glyph size for the inline action icons.
+constexpr int IconSize = 16;
+
+// Style-metric fallbacks used only when no Gui::Application (and thus no
+// FreeCADStyle) is available, e.g. in the headless test harness. In the running
+// application these are superseded by the resolved LineEdit box geometry.
+constexpr QMargins FallbackPadding {6, 4, 6, 4};
+constexpr int FallbackSpacing = 6;
+constexpr int FallbackHeight = 28;
+
+/// A compact, flat (auto-raise) icon button styled by the ambient QStyle.
+QToolButton* makeActionButton(QWidget* parent, const QIcon& icon)
+{
+    auto* button = new QToolButton(parent);
+    button->setAutoRaise(true);
+    button->setIcon(icon);
+    button->setIconSize(QSize(IconSize, IconSize));
+    return button;
+}
+
+/// Renders @p button as the simplified "InternalButton" component painted by
+/// FreeCADStyle, so the custom inner controls look the same under any application QStyle.
+void styleAsInternalButton(QToolButton* button)
+{
+    button->setAutoRaise(false);
+    button->setProperty("component", "InternalButton");
+    if (Gui::Application::Instance) {
+        button->setStyle(Gui::Application::Instance->freeCADStyle());
+    }
+}
+
+/// A tool button whose hover state mirrors another widget's, so a control filling a
+/// larger interactive surface reflects that surface's hover — not merely its own rect.
+/// This lets the change surface stay in its hover fill even while the pointer is over
+/// the remove button layered on top of it.
+class HostStateToolButton: public QToolButton
+{
+public:
+    explicit HostStateToolButton(QWidget* parent)
+        : QToolButton(parent)
+    {}
+
+    /// Widget whose hover state this button mirrors.
+    QWidget* stateHost = nullptr;
+
+    /// Reports a minimum width that swaps the full label for an ellipsis, so the row
+    /// can shrink within the task panel; the label itself is elided in paintEvent.
+    QSize minimumSizeHint() const override
+    {
+        QSize hint = QToolButton::minimumSizeHint();
+        if (toolButtonStyle() == Qt::ToolButtonTextBesideIcon && !text().isEmpty()) {
+            const int fullTextWidth = fontMetrics().horizontalAdvance(text());
+            const int ellipsisWidth = fontMetrics().horizontalAdvance(QStringLiteral("…"));
+            hint.setWidth(qMax(0, hint.width() - fullTextWidth + ellipsisWidth));
+        }
+        return hint;
+    }
+
+protected:
+    void paintEvent(QPaintEvent* /*event*/) override
+    {
+        QStyleOptionToolButton option;
+        initStyleOption(&option);
+        if (stateHost != nullptr) {
+            option.state.setFlag(QStyle::State_MouseOver, stateHost->underMouse());
+        }
+        elideLabel(option);
+        QStylePainter(this).drawComplexControl(QStyle::CC_ToolButton, option);
+    }
+
+private:
+    /// Shortens option.text with an ellipsis to fit the width the style leaves for the
+    /// label (content rect minus icon + spacing), matching drawToolButtonLabel's layout.
+    void elideLabel(QStyleOptionToolButton& option) const
+    {
+        if (option.text.isEmpty() || option.toolButtonStyle != Qt::ToolButtonTextBesideIcon
+            || Gui::Application::Instance == nullptr) {
+            return;
+        }
+        const FreeCADStyle::BoxGeometryDefinition geometry
+            = Gui::Application::Instance->freeCADStyle()->resolveBoxGeometry(
+                FreeCADStyle::contextOf(this)
+            );
+        const QRect contentRect = geometry.contentRect(option.rect);
+        const int reserved = option.icon.isNull() ? 0
+                                                  : option.iconSize.width() + geometry.iconSpacing;
+        const int textWidth = contentRect.width() - reserved;
+        option.text = option.fontMetrics.elidedText(option.text, Qt::ElideRight, qMax(0, textWidth));
+    }
+};
+}  // namespace
 
 // ---------------------------------------------------------------------------
 // Construction
@@ -49,37 +158,58 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     , m_selection(new GeometrySelection(mode, this))
     , m_contentLayout(nullptr)
 {
-    // The outer layout provides margins that keep child widgets inside the frame
-    // border drawn by paintEvent.
+    // Resolves the LineEdit token chain so the widget matches native inputs.
+    setProperty("component", "LineEdit");
+
+    // The outer layout insets child widgets to the frame border + padding drawn
+    // by paintEvent; the concrete margins come from applyStyleMetrics().
     auto* outerLayout = new QVBoxLayout(this);
-    outerLayout->setContentsMargins(4, 2, 4, 2);
     outerLayout->setSpacing(0);
 
     auto* contentContainer = new QWidget(this);
-    contentContainer->setAttribute(Qt::WA_TransparentForMouseEvents, false);
     m_contentLayout = new QVBoxLayout(contentContainer);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
-    m_contentLayout->setSpacing(2);
     outerLayout->addWidget(contentContainer);
 
-    // React to model changes.
+    // React to model changes — every signal simply rebuilds the visible rows.
     connect(m_selection, &GeometrySelection::referencesChanged, this, &GeometrySelectorWidget::rebuildRows);
     connect(
         m_selection,
         &GeometrySelection::selectionModeEntered,
         this,
-        &GeometrySelectorWidget::onSelectionModeEntered
+        &GeometrySelectorWidget::rebuildRows
     );
     connect(
         m_selection,
         &GeometrySelection::selectionModeExited,
         this,
-        &GeometrySelectorWidget::onSelectionModeExited
+        &GeometrySelectorWidget::rebuildRows
     );
 
     // Paint as a line-edit panel — signal to Qt that we draw our own background.
     setAutoFillBackground(false);
 
+    applyStyleMetrics();
+    rebuildRows();
+}
+
+GeometrySelectorWidget::GeometrySelectorWidget(QWidget* parent)
+    : GeometrySelectorWidget(GeometryQuantity::Single, parent)
+{}
+
+GeometryQuantity GeometrySelectorWidget::quantity() const
+{
+    return m_selection->quantity();
+}
+
+void GeometrySelectorWidget::setQuantity(GeometryQuantity mode)
+{
+    if (m_selection->quantity() == mode) {
+        return;
+    }
+    m_selection->setQuantity(mode);
+    // The mode changes both the fixed-height rule and the rendered rows.
+    applyStyleMetrics();
     rebuildRows();
 }
 
@@ -94,7 +224,92 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
     option.initFrom(this);
     option.state |= QStyle::State_Sunken;
     option.features = QStyleOptionFrame::None;
+    option.lineWidth = 1;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
+}
+
+void GeometrySelectorWidget::enterEvent(QEnterEvent* /*event*/)
+{
+    setHovered(true);
+}
+
+void GeometrySelectorWidget::leaveEvent(QEvent* /*event*/)
+{
+    setHovered(false);
+}
+
+void GeometrySelectorWidget::changeEvent(QEvent* event)
+{
+    QWidget::changeEvent(event);
+    // Re-resolve token-driven metrics when the theme or style swaps out.
+    if (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange) {
+        applyStyleMetrics();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Style metrics — margins, spacing and fixed height sourced from tokens.
+// ---------------------------------------------------------------------------
+
+void GeometrySelectorWidget::applyStyleMetrics()
+{
+    QMargins padding = FallbackPadding;
+    int spacing = FallbackSpacing;
+    int height = FallbackHeight;
+
+    // Pull the LineEdit box geometry through the cached, enum-based token path;
+    // the padding, spacing and height match every other native input field.
+    if (Application::Instance) {
+        auto* fcStyle = Application::Instance->freeCADStyle();
+        const FreeCADStyle::BoxGeometryDefinition geometry = fcStyle->resolveBoxGeometry(
+            FreeCADStyle::contextOf(this)
+        );
+        padding = geometry.padding.toMargins();
+        spacing = geometry.iconSpacing;
+        if (geometry.height) {
+            height = *geometry.height;
+        }
+    }
+
+    m_itemSpacing = spacing;
+    layout()->setContentsMargins(padding);
+    m_contentLayout->setSpacing(spacing);
+
+    // A single-value selector is exactly one line-edit tall; a multi-value one
+    // grows with its rows, so only the single-value form pins its height.
+    if (m_selection->quantity() == GeometryQuantity::Single) {
+        setFixedHeight(height);
+    }
+    else {
+        setMinimumHeight(0);
+        setMaximumHeight(QWIDGETSIZE_MAX);
+    }
+}
+
+void GeometrySelectorWidget::setHovered(bool hovered)
+{
+    for (QToolButton* surface : m_referenceSurfaces) {
+        if (hovered) {
+            surface->setText(tr("change"));
+            surface->setIcon(IconManager::instance().icon(":/icons/tabler/outline/replace.svg"));
+        }
+        else {
+            surface->setText(surface->property("restText").toString());
+            surface->setIcon(surface->property("restIcon").value<QIcon>());
+        }
+        surface->update();
+    }
+    for (QWidget* control : m_hoverOnly) {
+        control->setVisible(hovered);
+    }
+    if (m_placeholderButton != nullptr) {
+        // Placeholder colour at rest, normal text colour while hovered.
+        const QPalette::ColorRole textSource = hovered ? QPalette::ButtonText
+                                                       : QPalette::PlaceholderText;
+        QPalette buttonPalette = m_placeholderButton->palette();
+        buttonPalette.setColor(QPalette::ButtonText, palette().color(textSource));
+        m_placeholderButton->setPalette(buttonPalette);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -126,134 +341,157 @@ static QIcon viewProviderIconFor(App::DocumentObject* object)
     return viewProvider->getIcon();
 }
 
-GeometrySelectorWidget::ReferenceRow GeometrySelectorWidget::makeEmptyRow()
+/// Builds a row's horizontal layout with the given item spacing.
+static QHBoxLayout* makeRowLayout(QWidget* container, int spacing)
 {
-    auto* container = new QWidget(this);
     auto* layout = new QHBoxLayout(container);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    layout->setSpacing(spacing);
+    return layout;
+}
 
-    auto* selectButton = new QToolButton(container);
-    selectButton->setText(tr("+ Select geometry"));
-    selectButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    selectButton->setAutoRaise(true);
+/// Human-readable label for one reference: "Object" or "Object.Sub".
+static QString referenceLabel(const GeometryReference& ref)
+{
+    const QString objectName = ref.object
+        ? QString::fromStdString(ref.object->Label.getValue())
+        : QCoreApplication::translate("Gui::GeometrySelectorWidget", "<deleted>");
+    const QString subName = QString::fromStdString(ref.subName);
+    return subName.isEmpty() ? objectName : objectName + u'.' + subName;
+}
+
+/// Every reference joined into one comma-separated label.
+static QString joinedReferenceText(const std::vector<GeometryReference>& references)
+{
+    QStringList labels;
+    labels.reserve(static_cast<qsizetype>(references.size()));
+    for (const GeometryReference& ref : references) {
+        labels << referenceLabel(ref);
+    }
+    return labels.join(QStringLiteral(", "));
+}
+
+QWidget* GeometrySelectorWidget::makeEmptyRow()
+{
+    auto* container = new QWidget(this);
+    auto* layout = makeRowLayout(container, m_itemSpacing);
+
+    // Full-width prompt: "+ Select geometry", styled like the other internal
+    // buttons. Its text is drawn in the placeholder colour until hovered (see
+    // setHovered), matching a native input's placeholder.
+    auto* selectButton = makeActionButton(
+        container,
+        IconManager::instance().icon(":/icons/tabler/outline/plus.svg")
+    );
+    selectButton->setText(tr("Select geometry"));
+    selectButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    selectButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    styleAsInternalButton(selectButton);
     layout->addWidget(selectButton);
-    layout->addStretch();
 
     connect(selectButton, &QToolButton::clicked, this, [this] { m_selection->startSelecting(); });
 
-    return ReferenceRow {
-        .container = container,
-        .iconLabel = nullptr,
-        .nameLabel = nullptr,
-        .actionButton = selectButton,
-        .removeButton = nullptr,
-    };
+    m_placeholderButton = selectButton;
+    return container;
 }
 
-GeometrySelectorWidget::ReferenceRow GeometrySelectorWidget::makeSelectingRow()
+QWidget* GeometrySelectorWidget::makeSelectingRow()
 {
     auto* container = new QWidget(this);
-    auto* layout = new QHBoxLayout(container);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    auto* layout = makeRowLayout(container, m_itemSpacing);
 
-    auto* placeholderLabel = new QLabel(tr("Select sketch, face…"), container);
-    placeholderLabel->setEnabled(false);
-    layout->addWidget(placeholderLabel);
-    layout->addStretch();
+    const std::vector<GeometryReference>& refs = m_selection->references();
 
+    if (refs.empty()) {
+        // Nothing picked yet: an italic prompt in the muted placeholder colour. The
+        // fixed prompt is short, so a plain label suffices.
+        auto* prompt = new QLabel(tr("Select sketch, face…"), container);
+        QFont italicFont = prompt->font();
+        italicFont.setItalic(true);
+        prompt->setFont(italicFont);
+        prompt->setForegroundRole(QPalette::PlaceholderText);
+        prompt->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        layout->addWidget(prompt);
+    }
+    else {
+        // Show the live selection so the user sees what they have and what each edit
+        // changes. Elided so a long list never widens the task panel.
+        auto* selectionLabel = new ElideLabel(container);
+        selectionLabel->setText(joinedReferenceText(refs));
+        selectionLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        layout->addWidget(selectionLabel);
+    }
+
+    // Confirm the pick: commits the current references and ends the session.
+    // A tick glyph, sitting just left of Cancel.
+    auto* confirmButton = makeActionButton(
+        container,
+        IconManager::instance().icon(":/icons/tabler/outline/check.svg")
+    );
+    confirmButton->setToolTip(tr("Confirm"));
+    styleAsInternalButton(confirmButton);
+    layout->addWidget(confirmButton);
+
+    connect(confirmButton, &QToolButton::clicked, this, [this] { m_selection->stopSelecting(); });
+
+    // Cancel the pick: ends the session and restores the previous selection.
+    // Plain text — a cancel glyph would not read clearly here.
     auto* cancelButton = new QToolButton(container);
     cancelButton->setText(tr("Cancel"));
-    cancelButton->setAutoRaise(true);
+    cancelButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    styleAsInternalButton(cancelButton);
     layout->addWidget(cancelButton);
 
-    connect(cancelButton, &QToolButton::clicked, this, [this] {
-        m_selection->stopSelecting();
-        m_selection->clear();
-    });
+    connect(cancelButton, &QToolButton::clicked, this, [this] { m_selection->cancelSelecting(); });
 
-    return ReferenceRow {
-        .container = container,
-        .iconLabel = nullptr,
-        .nameLabel = placeholderLabel,
-        .actionButton = cancelButton,
-        .removeButton = nullptr,
-    };
+    return container;
 }
 
-GeometrySelectorWidget::ReferenceRow GeometrySelectorWidget::makeReferenceRow(std::size_t index)
+QWidget* GeometrySelectorWidget::makeReferenceRow()
 {
     const std::vector<GeometryReference>& refs = m_selection->references();
-    const GeometryReference& ref = refs[index];
 
     auto* container = new QWidget(this);
-    auto* layout = new QHBoxLayout(container);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(4);
+    auto* layout = makeRowLayout(container, m_itemSpacing);
 
-    // Type icon from view provider — degrades gracefully if unavailable.
-    auto* iconLabel = new QLabel(container);
-    const QIcon providerIcon = viewProviderIconFor(ref.object);
-    if (!providerIcon.isNull()) {
-        const QSize iconSize(16, 16);
-        iconLabel->setPixmap(providerIcon.pixmap(iconSize));
-        iconLabel->setFixedSize(iconSize);
-    }
-    else {
-        iconLabel->hide();
-    }
-    layout->addWidget(iconLabel);
+    // ---- Change surface: a wide button filling the row's free width --------
+    // It mirrors the widget's hover state, so hovering anywhere over the input
+    // (even over the clear button beside it) keeps it in its hover fill and
+    // clicking it re-enters selection. Every reference is shown as one
+    // comma-separated label; the type icon is used only for a lone reference.
+    const QString displayText = joinedReferenceText(refs);
+    const QIcon typeIcon = refs.size() == 1 ? viewProviderIconFor(refs.front().object) : QIcon();
 
-    // Object + subelement name.
-    const QString objectName = ref.object ? QString::fromStdString(ref.object->Label.getValue())
-                                          : tr("<deleted>");
-    const QString subName = QString::fromStdString(ref.subName);
-    const QString displayText = subName.isEmpty() ? objectName : objectName + u'.' + subName;
+    auto* change = new HostStateToolButton(container);
+    change->stateHost = this;
+    change->setIcon(typeIcon);
+    change->setText(displayText);
+    change->setIconSize(QSize(IconSize, IconSize));
+    change->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    change->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    change->setProperty("restText", displayText);
+    change->setProperty("restIcon", QVariant::fromValue(typeIcon));
+    styleAsInternalButton(change);
+    layout->addWidget(change, 1);
+    connect(change, &QToolButton::clicked, this, [this] { m_selection->startSelecting(); });
+    m_referenceSurfaces.push_back(change);
 
-    auto* nameLabel = new QLabel(displayText, container);
-    nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    layout->addWidget(nameLabel);
+    // ---- Clear: a single control that drops every reference. Sits to the
+    // right with its own hover, no fill at rest, revealed only while hovered.
+    auto* clearButton = makeActionButton(
+        container,
+        IconManager::instance().icon(":/icons/tabler/outline/trash.svg")
+    );
+    clearButton->setToolTip(tr("Clear"));
+    styleAsInternalButton(clearButton);
+    connect(clearButton, &QToolButton::clicked, this, [this] { m_selection->clear(); });
+    layout->addWidget(clearButton);
 
-    // Change button (re-enter selecting mode to pick a replacement).
-    auto* changeButton = new QToolButton(container);
-    changeButton->setText(tr("Change"));
-    changeButton->setAutoRaise(true);
-    layout->addWidget(changeButton);
+    // Shown only while hovered; registered so setHovered() can toggle it.
+    clearButton->hide();
+    m_hoverOnly.push_back(clearButton);
 
-    connect(changeButton, &QToolButton::clicked, this, [this] { m_selection->startSelecting(); });
-
-    // Remove button: only shown in AllowMultiple mode.
-    QToolButton* removeButton = nullptr;
-    if (m_selection->quantity() == GeometryQuantity::AllowMultiple) {
-        removeButton = new QToolButton(container);
-        removeButton->setText(tr("Remove"));
-        removeButton->setAutoRaise(true);
-        layout->addWidget(removeButton);
-
-        connect(removeButton, &QToolButton::clicked, this, [this, index] {
-            m_selection->removeReference(index);
-        });
-    }
-    else {
-        // Single mode: clear button acts as remove.
-        auto* clearButton = new QToolButton(container);
-        clearButton->setText(tr("Clear"));
-        clearButton->setAutoRaise(true);
-        layout->addWidget(clearButton);
-
-        connect(clearButton, &QToolButton::clicked, this, [this] { m_selection->clear(); });
-
-        removeButton = clearButton;
-    }
-
-    return ReferenceRow {
-        .container = container,
-        .iconLabel = iconLabel,
-        .nameLabel = nameLabel,
-        .actionButton = changeButton,
-        .removeButton = removeButton,
-    };
+    return container;
 }
 
 // ---------------------------------------------------------------------------
@@ -262,6 +500,9 @@ GeometrySelectorWidget::ReferenceRow GeometrySelectorWidget::makeReferenceRow(st
 
 void GeometrySelectorWidget::clearRows()
 {
+    m_referenceSurfaces.clear();
+    m_hoverOnly.clear();
+    m_placeholderButton = nullptr;
     while (QLayoutItem* item = m_contentLayout->takeAt(0)) {
         if (QWidget* widget = item->widget()) {
             widget->deleteLater();
@@ -270,15 +511,6 @@ void GeometrySelectorWidget::clearRows()
     }
 }
 
-void GeometrySelectorWidget::addRowWidget(QWidget* rowWidget)
-{
-    m_contentLayout->addWidget(rowWidget);
-}
-
-// ---------------------------------------------------------------------------
-// Slot implementations
-// ---------------------------------------------------------------------------
-
 void GeometrySelectorWidget::rebuildRows()
 {
     clearRows();
@@ -286,26 +518,15 @@ void GeometrySelectorWidget::rebuildRows()
     const std::vector<GeometryReference>& refs = m_selection->references();
 
     if (m_selection->isSelecting()) {
-        addRowWidget(makeSelectingRow().container);
-        return;
+        m_contentLayout->addWidget(makeSelectingRow());
+    }
+    else if (refs.empty()) {
+        m_contentLayout->addWidget(makeEmptyRow());
+    }
+    else {
+        m_contentLayout->addWidget(makeReferenceRow());
     }
 
-    if (refs.empty()) {
-        addRowWidget(makeEmptyRow().container);
-        return;
-    }
-
-    for (std::size_t index = 0; index < refs.size(); ++index) {
-        addRowWidget(makeReferenceRow(index).container);
-    }
-}
-
-void GeometrySelectorWidget::onSelectionModeEntered()
-{
-    rebuildRows();
-}
-
-void GeometrySelectorWidget::onSelectionModeExited()
-{
-    rebuildRows();
+    // Reflect the current pointer position if it is already over the widget.
+    setHovered(underMouse());
 }

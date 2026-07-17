@@ -41,6 +41,7 @@
 #include <Mod/Part/App/ExtrusionHelper.h>
 #include "Mod/Part/App/TopoShapeOpCode.h"
 #include <Mod/Part/App/PartFeature.h>
+#include <Mod/Part/App/Part2DObject.h>
 
 #include "FeatureExtrude.h"
 
@@ -131,8 +132,44 @@ bool FeatureExtrude::hasTaperedAngle() const
         || fabs(TaperAngle2.getValue()) > Base::toRadians(Precision::Angular());
 }
 
+void FeatureExtrude::keepReferenceAxisWithProfile()
+{
+    // A "Sketch normal"-style ReferenceAxis points at the profile sketch's own
+    // virtual axis (N_/V_/H_Axis, Axis<n>). When the profile is swapped, that
+    // reference is left pointing at the previous sketch, where the virtual axis
+    // can no longer be resolved and getAxis() throws. Re-point it at the new
+    // profile so the extrude keeps a valid direction. Edge- or datum-based axes
+    // still resolve against their original object, so they are left untouched.
+    App::DocumentObject* axisObject = ReferenceAxis.getValue();
+    App::DocumentObject* profile = Profile.getValue();
+    if (!axisObject || axisObject == profile || !axisObject->isDerivedFrom<Part::Part2DObject>()) {
+        return;
+    }
+
+    const std::vector<std::string>& subs = ReferenceAxis.getSubValues();
+    const bool isSketchVirtualAxis = !subs.empty()
+        && (subs[0] == "N_Axis" || subs[0] == "V_Axis" || subs[0] == "H_Axis"
+            || subs[0].compare(0, 4, "Axis") == 0);
+    if (!isSketchVirtualAxis) {
+        return;
+    }
+
+    if (profile && profile->isDerivedFrom<Part::Part2DObject>()) {
+        ReferenceAxis.setValue(profile, subs);
+    }
+    else {
+        // The new profile is not a sketch (e.g. a face): fall back to the
+        // profile normal by clearing the reference axis.
+        ReferenceAxis.setValue(nullptr, std::vector<std::string>());
+    }
+}
+
 void FeatureExtrude::onChanged(const App::Property* prop)
 {
+    if (!isRestoring() && prop == &Profile) {
+        keepReferenceAxisWithProfile();
+    }
+
     if (!isRestoring() && prop == &Midplane) {
         // Deprecation notice: Midplane property is deprecated and has been replaced by SideType in
         // FreeCAD 1.1 when FeatureExtrude was refactored.

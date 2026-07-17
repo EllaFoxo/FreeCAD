@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <cstddef>
+#include <vector>
 
 #include <QWidget>
 
@@ -31,7 +31,7 @@
 
 #include "GeometrySelection.h"
 
-class QLabel;
+class QEnterEvent;
 class QToolButton;
 class QVBoxLayout;
 
@@ -43,18 +43,23 @@ namespace Gui
  * as a line-edit-styled frame. Exposes the core via selection() so callers
  * can configure gate, binding, and preview hooks.
  *
- * The frame is painted via QStyle::PE_PanelLineEdit so any ambient QStyle
- * themes it correctly — no hard dependency on FreeCADStyle.
+ * The frame is painted via QStyle::PE_PanelLineEdit and all spacing comes from
+ * the design-system tokens (LineEditPadding, FormControlIconSpacing, …) so any
+ * ambient QStyle themes it correctly — no hard dependency on FreeCADStyle.
+ *
+ * A filled reference presents only its icon and name at rest; the change and
+ * remove controls are revealed while the pointer hovers the widget, matching
+ * the Figma design.
  */
 class GuiExport GeometrySelectorWidget: public QWidget
 {
     Q_OBJECT
+    Q_PROPERTY(Gui::GeometryQuantity quantity READ quantity WRITE setQuantity)
 
 public:
-    explicit GeometrySelectorWidget(
-        GeometryQuantity mode = GeometryQuantity::Single,
-        QWidget* parent = nullptr
-    );
+    explicit GeometrySelectorWidget(GeometryQuantity mode, QWidget* parent = nullptr);
+
+    explicit GeometrySelectorWidget(QWidget* parent = nullptr);
 
     /// The owned core; callers use this to configure gate, binding, etc.
     GeometrySelection* selection() const
@@ -62,34 +67,43 @@ public:
         return m_selection;
     }
 
+    /// The selection quantity mode (Single / AllowMultiple); delegates to the core.
+    GeometryQuantity quantity() const;
+    void setQuantity(GeometryQuantity mode);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
+    void enterEvent(QEnterEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
 private Q_SLOTS:
     void rebuildRows();
-    void onSelectionModeEntered();
-    void onSelectionModeExited();
 
 private:
-    /// One rendered row for a single reference (or the empty/selecting placeholder).
-    struct ReferenceRow
-    {
-        QWidget* container = nullptr;
-        QLabel* iconLabel = nullptr;
-        QLabel* nameLabel = nullptr;
-        QToolButton* actionButton = nullptr;
-        QToolButton* removeButton = nullptr;
-    };
-
-    ReferenceRow makeEmptyRow();
-    ReferenceRow makeSelectingRow();
-    ReferenceRow makeReferenceRow(std::size_t index);
+    QWidget* makeEmptyRow();
+    QWidget* makeSelectingRow();
+    /// A single row listing every reference as a comma-separated label, with one
+    /// change surface and one clear control.
+    QWidget* makeReferenceRow();
 
     void clearRows();
-    void addRowWidget(QWidget* rowWidget);
+    /// Resolves layout margins, spacing and fixed height from style tokens.
+    void applyStyleMetrics();
+    /// Swaps filled references between their rest (icon + name) and hover
+    /// (change + remove) presentations.
+    void setHovered(bool hovered);
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;
+    /// Item spacing within a row, resolved from the LineEdit icon-spacing token.
+    int m_itemSpacing = 6;
+    /// Change surfaces whose label + icon swap between rest and hover.
+    std::vector<QToolButton*> m_referenceSurfaces;
+    /// Controls revealed only while hovered (the remove buttons on the top layer).
+    std::vector<QWidget*> m_hoverOnly;
+    /// The empty-state "Select geometry" prompt: placeholder text until hovered.
+    QToolButton* m_placeholderButton = nullptr;
 };
 
 }  // namespace Gui

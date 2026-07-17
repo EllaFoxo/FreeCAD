@@ -485,6 +485,15 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
         .inherits = {"Button", "FormControl"},
     }, StyleComponent::ToolButton);
 
+    // Simplified, solid-filled action button for custom composite widgets. It
+    // inherits FormControl directly (not Button) so it carries none of Button's
+    // gradient background or hover/pressed effects.
+    registry.registerDescriptor({
+        .name     = "InternalButton",
+        .variants = {"ControlSize", "State"},
+        .inherits = {"FormControl"},
+    }, StyleComponent::InternalButton);
+
     registry.registerDescriptor({
         .name     = "LineEdit",
         .variants = {"ControlSize", "State"},

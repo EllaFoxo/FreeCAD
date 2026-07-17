@@ -979,6 +979,18 @@ void TaskExtrudeParameters::updateDirectionEdits()
     ui->ZDirectionEdit->setValue(extrude->Direction.getValue().z);
 }
 
+void TaskExtrudeParameters::onProfileChanged()
+{
+    // The profile drives the shape, the extrude direction and the sketch-normal
+    // axis, so recompute first and then refresh everything derived from it: the
+    // direction combo (its "Sketch normal" entry now targets the new sketch), the
+    // direction spin boxes and the draggers.
+    recomputeFeature();
+    fillDirectionCombo();
+    updateDirectionEdits();
+    setGizmoPositions();
+}
+
 void TaskExtrudeParameters::setDirectionMode(int index)
 {
     auto extrude = getObject<PartDesign::FeatureExtrude>();

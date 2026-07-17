@@ -81,6 +81,10 @@ protected:
     bool hasTaperedAngle() const;
     void onChanged(const App::Property* prop) override;
 
+    /// Keeps a "Sketch normal"-style ReferenceAxis valid when the Profile is
+    /// swapped, by re-pointing the sketch's virtual axis at the new profile.
+    void keepReferenceAxisWithProfile();
+
 
     /// Options for buildExtrusion()
     enum class ExtrudeOption
