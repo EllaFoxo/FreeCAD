@@ -96,9 +96,9 @@ private Q_SLOTS:
 private:
     QWidget* makeEmptyRow();
     QWidget* makeSelectingRow();
-    /// A single row listing every reference as a comma-separated label, with one
-    /// change surface and one clear control.
-    QWidget* makeReferenceRow();
+    /// A capped scroll list with one row per reference, each row revealing its own
+    /// remove control on hover.
+    QWidget* makeReferenceList();
 
     void clearRows();
     /// Resolves layout margins, spacing and fixed height from style tokens.
@@ -106,15 +106,13 @@ private:
     /// Swaps filled references between their rest (icon + name) and hover
     /// (change + remove) presentations.
     void setHovered(bool hovered);
+    /// The resolved List row height, or a font-based fallback when headless.
+    int rowHeight() const;
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;
     /// Item spacing within a row, resolved from the LineEdit icon-spacing token.
     int m_itemSpacing = 6;
-    /// Change surfaces whose label + icon swap between rest and hover.
-    std::vector<QToolButton*> m_referenceSurfaces;
-    /// Controls revealed only while hovered (the remove buttons on the top layer).
-    std::vector<QWidget*> m_hoverOnly;
     /// The empty-state "Select geometry" prompt: placeholder text until hovered.
     QToolButton* m_placeholderButton = nullptr;
 };

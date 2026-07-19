@@ -110,6 +110,40 @@ private Q_SLOTS:
         multi.selection()->stopSelecting();
     }
 
+    // n=1 and n≥2 render through the same ReferenceListView with one row each.
+    void test_referenceListRendersOneRowPerReference()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        widget.selection()->setReferences(
+            {{.object = m_object, .subName = "Edge1"},
+             {.object = m_object, .subName = "Edge2"},
+             {.object = m_object, .subName = "Edge3"}}
+        );
+        QCoreApplication::processEvents();
+        const auto rows = widget.findChildren<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QCOMPARE(rows.size(), 3);
+
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.findChildren<QWidget*>(QStringLiteral("gsw_reference_row")).size(), 1);
+    }
+
+    // ≥4 references cap the list height so the 4th row is only partially visible.
+    void test_referenceListCapsHeight()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        std::vector<Gui::GeometryReference> many;
+        for (int index = 0; index < 6; ++index) {
+            many.push_back({.object = m_object, .subName = "Edge" + std::to_string(index)});
+        }
+        widget.selection()->setReferences(many);
+        QCoreApplication::processEvents();
+        auto* list = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_list"));
+        QVERIFY(list != nullptr);
+        QVERIFY(list->maximumHeight() < QWIDGETSIZE_MAX);
+        QVERIFY(list->sizeHint().height() > list->maximumHeight());  // content exceeds cap
+    }
+
 private:
     std::string m_docName;
     App::Document* m_doc = nullptr;
