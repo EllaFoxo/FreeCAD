@@ -160,6 +160,12 @@ private:
     void seedViewportSelection();
     /// Drops the reference matching a Ctrl-deselect in the 3D view (AllowMultiple only).
     void handleDeselect(const Gui::SelectionChanges& msg);
+    /// Confirms (commits + ends) the session on the next event-loop turn unless a pick
+    /// arrives first. A replacing pick clears the selection just before adding to it, so
+    /// a lone clear — a click on empty space — is the only one that reaches the deferred
+    /// slot and confirms.
+    void scheduleConfirmOnClear();
+    bool _confirmOnClearPending = false;
 
     App::Property* _boundProperty = nullptr;
     /// The bound property's owning object; watched so a deletion drops the binding

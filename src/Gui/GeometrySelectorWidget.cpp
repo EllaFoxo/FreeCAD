@@ -23,6 +23,8 @@
 
 #include "GeometrySelectorWidget.h"
 
+#include <iterator>
+
 #include <QCoreApplication>
 #include <QEnterEvent>
 #include <QEvent>
@@ -30,8 +32,10 @@
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QImage>
 #include <QLabel>
 #include <QPaintEvent>
+#include <QPixmap>
 #include <QStringList>
 #include <QStyleOptionFrame>
 #include <QStyleOptionToolButton>
@@ -341,6 +345,28 @@ static QIcon viewProviderIconFor(App::DocumentObject* object)
     return viewProvider->getIcon();
 }
 
+/// The icon shared by every reference, or a null QIcon when they differ or none is
+/// available. Icons are compared by their rendered pixmap so distinct objects of the
+/// same type (which produce separate QIcon instances) still count as sharing one icon.
+static QIcon commonReferenceIcon(const std::vector<GeometryReference>& references)
+{
+    if (references.empty()) {
+        return {};
+    }
+    QIcon firstIcon = viewProviderIconFor(references.front().object);
+    if (firstIcon.isNull()) {
+        return {};
+    }
+    const QImage reference = firstIcon.pixmap(IconSize, IconSize).toImage();
+    for (auto it = std::next(references.begin()); it != references.end(); ++it) {
+        const QIcon icon = viewProviderIconFor(it->object);
+        if (icon.isNull() || icon.pixmap(IconSize, IconSize).toImage() != reference) {
+            return {};
+        }
+    }
+    return firstIcon;
+}
+
 /// Builds a row's horizontal layout with the given item spacing.
 static QHBoxLayout* makeRowLayout(QWidget* container, int spacing)
 {
@@ -458,9 +484,9 @@ QWidget* GeometrySelectorWidget::makeReferenceRow()
     // It mirrors the widget's hover state, so hovering anywhere over the input
     // (even over the clear button beside it) keeps it in its hover fill and
     // clicking it re-enters selection. Every reference is shown as one
-    // comma-separated label; the type icon is used only for a lone reference.
+    // comma-separated label; the type icon is shown when every reference shares it.
     const QString displayText = joinedReferenceText(refs);
-    const QIcon typeIcon = refs.size() == 1 ? viewProviderIconFor(refs.front().object) : QIcon();
+    const QIcon typeIcon = commonReferenceIcon(refs);
 
     auto* change = new HostStateToolButton(container);
     change->stateHost = this;

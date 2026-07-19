@@ -8,6 +8,7 @@
 
 #include <QApplication>
 #include <QString>
+#include <QTimer>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -258,11 +259,31 @@ void GeometrySelection::handleDeselect(const Gui::SelectionChanges& msg)
     updateReferences(std::move(next));
 }
 
+void GeometrySelection::scheduleConfirmOnClear()
+{
+    _confirmOnClearPending = true;
+    // Fire after the current synchronous selection burst: a replacing pick emits the
+    // clear and its AddSelection back-to-back, and that AddSelection clears the flag
+    // below before this runs. A standalone clear (empty-space click) survives to here.
+    QTimer::singleShot(0, this, [this] {
+        if (_confirmOnClearPending && _selecting) {
+            _confirmOnClearPending = false;
+            stopSelecting();
+        }
+    });
+}
+
 void GeometrySelection::onSelectionChanged(const Gui::SelectionChanges& msg)
 {
     if (!_selecting) {
         return;
     }
+    if (msg.Type == Gui::SelectionChanges::ClrSelection) {
+        scheduleConfirmOnClear();
+        return;
+    }
+    // Any other change belongs to an active pick, so cancel a pending empty-space confirm.
+    _confirmOnClearPending = false;
     if (msg.Type == Gui::SelectionChanges::RmvSelection) {
         handleDeselect(msg);
         return;
