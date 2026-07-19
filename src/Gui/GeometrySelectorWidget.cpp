@@ -103,8 +103,10 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     , m_selection(new GeometrySelection(mode, this))
     , m_contentLayout(nullptr)
 {
-    // Resolves the LineEdit token chain so the widget matches native inputs.
-    setProperty("component", "LineEdit");
+    // Resolves the List token chain so the widget matches native lists.
+    setProperty("component", "List");
+    // Makes real keyboard focus show the focused style like any input.
+    setFocusPolicy(Qt::StrongFocus);
 
     // The outer layout insets child widgets to the frame border + padding drawn
     // by paintEvent; the concrete margins come from applyStyleMetrics().
@@ -166,21 +168,15 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QStylePainter painter(this);
     QStyleOptionFrame option;
-    option.initFrom(this);
+    option.initFrom(this);  // carries real keyboard-focus state
     option.state |= QStyle::State_Sunken;
+    if (m_selection->isSelecting()) {
+        option.state |= QStyle::State_HasFocus;  // stay "focused" through viewport picking
+    }
+    option.state.setFlag(QStyle::State_MouseOver, false);
     option.features = QStyleOptionFrame::None;
     option.lineWidth = 1;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
-}
-
-void GeometrySelectorWidget::enterEvent(QEnterEvent* /*event*/)
-{
-    setHovered(true);
-}
-
-void GeometrySelectorWidget::leaveEvent(QEvent* /*event*/)
-{
-    setHovered(false);
 }
 
 void GeometrySelectorWidget::changeEvent(QEvent* event)
@@ -231,18 +227,6 @@ void GeometrySelectorWidget::applyStyleMetrics()
     }
 }
 
-void GeometrySelectorWidget::setHovered(bool hovered)
-{
-    if (m_placeholderButton != nullptr) {
-        // Placeholder colour at rest, normal text colour while hovered.
-        const QPalette::ColorRole textSource = hovered ? QPalette::ButtonText
-                                                       : QPalette::PlaceholderText;
-        QPalette buttonPalette = m_placeholderButton->palette();
-        buttonPalette.setColor(QPalette::ButtonText, palette().color(textSource));
-        m_placeholderButton->setPalette(buttonPalette);
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Row building helpers
 // ---------------------------------------------------------------------------
@@ -289,6 +273,12 @@ static QString referenceLabel(const GeometryReference& ref)
         : QCoreApplication::translate("Gui::GeometrySelectorWidget", "<deleted>");
     const QString subName = QString::fromStdString(ref.subName);
     return subName.isEmpty() ? objectName : objectName + u'.' + subName;
+}
+
+/// The single canonical "select geometry" prompt, shared by the inline row and the overlay.
+static QString selectingPlaceholderText()
+{
+    return QCoreApplication::translate("Gui::GeometrySelectorWidget", "Select sketch, face…");
 }
 
 namespace
@@ -367,7 +357,12 @@ private:
 class SelectingOverlay: public QWidget
 {
 public:
-    SelectingOverlay(std::function<void()> onDone, std::function<void()> onCancel, QWidget* parent)
+    SelectingOverlay(
+        const QString& promptText,
+        std::function<void()> onDone,
+        std::function<void()> onCancel,
+        QWidget* parent
+    )
         : QWidget(parent)
     {
         setObjectName(QStringLiteral("gsw_overlay"));
@@ -377,9 +372,7 @@ public:
         auto* column = new QVBoxLayout(this);
         column->addStretch(1);
 
-        auto* prompt = new QLabel(
-            QCoreApplication::translate("Gui::GeometrySelectorWidget", "Select face or sketch…")
-        );
+        auto* prompt = new QLabel(promptText);
         QFont italicFont = prompt->font();
         italicFont.setItalic(true);
         prompt->setFont(italicFont);
@@ -398,6 +391,7 @@ public:
         done->setText(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Done"));
         done->setProperty("component", "InternalButton");
         done->setDefault(true);
+        done->setAutoDefault(false);
         if (Gui::Application::Instance) {
             done->setStyle(Gui::Application::Instance->freeCADStyle());
         }
@@ -437,8 +431,8 @@ QWidget* GeometrySelectorWidget::makeEmptyRow()
     auto* layout = makeRowLayout(container, m_itemSpacing);
 
     // Full-width prompt: "+ Select geometry", styled like the other internal
-    // buttons. Its text is drawn in the placeholder colour until hovered (see
-    // setHovered), matching a native input's placeholder.
+    // buttons. Its text is drawn in the placeholder colour, matching a native
+    // input's placeholder.
     auto* selectButton = makeActionButton(
         container,
         IconManager::instance().icon(":/icons/tabler/outline/plus.svg")
@@ -447,11 +441,13 @@ QWidget* GeometrySelectorWidget::makeEmptyRow()
     selectButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     selectButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     styleAsInternalButton(selectButton);
+    QPalette buttonPalette = selectButton->palette();
+    buttonPalette.setBrush(QPalette::ButtonText, palette().placeholderText());
+    selectButton->setPalette(buttonPalette);
     layout->addWidget(selectButton);
 
     connect(selectButton, &QToolButton::clicked, this, [this] { m_selection->startSelecting(); });
 
-    m_placeholderButton = selectButton;
     return container;
 }
 
@@ -460,7 +456,7 @@ QWidget* GeometrySelectorWidget::makeSelectingInlineRow()
     auto* container = new QWidget(this);
     auto* rowLayout = makeRowLayout(container, m_itemSpacing);
 
-    auto* prompt = new QLabel(tr("Select sketch, face…"), container);
+    auto* prompt = new QLabel(selectingPlaceholderText(), container);
     QFont italicFont = prompt->font();
     italicFont.setItalic(true);
     prompt->setFont(italicFont);
@@ -536,6 +532,7 @@ QWidget* GeometrySelectorWidget::makeSelectingOverlay()
     stack->addWidget(makeReferenceList());
 
     auto* overlay = new SelectingOverlay(
+        selectingPlaceholderText(),
         [this] { m_selection->stopSelecting(); },
         [this] { m_selection->cancelSelecting(); },
         container
@@ -563,7 +560,6 @@ int GeometrySelectorWidget::rowHeight() const
 
 void GeometrySelectorWidget::clearRows()
 {
-    m_placeholderButton = nullptr;
     while (QLayoutItem* item = m_contentLayout->takeAt(0)) {
         if (QWidget* widget = item->widget()) {
             // Detach immediately so a rebuild triggered from a descendant's own event
@@ -604,7 +600,5 @@ void GeometrySelectorWidget::rebuildRows()
             break;
     }
 
-    // Reflect the current pointer position if it is already over the widget.
-    setHovered(underMouse());
     update();
 }

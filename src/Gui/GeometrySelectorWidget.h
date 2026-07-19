@@ -31,8 +31,6 @@
 
 #include "GeometrySelection.h"
 
-class QEnterEvent;
-class QToolButton;
 class QVBoxLayout;
 
 namespace Gui
@@ -40,12 +38,13 @@ namespace Gui
 
 /**
  * Composite view widget that owns a GeometrySelection core and renders it
- * as a line-edit-styled frame. Exposes the core via selection() so callers
- * can configure gate, binding, and preview hooks.
+ * as a list-styled frame. Exposes the core via selection() so callers can
+ * configure gate, binding, and preview hooks.
  *
- * The frame is painted via QStyle::PE_PanelLineEdit and all spacing comes from
- * the design-system tokens (LineEditPadding, FormControlIconSpacing, …) so any
- * ambient QStyle themes it correctly — no hard dependency on FreeCADStyle.
+ * The frame is still painted via the ambient QStyle, and all spacing comes
+ * from the design-system tokens resolved through the List token chain, so
+ * any ambient QStyle themes it correctly — no hard dependency on
+ * FreeCADStyle.
  *
  * A filled reference presents only its icon and name at rest; the change and
  * remove controls are revealed while the pointer hovers the widget, matching
@@ -86,8 +85,6 @@ public:
 
 protected:
     void paintEvent(QPaintEvent* event) override;
-    void enterEvent(QEnterEvent* event) override;
-    void leaveEvent(QEvent* event) override;
     void changeEvent(QEvent* event) override;
 
 private Q_SLOTS:
@@ -108,9 +105,6 @@ private:
     void clearRows();
     /// Resolves layout margins, spacing and fixed height from style tokens.
     void applyStyleMetrics();
-    /// Swaps filled references between their rest (icon + name) and hover
-    /// (change + remove) presentations.
-    void setHovered(bool hovered);
     /// The resolved List row height, or a font-based fallback when headless.
     int rowHeight() const;
 
@@ -118,8 +112,6 @@ private:
     QVBoxLayout* m_contentLayout;
     /// Item spacing within a row, resolved from the LineEdit icon-spacing token.
     int m_itemSpacing = 6;
-    /// The empty-state "Select geometry" prompt: placeholder text until hovered.
-    QToolButton* m_placeholderButton = nullptr;
 };
 
 }  // namespace Gui

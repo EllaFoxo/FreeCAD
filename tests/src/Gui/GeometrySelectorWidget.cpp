@@ -177,6 +177,13 @@ private Q_SLOTS:
         multi.selection()->stopSelecting();
     }
 
+    // The widget resolves the List token chain, not LineEdit.
+    void test_usesListComponentOverride()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        QCOMPARE(widget.property("component").toString(), QStringLiteral("List"));
+    }
+
 private:
     std::string m_docName;
     App::Document* m_doc = nullptr;
