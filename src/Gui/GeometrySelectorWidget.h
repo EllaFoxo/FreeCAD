@@ -95,10 +95,15 @@ private Q_SLOTS:
 
 private:
     QWidget* makeEmptyRow();
-    QWidget* makeSelectingRow();
+    /// Single-row chrome for ≤1 committed reference: placeholder + Cancel, plus
+    /// Confirm only when the mode can accumulate a multi-select.
+    QWidget* makeSelectingInlineRow();
     /// A capped scroll list with one row per reference, each row revealing its own
     /// remove control on hover.
     QWidget* makeReferenceList();
+    /// Dims the reused reference list beneath a centred placeholder + Done + Cancel,
+    /// for ≥2 committed references while selecting.
+    QWidget* makeSelectingOverlay();
 
     void clearRows();
     /// Resolves layout margins, spacing and fixed height from style tokens.

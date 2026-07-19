@@ -34,9 +34,11 @@
 #include <QIcon>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPaintEvent>
+#include <QPushButton>
 #include <QScrollArea>
-#include <QStringList>
+#include <QStackedLayout>
 #include <QStyleOptionFrame>
 #include <QStylePainter>
 #include <QToolButton>
@@ -289,17 +291,6 @@ static QString referenceLabel(const GeometryReference& ref)
     return subName.isEmpty() ? objectName : objectName + u'.' + subName;
 }
 
-/// Every reference joined into one comma-separated label.
-static QString joinedReferenceText(const std::vector<GeometryReference>& references)
-{
-    QStringList labels;
-    labels.reserve(static_cast<qsizetype>(references.size()));
-    for (const GeometryReference& ref : references) {
-        labels << referenceLabel(ref);
-    }
-    return labels.join(QStringLiteral(", "));
-}
-
 namespace
 {
 /// A single reference row: type icon + elided label, plus a remove button that is
@@ -369,6 +360,75 @@ private:
     QToolButton* m_remove = nullptr;
     std::function<void()> m_activate;
 };
+
+/// Dims whatever sits beneath it in a StackAll QStackedLayout, centring an italic
+/// placeholder above a Done (accent) + Cancel row. Opaque to mouse events so clicks
+/// never reach the dimmed content underneath.
+class SelectingOverlay: public QWidget
+{
+public:
+    SelectingOverlay(std::function<void()> onDone, std::function<void()> onCancel, QWidget* parent)
+        : QWidget(parent)
+    {
+        setObjectName(QStringLiteral("gsw_overlay"));
+        setAttribute(Qt::WA_NoSystemBackground);  // we paint our own scrim
+        setAutoFillBackground(false);
+
+        auto* column = new QVBoxLayout(this);
+        column->addStretch(1);
+
+        auto* prompt = new QLabel(
+            QCoreApplication::translate("Gui::GeometrySelectorWidget", "Select face or sketch…")
+        );
+        QFont italicFont = prompt->font();
+        italicFont.setItalic(true);
+        prompt->setFont(italicFont);
+        prompt->setForegroundRole(QPalette::PlaceholderText);
+        prompt->setAlignment(Qt::AlignCenter);
+        column->addWidget(prompt, 0, Qt::AlignHCenter);
+
+        auto* buttons = new QHBoxLayout;
+        buttons->addStretch(1);
+
+        // Done accepts the accumulated Ctrl-multiselect; a QPushButton with the default
+        // flag so FreeCADStyle resolves the accent (Primary) ButtonType variant — a
+        // QToolButton has no equivalent "default" style feature.
+        auto* done = new QPushButton(this);
+        done->setObjectName(QStringLiteral("gsw_done"));
+        done->setText(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Done"));
+        done->setProperty("component", "InternalButton");
+        done->setDefault(true);
+        if (Gui::Application::Instance) {
+            done->setStyle(Gui::Application::Instance->freeCADStyle());
+        }
+        QObject::connect(done, &QPushButton::clicked, this, [handler = std::move(onDone)] {
+            handler();
+        });
+        buttons->addWidget(done);
+
+        auto* cancel = new QToolButton(this);
+        cancel->setObjectName(QStringLiteral("gsw_cancel"));
+        cancel->setText(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Cancel"));
+        cancel->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        styleAsInternalButton(cancel);
+        QObject::connect(cancel, &QToolButton::clicked, this, [handler = std::move(onCancel)] {
+            handler();
+        });
+        buttons->addWidget(cancel);
+        buttons->addStretch(1);
+        column->addLayout(buttons);
+        column->addStretch(1);
+    }
+
+protected:
+    void paintEvent(QPaintEvent* /*event*/) override
+    {
+        QPainter painter(this);
+        QColor scrim = palette().color(QPalette::Base);
+        scrim.setAlphaF(0.75F);  // dim the list beneath while keeping it visible
+        painter.fillRect(rect(), scrim);
+    }
+};
 }  // namespace
 
 QWidget* GeometrySelectorWidget::makeEmptyRow()
@@ -395,54 +455,39 @@ QWidget* GeometrySelectorWidget::makeEmptyRow()
     return container;
 }
 
-QWidget* GeometrySelectorWidget::makeSelectingRow()
+QWidget* GeometrySelectorWidget::makeSelectingInlineRow()
 {
     auto* container = new QWidget(this);
-    auto* layout = makeRowLayout(container, m_itemSpacing);
+    auto* rowLayout = makeRowLayout(container, m_itemSpacing);
 
-    const std::vector<GeometryReference>& refs = m_selection->references();
+    auto* prompt = new QLabel(tr("Select sketch, face…"), container);
+    QFont italicFont = prompt->font();
+    italicFont.setItalic(true);
+    prompt->setFont(italicFont);
+    prompt->setForegroundRole(QPalette::PlaceholderText);
+    prompt->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    rowLayout->addWidget(prompt, 1);
 
-    if (refs.empty()) {
-        // Nothing picked yet: an italic prompt in the muted placeholder colour. The
-        // fixed prompt is short, so a plain label suffices.
-        auto* prompt = new QLabel(tr("Select sketch, face…"), container);
-        QFont italicFont = prompt->font();
-        italicFont.setItalic(true);
-        prompt->setFont(italicFont);
-        prompt->setForegroundRole(QPalette::PlaceholderText);
-        prompt->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        layout->addWidget(prompt);
+    // Confirm commits an accumulated Ctrl-multiselect; only AllowMultiple can accumulate.
+    if (m_selection->quantity() == GeometryQuantity::AllowMultiple) {
+        auto* confirmButton = makeActionButton(
+            container,
+            IconManager::instance().icon(":/icons/tabler/outline/check.svg")
+        );
+        confirmButton->setObjectName(QStringLiteral("gsw_confirm"));
+        confirmButton->setToolTip(tr("Confirm"));
+        styleAsInternalButton(confirmButton);
+        connect(confirmButton, &QToolButton::clicked, this, [this] { m_selection->stopSelecting(); });
+        rowLayout->addWidget(confirmButton);
     }
-    else {
-        // Show the live selection so the user sees what they have and what each edit
-        // changes. Elided so a long list never widens the task panel.
-        auto* selectionLabel = new ElideLabel(container);
-        selectionLabel->setText(joinedReferenceText(refs));
-        selectionLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        layout->addWidget(selectionLabel);
-    }
 
-    // Confirm the pick: commits the current references and ends the session.
-    // A tick glyph, sitting just left of Cancel.
-    auto* confirmButton = makeActionButton(
-        container,
-        IconManager::instance().icon(":/icons/tabler/outline/check.svg")
-    );
-    confirmButton->setToolTip(tr("Confirm"));
-    styleAsInternalButton(confirmButton);
-    layout->addWidget(confirmButton);
-
-    connect(confirmButton, &QToolButton::clicked, this, [this] { m_selection->stopSelecting(); });
-
-    // Cancel the pick: ends the session and restores the previous selection.
-    // Plain text — a cancel glyph would not read clearly here.
     auto* cancelButton = new QToolButton(container);
+    cancelButton->setObjectName(QStringLiteral("gsw_cancel"));
     cancelButton->setText(tr("Cancel"));
     cancelButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     styleAsInternalButton(cancelButton);
-    layout->addWidget(cancelButton);
-
     connect(cancelButton, &QToolButton::clicked, this, [this] { m_selection->cancelSelecting(); });
+    rowLayout->addWidget(cancelButton);
 
     return container;
 }
@@ -477,6 +522,27 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
     const int stride = rowHeight() + m_itemSpacing;
     scroll->setMaximumHeight(qRound(3.25 * stride));
     return scroll;
+}
+
+QWidget* GeometrySelectorWidget::makeSelectingOverlay()
+{
+    auto* container = new QWidget(this);
+    auto* stack = new QStackedLayout(container);
+    stack->setStackingMode(QStackedLayout::StackAll);
+    stack->setContentsMargins(0, 0, 0, 0);
+
+    // The committed references, shown dimmed beneath the overlay. Reuse the list builder
+    // so the rows are pixel-identical to the idle state.
+    stack->addWidget(makeReferenceList());
+
+    auto* overlay = new SelectingOverlay(
+        [this] { m_selection->stopSelecting(); },
+        [this] { m_selection->cancelSelecting(); },
+        container
+    );
+    stack->addWidget(overlay);
+    stack->setCurrentWidget(overlay);  // topmost in StackAll
+    return container;
 }
 
 int GeometrySelectorWidget::rowHeight() const
@@ -528,8 +594,10 @@ void GeometrySelectorWidget::rebuildRows()
             m_contentLayout->addWidget(makeEmptyRow());
             break;
         case VisualState::SelectingInline:
+            m_contentLayout->addWidget(makeSelectingInlineRow());
+            break;
         case VisualState::SelectingOverlay:
-            m_contentLayout->addWidget(makeSelectingRow());  // replaced in Task 3
+            m_contentLayout->addWidget(makeSelectingOverlay());
             break;
         case VisualState::ReferenceList:
             m_contentLayout->addWidget(makeReferenceList());

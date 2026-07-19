@@ -144,6 +144,39 @@ private Q_SLOTS:
         QVERIFY(list->sizeHint().height() > list->maximumHeight());  // content exceeds cap
     }
 
+    // Confirm affordance appears only in AllowMultiple selecting; never in Single.
+    void test_confirmAffordancePerMode()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget single(Gui::GeometryQuantity::Single);
+        single.selection()->startSelecting();
+        QCoreApplication::processEvents();
+        QVERIFY(single.findChild<QWidget*>(QStringLiteral("gsw_confirm")) == nullptr);
+        QVERIFY(single.findChild<QWidget*>(QStringLiteral("gsw_cancel")) != nullptr);
+        single.selection()->stopSelecting();
+
+        Gui::GeometrySelectorWidget multi(Gui::GeometryQuantity::AllowMultiple);
+        multi.selection()->startSelecting();  // 0 committed → inline chrome
+        QCoreApplication::processEvents();
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_confirm")) != nullptr);
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_cancel")) != nullptr);
+        multi.selection()->stopSelecting();
+    }
+
+    // ≥2 committed references while selecting produce the overlay with Done + Cancel.
+    void test_overlayChromeForMultiReselect()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget multi(Gui::GeometryQuantity::AllowMultiple);
+        multi.selection()->setReferences(
+            {{.object = m_object, .subName = "Edge1"}, {.object = m_object, .subName = "Edge2"}}
+        );
+        multi.selection()->startSelecting();
+        QCoreApplication::processEvents();
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_overlay")) != nullptr);
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_done")) != nullptr);
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_cancel")) != nullptr);
+        multi.selection()->stopSelecting();
+    }
+
 private:
     std::string m_docName;
     App::Document* m_doc = nullptr;
