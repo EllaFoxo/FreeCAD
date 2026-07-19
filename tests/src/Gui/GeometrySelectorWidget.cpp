@@ -82,6 +82,34 @@ private Q_SLOTS:
         QCOMPARE(static_cast<int>(widget.selection()->references().size()), 0);
     }
 
+    // visualState() classifies purely from mode + references + isSelecting.
+    void test_visualStateClassification()  // NOLINT
+    {
+        using VS = Gui::GeometrySelectorWidget::VisualState;
+
+        Gui::GeometrySelectorWidget single(Gui::GeometryQuantity::Single);
+        QCOMPARE(single.visualState(), VS::Empty);
+        single.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCOMPARE(single.visualState(), VS::ReferenceList);
+        single.selection()->startSelecting();
+        QCOMPARE(single.visualState(), VS::SelectingInline);
+        single.selection()->stopSelecting();
+
+        Gui::GeometrySelectorWidget multi(Gui::GeometryQuantity::AllowMultiple);
+        multi.selection()->setReferences(
+            {{.object = m_object, .subName = "Edge1"}, {.object = m_object, .subName = "Edge2"}}
+        );
+        QCOMPARE(multi.visualState(), VS::ReferenceList);
+        multi.selection()->startSelecting();
+        QCOMPARE(multi.visualState(), VS::SelectingOverlay);  // ≥2 committed → overlay
+        multi.selection()->stopSelecting();
+
+        multi.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        multi.selection()->startSelecting();
+        QCOMPARE(multi.visualState(), VS::SelectingInline);  // 1 committed → inline
+        multi.selection()->stopSelecting();
+    }
+
 private:
     std::string m_docName;
     App::Document* m_doc = nullptr;

@@ -71,6 +71,19 @@ public:
     GeometryQuantity quantity() const;
     void setQuantity(GeometryQuantity mode);
 
+    /// The four rendered states, derived from mode + references + session.
+    enum class VisualState
+    {
+        Empty,             // idle, no references
+        SelectingInline,   // selecting with ≤1 committed reference (single-row chrome)
+        ReferenceList,     // idle with ≥1 references (capped scroll list)
+        SelectingOverlay,  // selecting with ≥2 committed references (overlay chrome)
+    };
+
+    /// Classifies the current state from the core alone; independent of any QStyle or
+    /// Gui::Application, so it is well-defined even in a headless harness.
+    VisualState visualState() const;
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void enterEvent(QEnterEvent* event) override;

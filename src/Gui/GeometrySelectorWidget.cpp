@@ -537,22 +537,33 @@ void GeometrySelectorWidget::clearRows()
     }
 }
 
+GeometrySelectorWidget::VisualState GeometrySelectorWidget::visualState() const
+{
+    const std::size_t count = m_selection->references().size();
+    if (m_selection->isSelecting()) {
+        return count >= 2 ? VisualState::SelectingOverlay : VisualState::SelectingInline;
+    }
+    return count == 0 ? VisualState::Empty : VisualState::ReferenceList;
+}
+
 void GeometrySelectorWidget::rebuildRows()
 {
     clearRows();
 
-    const std::vector<GeometryReference>& refs = m_selection->references();
-
-    if (m_selection->isSelecting()) {
-        m_contentLayout->addWidget(makeSelectingRow());
-    }
-    else if (refs.empty()) {
-        m_contentLayout->addWidget(makeEmptyRow());
-    }
-    else {
-        m_contentLayout->addWidget(makeReferenceRow());
+    switch (visualState()) {
+        case VisualState::Empty:
+            m_contentLayout->addWidget(makeEmptyRow());
+            break;
+        case VisualState::SelectingInline:
+        case VisualState::SelectingOverlay:
+            m_contentLayout->addWidget(makeSelectingRow());  // replaced in Task 3
+            break;
+        case VisualState::ReferenceList:
+            m_contentLayout->addWidget(makeReferenceRow());  // replaced in Task 2
+            break;
     }
 
     // Reflect the current pointer position if it is already over the widget.
     setHovered(underMouse());
+    update();
 }
