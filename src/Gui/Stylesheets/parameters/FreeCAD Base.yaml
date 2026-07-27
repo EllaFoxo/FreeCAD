@@ -34,9 +34,12 @@ BaseBorderColor: "@Neutral.400"
 BaseShadowColor: "opacity(@Color.black, 8%)"
 BaseHoveredBorderColorEffect: "effect(darken: 0.08)"
 
+FormControlInternalHeight: 22px
 FormControlSmallHeight: 24px
 FormControlHeight: 28px
 FormControlBigHeight: 32px
+
+FormControlInternalFontSize: 6px
 
 FormControlIconSpacing: "@Spacing.150"
 
@@ -48,8 +51,10 @@ FormControlTextColor: "@BaseTextColor"
 
 ButtonBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Background.100, @Background.200)"
 ButtonMinWidth: 100px
-ButtonHeight: "@FormControlHeight"
 ButtonPadding: "padding(horizontal: @Spacing.300, vertical: @Spacing.100)"
+
+ButtonInternalPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.050)"
+
 ButtonIconSpacing: "@FormControlIconSpacing"
 ButtonIconSize: 16px
 ButtonFontSize: 12px
@@ -98,12 +103,11 @@ ButtonLinkCheckedInnerShadow: "@ButtonCheckedInnerShadow"
 
 ToolButtonPadding: "padding(@Spacing.150)"
 ToolButtonSmallPadding: "padding(@Spacing.100)"
+ToolButtonInternalPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.050)"
 
 ToolButtonMinWidth: "@ButtonHeight"
 ToolButtonSmallMinWidth: "@ButtonSmallHeight"
-
-ToolButtonSmallHeight: "@FormControlSmallHeight"
-ToolButtonBigHeight: "@FormControlBigHeight"
+ToolButtonInternalMinWidth: "reset()"
 
 # ── ToolButton – Link variant (auto-raise / toolbar buttons) ──────────────────
 # These tokens define the visual appearance of QToolButton with autoRaise=true,
@@ -246,6 +250,14 @@ ListBackground: "@Background.000"
 ListBorderColor: "@FormControlBorderColor"
 ListBorderRadius: "@FormControlBorderRadius"
 ListBorderThickness: "@FormControlBorderThickness"
+
+# State overrides — the list frame reacts to focus and hover like a text input,
+# so its accent focus ring and hover border effect are derived from LineEdit.
+ListFocusedBorderColor: "@LineEditFocusedBorderColor"
+ListHoveredBorderColorEffect: "@LineEditHoveredBorderColorEffect"
+
+ListDisabledBackground: "@LineEditDisabledBackground"
+ListDisabledTextColor: "@LineEditDisabledTextColor"
 
 # ── List Item ──────────────────────────────────────────────────────────────
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
