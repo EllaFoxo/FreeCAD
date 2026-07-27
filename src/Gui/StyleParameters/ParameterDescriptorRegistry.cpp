@@ -25,7 +25,10 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
+#include <cstdint>
 #include <map>
+#include <numeric>
 #include <ranges>
 
 namespace Gui::StyleParameters
@@ -81,8 +84,9 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
         {static_cast<uint8_t>(ButtonType::Link),    "Link"},
     }},
     {VariantSlot::ControlSize, {
-        {static_cast<uint8_t>(ControlSize::Small), "Small"},
-        {static_cast<uint8_t>(ControlSize::Big),   "Big"},
+        {static_cast<uint8_t>(ControlSize::Internal), "Internal"},
+        {static_cast<uint8_t>(ControlSize::Small),    "Small"},
+        {static_cast<uint8_t>(ControlSize::Big),      "Big"},
     }},
     {VariantSlot::Position, {
         {static_cast<uint8_t>(Position::East),  "East"},
@@ -103,15 +107,54 @@ std::string_view variantSlotString(VariantSlot slot, uint8_t value)
     return lookup(lookup(variantSlotNames, slot), value);
 }
 
-// Concatenates the string fragments of all non-default variant slots.
-// e.g. ButtonType=Primary, ControlSize=Default → "Primary"
-std::string variantString(const VariantKey& variant)
+// The non-default variant value strings, in slot order.
+// e.g. ButtonType=Primary, ControlSize=Internal → {"Primary", "Internal"}.
+std::vector<std::string> variantFragments(const VariantKey& variant)
 {
-    std::string result;
+    std::vector<std::string> fragments;
     for (size_t index = 0; index < variant.slots.size(); ++index) {
-        result += variantSlotString(static_cast<VariantSlot>(index), variant.slots.at(index));
+        const std::string_view fragment
+            = variantSlotString(static_cast<VariantSlot>(index), variant.slots.at(index));
+        if (!fragment.empty()) {
+            fragments.emplace_back(fragment);
+        }
     }
-    return result;
+    return fragments;
+}
+
+// Every combination of the variant fragments, most-specific first, dropping lower-priority
+// (later-slot) fragments before higher-priority ones; the empty (base) combination is last.
+// e.g. {"Primary", "Internal"} → {"PrimaryInternal", "Primary", "Internal", ""}.
+//
+// This makes variants *compose* in the fallback: a token defined for a single variant (say
+// ButtonInternalHeight) is still reached when another variant (Primary) is also active, so a
+// primary internal button gets both its accent colour and its 18px height. For zero or one
+// active fragment the output is {fragment, ""} (or just {""}), identical to a plain
+// concatenation, so single-variant widgets are completely unaffected.
+std::vector<std::string> variantCombinations(const std::vector<std::string>& fragments)
+{
+    const size_t count = fragments.size();
+    std::vector<std::uint32_t> masks(size_t {1} << count);
+    std::iota(masks.begin(), masks.end(), std::uint32_t {0});
+    // More fragments (more specific) first; ties broken so earlier slots are kept longer.
+    std::ranges::sort(masks, [](std::uint32_t lhs, std::uint32_t rhs) {
+        const int lhsBits = std::popcount(lhs);
+        const int rhsBits = std::popcount(rhs);
+        return lhsBits != rhsBits ? lhsBits > rhsBits : lhs < rhs;
+    });
+
+    std::vector<std::string> combinations;
+    combinations.reserve(masks.size());
+    for (const std::uint32_t mask : masks) {
+        std::string combination;
+        for (size_t bit = 0; bit < count; ++bit) {
+            if ((mask & (std::uint32_t {1} << bit)) != 0) {
+                combination += fragments[bit];
+            }
+        }
+        combinations.push_back(std::move(combination));
+    }
+    return combinations;
 }
 
 // ── State strings ────────────────────────────────────────────────────────────
@@ -274,7 +317,7 @@ std::optional<ParsedParameterName> ParameterDescriptorRegistry::parse(const std:
 std::vector<std::string> ParameterDescriptorRegistry::buildPrefixes(const StyleContext& context) const
 {
     const std::string elementSuffix = std::string(elementString(context.element));
-    const std::string variantStr = variantString(context.variant);
+    const std::vector<std::string> fragments = variantFragments(context.variant);
 
     std::vector<std::string> activeStates;
     for (const StyleState stateFlag : statePriorityOrder) {
@@ -286,11 +329,11 @@ std::vector<std::string> ParameterDescriptorRegistry::buildPrefixes(const StyleC
     std::vector<std::string> prefixes;
 
     if (!context.componentOverride.empty()) {
-        appendPrefixEntries(prefixes, context.componentOverride + elementSuffix, variantStr, activeStates);
+        appendPrefixEntries(prefixes, context.componentOverride + elementSuffix, fragments, activeStates);
     }
 
     for (const std::string& componentName : chain(context.component)) {
-        appendPrefixEntries(prefixes, componentName + elementSuffix, variantStr, activeStates);
+        appendPrefixEntries(prefixes, componentName + elementSuffix, fragments, activeStates);
     }
 
     return prefixes;
@@ -305,10 +348,10 @@ std::vector<std::string> ParameterDescriptorRegistry::buildPrefixesFromParsed(
         return {};
     }
 
-    // ── Compute variant string and active state strings ────────────────────
-    // Variant string: concatenation of matched variant-kind values in variant order.
-    // State strings: matched values of State-kind variants (0 or 1 per variant).
-    std::string variantStr;
+    // ── Collect variant fragments and active state strings ─────────────────
+    // Variant fragments: matched variant-kind values in variant order (composed in the
+    // fallback by appendPrefixEntries). State strings: matched State-kind values.
+    std::vector<std::string> fragments;
     std::vector<std::string> activeStates;
 
     for (const std::string& variantName : desc->variants) {
@@ -324,7 +367,7 @@ std::vector<std::string> ParameterDescriptorRegistry::buildPrefixesFromParsed(
         }
 
         if (variant.kind == ParameterVariantKind::Variant) {
-            variantStr += valueIt->second;
+            fragments.push_back(valueIt->second);
         }
         else {
             activeStates.push_back(valueIt->second);
@@ -336,7 +379,7 @@ std::vector<std::string> ParameterDescriptorRegistry::buildPrefixesFromParsed(
 
     std::vector<std::string> prefixes;
     for (const std::string& componentBase : chain) {
-        appendPrefixEntries(prefixes, componentBase, variantStr, activeStates);
+        appendPrefixEntries(prefixes, componentBase, fragments, activeStates);
     }
 
     return prefixes;
@@ -394,22 +437,19 @@ const std::vector<std::string>& ParameterDescriptorRegistry::sortedNames() const
 void ParameterDescriptorRegistry::appendPrefixEntries(
     std::vector<std::string>& prefixes,
     const std::string& componentBase,
-    const std::string& variantStr,
+    const std::vector<std::string>& variantFragments,
     const std::vector<std::string>& activeStates
 ) const
 {
-    if (!variantStr.empty()) {
+    // Each variant combination (most specific first) is tried with each active state, then
+    // without a state. The final combination is always the empty (base) one, so this emits
+    // the plain component and component+state entries last.
+    for (const std::string& variant : variantCombinations(variantFragments)) {
         for (const std::string& stateStr : activeStates) {
-            prefixes.push_back(componentBase + variantStr + stateStr);
+            prefixes.push_back(componentBase + variant + stateStr);
         }
-        prefixes.push_back(componentBase + variantStr);
+        prefixes.push_back(componentBase + variant);
     }
-
-    for (const std::string& stateStr : activeStates) {
-        prefixes.push_back(componentBase + stateStr);
-    }
-
-    prefixes.push_back(componentBase);
 }
 
 std::vector<std::string> ParameterDescriptorRegistry::resolveChainNames(const std::string& name) const

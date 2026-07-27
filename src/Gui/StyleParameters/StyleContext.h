@@ -113,6 +113,7 @@ enum class ButtonType : uint8_t
 enum class ControlSize : uint8_t
 {
     Default,
+    Internal,  // compact 18px controls embedded inside composite widgets
     Small,
     Big,
     // Add new sizes before COUNT

@@ -3089,10 +3089,26 @@ StyleContext FreeCADStyle::contextOf(
         context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
     }
 
+    // An explicit "buttonType" property overrides the above. It is the only way to mark a
+    // QToolButton as Primary, since a QToolButton never emits the QStyleOptionButton
+    // DefaultButton feature that a default QPushButton uses.
+    if (widget) {
+        const QString buttonType = widget->property("buttonType").toString();
+        if (buttonType == u"primary") {
+            context.variant.set(VariantSlot::ButtonType, ButtonType::Primary);
+        }
+        else if (buttonType == u"link") {
+            context.variant.set(VariantSlot::ButtonType, ButtonType::Link);
+        }
+    }
+
     // ControlSize — derived from the "controlSize" widget property.
     if (widget) {
         const QString sizeName = widget->property("controlSize").toString();
-        if (sizeName == u"small") {
+        if (sizeName == u"internal") {
+            context.variant.set(VariantSlot::ControlSize, ControlSize::Internal);
+        }
+        else if (sizeName == u"small") {
             context.variant.set(VariantSlot::ControlSize, ControlSize::Small);
         }
         else if (sizeName == u"big") {

@@ -221,12 +221,12 @@ private:
 
     const std::vector<std::string>& sortedNames() const;
 
-    // Builds the prefix entries for one component-with-element base string,
-    // given the variant values and the set of active state strings.
+    // Builds the prefix entries for one component-with-element base string, given the active
+    // variant fragments (composed most-specific-first) and the set of active state strings.
     void appendPrefixEntries(
         std::vector<std::string>& prefixes,
         const std::string& componentBase,
-        const std::string& variantStr,
+        const std::vector<std::string>& variantFragments,
         const std::vector<std::string>& activeStates
     ) const;
 
