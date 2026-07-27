@@ -44,6 +44,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <App/Document.h>
 #include <App/DocumentObject.h>
 
 #include "Application.h"
@@ -51,6 +52,7 @@
 #include "ElideLabel.h"
 #include "FreeCADStyle.h"
 #include "IconManager.h"
+#include "Selection/Selection.h"
 #include "ViewProvider.h"
 
 using namespace Gui;
@@ -377,12 +379,18 @@ public:
         int spacing,
         std::function<void()> onActivate,
         std::function<void()> onRemove,
+        std::function<void()> onHoverEnter,
+        std::function<void()> onHoverLeave,
         QWidget* parent
     )
         : QWidget(parent)
         , m_activate(std::move(onActivate))
+        , m_hoverEnter(std::move(onHoverEnter))
+        , m_hoverLeave(std::move(onHoverLeave))
     {
         setObjectName(QStringLiteral("gsw_reference_row"));
+        // Tag the row as a List row so it can paint the ListRow* hovered background itself.
+        setProperty("component", "List");
         auto* rowLayout = new QHBoxLayout(this);
         rowLayout->setContentsMargins(padding);
         rowLayout->setSpacing(spacing);
@@ -415,11 +423,34 @@ public:
 protected:
     void enterEvent(QEnterEvent* /*event*/) override
     {
+        m_hovered = true;
+        update();  // repaint with the hovered row background
         m_remove->show();
+        if (m_hoverEnter) {
+            m_hoverEnter();
+        }
     }
     void leaveEvent(QEvent* /*event*/) override
     {
+        m_hovered = false;
+        update();
         m_remove->hide();
+        if (m_hoverLeave) {
+            m_hoverLeave();
+        }
+    }
+    void paintEvent(QPaintEvent* /*event*/) override
+    {
+        // The row is transparent at rest; only the hovered state paints a background, drawn
+        // through the shared List box painting so it matches the tree/list delegates.
+        if (!m_hovered || !Application::Instance) {
+            return;
+        }
+        StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
+        context.element = StyleParameters::StyleComponentElement::Row;
+        context.state |= StyleParameters::StyleState::Hovered;
+        QPainter painter(this);
+        Application::Instance->freeCADStyle()->paintBox(&painter, rect(), context);
     }
     void mousePressEvent(QMouseEvent* event) override
     {
@@ -442,6 +473,9 @@ protected:
 private:
     QToolButton* m_remove = nullptr;
     std::function<void()> m_activate;
+    std::function<void()> m_hoverEnter;
+    std::function<void()> m_hoverLeave;
+    bool m_hovered = false;
 };
 
 /// The selecting-state chrome: a scrim that dims whatever sits beneath it in a StackAll
@@ -599,6 +633,8 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
             m_itemSpacing,
             [this] { m_selection->startSelecting(); },
             [this, index] { m_selection->removeReference(index); },
+            [this, reference = references[index]] { previewReferenceInView(reference); },
+            [this] { clearReferencePreview(); },
             rowsContainer
         );
         // Pin every row to the resolved row height so the list matches other list-like
@@ -676,6 +712,42 @@ int GeometrySelectorWidget::referenceListHeight() const
     const int rowCount = static_cast<int>(m_selection->references().size());
     const int cappedHeight = qRound(MaxVisibleRows * rowHeight());
     return qMin(rowCount * rowHeight(), cappedHeight);
+}
+
+// ---------------------------------------------------------------------------
+// 3D-view preview — highlight a hovered reference through the shared
+// preselection mechanism, so it looks identical to a live cursor highlight.
+// ---------------------------------------------------------------------------
+
+void GeometrySelectorWidget::previewReferenceInView(const GeometryReference& reference)
+{
+    if (!Application::Instance || !reference.object) {
+        return;
+    }
+    App::Document* document = reference.object->getDocument();
+    const char* objectName = reference.object->getNameInDocument();
+    if (!document || !objectName) {
+        return;
+    }
+    // TreeView source: a highlight requested from a list, matching how the tree preselects a
+    // hovered item; the 3D view's unified selection node renders it like a cursor hover.
+    Selection().setPreselect(
+        document->getName(),
+        objectName,
+        reference.subName.c_str(),
+        0,
+        0,
+        0,
+        SelectionChanges::MsgSource::TreeView
+    );
+}
+
+void GeometrySelectorWidget::clearReferencePreview()
+{
+    if (!Application::Instance) {
+        return;
+    }
+    Selection().rmvPreselect();
 }
 
 // ---------------------------------------------------------------------------
