@@ -155,9 +155,8 @@ void TaskPadParameters::onModeChanged(int index, Side side)
             break;
         case Mode::ToFace:
             sideCtrl.Type->setValue("UpToFace");
-            if (sideCtrl.lineFaceName->text().isEmpty()) {
-                sideCtrl.buttonFace->setChecked(true);
-                handleLineFaceNameClick(sideCtrl.lineFaceName);  // sets placeholder text
+            if (sideCtrl.faceSelector->selection()->references().empty()) {
+                sideCtrl.faceSelector->selection()->startSelecting();
             }
             break;
         case Mode::ToShape:
