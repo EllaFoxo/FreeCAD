@@ -98,12 +98,11 @@ QToolButton* makeActionButton(QWidget* parent, const QIcon& icon)
     return button;
 }
 
-/// Renders @p button as the simplified "InternalButton" component painted by
-/// FreeCADStyle, so the custom inner controls look the same under any application QStyle.
-void styleAsInternalButton(QToolButton* button)
+/// Renders @p button as a flat Link-variant tool button painted by FreeCADStyle — a
+/// borderless control whose auto-raise state maps to the Link ButtonType variant.
+void styleAsLinkButton(QToolButton* button)
 {
-    button->setAutoRaise(false);
-    button->setProperty("component", "InternalButton");
+    button->setAutoRaise(true);  // auto-raise resolves to the Link ButtonType variant
     if (Gui::Application::Instance) {
         button->setStyle(Gui::Application::Instance->freeCADStyle());
     }
@@ -412,7 +411,7 @@ public:
             IconManager::instance().icon(":/icons/tabler/outline/trash.svg")
         );
         m_remove->setToolTip(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Remove"));
-        styleAsInternalButton(m_remove);
+        styleAsLinkButton(m_remove);
         m_remove->hide();
         QObject::connect(m_remove, &QToolButton::clicked, this, [handler = std::move(onRemove)] {
             handler();
