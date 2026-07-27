@@ -1859,17 +1859,29 @@ void FreeCADStyle::drawToolButtonLabel(
             return;
         }
 
-        const QRect shiftedRect = applyButtonShift(contentRect, option, widget);
-        const QPixmap pixmap = renderStyledIcon(
-            painter,
-            option->icon,
-            shiftedRect.size().boundedTo(option->iconSize),
-            option,
-            context
-        );
+        // Prefer the padded content rect, but where the padding leaves too little room for
+        // the icon on an axis, ignore the padding there (grow back toward the full button
+        // rect) so a short button shows the icon at size instead of squashing it.
+        QRect iconRect = contentRect;
+        if (iconRect.width() < option->iconSize.width()) {
+            iconRect.setLeft(option->rect.left());
+            iconRect.setWidth(option->rect.width());
+        }
+        if (iconRect.height() < option->iconSize.height()) {
+            iconRect.setTop(option->rect.top());
+            iconRect.setHeight(option->rect.height());
+        }
+        iconRect = applyButtonShift(iconRect, option, widget);
 
+        // Shrink to the available room preserving aspect ratio; never distort or upscale.
+        QSize iconSize = option->iconSize;
+        if (iconSize.width() > iconRect.width() || iconSize.height() > iconRect.height()) {
+            iconSize.scale(iconRect.size(), Qt::KeepAspectRatio);
+        }
+
+        const QPixmap pixmap = renderStyledIcon(painter, option->icon, iconSize, option, context);
         if (!pixmap.isNull()) {
-            proxy()->drawItemPixmap(painter, shiftedRect, Qt::AlignCenter, pixmap);
+            proxy()->drawItemPixmap(painter, iconRect, Qt::AlignCenter, pixmap);
         }
         return;
     }
