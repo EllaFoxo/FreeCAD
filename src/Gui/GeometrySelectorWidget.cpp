@@ -282,11 +282,12 @@ void GeometrySelectorWidget::applyStyleMetrics()
     );
     m_contentLayout->setSpacing(0);
 
-    // A single-value selector is exactly one row tall; a multi-value one grows with its rows.
-    // Either way the height is driven entirely by the current state's content, so a Fixed
-    // vertical policy keeps the parent from stretching the widget when the task panel has
-    // spare vertical space — it tracks the content's sizeHint like a line edit.
+    // Fill the field column like a line edit or combo box: Expanding horizontally so the
+    // control stretches to the available width instead of hugging its content. Vertically
+    // Fixed, since the height is driven entirely by the current state's content, so the parent
+    // never stretches the widget when the task panel has spare vertical space.
     QSizePolicy policy = sizePolicy();
+    policy.setHorizontalPolicy(QSizePolicy::Expanding);
     policy.setVerticalPolicy(QSizePolicy::Fixed);
     setSizePolicy(policy);
     if (m_selection->quantity() == GeometryQuantity::Single) {
@@ -325,15 +326,6 @@ static QIcon viewProviderIconFor(App::DocumentObject* object)
         return {};
     }
     return viewProvider->getIcon();
-}
-
-/// Builds a row's horizontal layout with the given item padding and icon spacing.
-static QHBoxLayout* makeRowLayout(QWidget* container, QMargins padding, int spacing)
-{
-    auto* layout = new QHBoxLayout(container);
-    layout->setContentsMargins(padding);
-    layout->setSpacing(spacing);
-    return layout;
 }
 
 /// Human-readable label for one reference: "Object" or "Object.Sub".
@@ -477,6 +469,149 @@ private:
     bool m_hovered = false;
 };
 
+/// The idle-state prompt, rendered as an InternalButton sized to its label: transparent at
+/// rest, a light flat gray box (the label plus the button's own padding) while the pointer is
+/// over the row, left-aligned like a native input placeholder. A click starts selecting.
+/// Painted directly rather than hosting a QToolButton so the label stays left-aligned without
+/// wrestling the button's centred layout, and so the box tracks the resolved BoxGeometry.
+class PromptButton: public QWidget
+{
+public:
+    PromptButton(
+        QString text,
+        QMargins outerPadding,
+        int iconSpacing,
+        std::function<void()> onActivate,
+        QWidget* parent
+    )
+        : QWidget(parent)
+        , m_text(std::move(text))
+        , m_outerPadding(outerPadding)
+        , m_iconSpacing(iconSpacing)
+        , m_activate(std::move(onActivate))
+    {
+        setObjectName(QStringLiteral("gsw_prompt"));
+        // Resolve the InternalButton token chain so its BoxStyle/BoxGeometry drive the paint.
+        setProperty("component", "InternalButton");
+    }
+
+    // Report the label-plus-padding extent as the minimum so the field keeps a sensible
+    // minimum width instead of collapsing; beyond that the control expands to fill the column.
+    QSize sizeHint() const override
+    {
+        return contentExtent();
+    }
+    QSize minimumSizeHint() const override
+    {
+        return contentExtent();
+    }
+
+protected:
+    void enterEvent(QEnterEvent* /*event*/) override
+    {
+        m_hovered = true;
+        update();
+    }
+    void leaveEvent(QEvent* /*event*/) override
+    {
+        m_hovered = false;
+        update();
+    }
+    void paintEvent(QPaintEvent* /*event*/) override
+    {
+        QPainter painter(this);
+        // The button box is inset from the frame by the item padding (plus 1px so its rounded
+        // corners clear the frame's 1px border); it then spans the rest of the width.
+        // Transparent at rest — hovering fills that box with the InternalButton background, and
+        // the leading plus icon and label are inset within it by the box's own padding.
+        const QRect box = rect().marginsRemoved(boxMargin());
+        if (m_hovered && Application::Instance) {
+            StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
+            context.state |= StyleParameters::StyleState::Hovered;
+            Application::Instance->freeCADStyle()->paintBox(&painter, box, context);
+        }
+
+        const QColor foreground = palette().color(QPalette::PlaceholderText);
+        QRect content = box.marginsRemoved(buttonPadding());
+
+        const QPixmap icon = IconManager::instance().pixmap(
+            QStringLiteral(":/icons/tabler/outline/plus.svg"),
+            QSize(IconSize, IconSize),
+            foreground
+        );
+        if (!icon.isNull()) {
+            const QRect iconRect(
+                content.left(),
+                content.top() + ((content.height() - IconSize) / 2),
+                IconSize,
+                IconSize
+            );
+            painter.drawPixmap(iconRect, icon);
+            content.setLeft(iconRect.right() + 1 + m_iconSpacing);
+        }
+
+        painter.setPen(foreground);
+        painter.drawText(content, Qt::AlignLeft | Qt::AlignVCenter, m_text);
+    }
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        // Accept the press so the matching release lands here and can start selecting.
+        if (event->button() == Qt::LeftButton) {
+            event->accept();
+            return;
+        }
+        QWidget::mousePressEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && m_activate) {
+            m_activate();
+        }
+    }
+
+private:
+    /// The InternalButton box padding resolved from tokens (the label's inset within the box),
+    /// or the outer padding as a fallback when no Gui::Application (and thus no FreeCADStyle) is
+    /// available, e.g. in the headless harness.
+    QMargins buttonPadding() const
+    {
+        if (Application::Instance) {
+            return Application::Instance->freeCADStyle()
+                ->resolveBoxGeometry(FreeCADStyle::contextOf(this))
+                .padding.toMargins();
+        }
+        return m_outerPadding;
+    }
+
+    /// The box inset: the item padding less 1px on each side, expanding the box outward so it
+    /// sits closer to the frame.
+    QMargins boxMargin() const
+    {
+        return m_outerPadding - QMargins(1, 1, 1, 1);
+    }
+
+    /// The intrinsic extent — icon and label plus the box's own padding plus the box inset —
+    /// used only as the minimum/hint size; the painted box expands to fill the column beyond it.
+    QSize contentExtent() const
+    {
+        const QMargins inner = buttonPadding();
+        const QMargins outer = boxMargin();
+        const QSize label = fontMetrics().size(Qt::TextSingleLine, m_text);
+        return {
+            outer.left() + outer.right() + inner.left() + inner.right() + IconSize + m_iconSpacing
+                + label.width(),
+            outer.top() + outer.bottom() + inner.top() + inner.bottom()
+                + qMax(IconSize, label.height())
+        };
+    }
+
+    QString m_text;
+    QMargins m_outerPadding;
+    int m_iconSpacing;
+    std::function<void()> m_activate;
+    bool m_hovered = false;
+};
+
 /// The selecting-state chrome: a scrim that dims whatever sits beneath it in a StackAll
 /// QStackedLayout, with the italic prompt filling the padded area and the Done/Cancel action
 /// buttons positioned absolutely over the right edge — vertically centred in the full overlay
@@ -594,24 +729,17 @@ private:
 
 QWidget* GeometrySelectorWidget::makeEmptyRow()
 {
-    auto* container = new QWidget(this);
-    container->setFixedHeight(rowHeight());
-    // Let hover and clicks fall through to the frame itself: the empty row carries no
-    // interactive control, so the whole frame acts as one button. Without this the label
-    // would swallow the mouse and the frame's WA_Hover would never see State_MouseOver.
-    container->setAttribute(Qt::WA_TransparentForMouseEvents);
-    auto* layout = makeRowLayout(container, m_itemPadding, m_itemSpacing);
-
-    // Idle prompt: a plain placeholder label, drawn in the placeholder colour like a
-    // native input. Clicking anywhere on the empty frame starts selecting (see
-    // mouseReleaseEvent), so no button is needed here — a button would only inflate the row.
-    auto* placeholder = new QLabel(tr("Select geometry"), container);
-    placeholder->setForegroundRole(QPalette::PlaceholderText);
-    placeholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    placeholder->setAttribute(Qt::WA_TransparentForMouseEvents);
-    layout->addWidget(placeholder, 1);
-
-    return container;
+    // The idle prompt fills the row and handles its own hover and clicks: transparent at rest,
+    // a light gray InternalButton box on hover, and a click starts selecting.
+    auto* prompt = new PromptButton(
+        tr("Select geometry"),
+        m_itemPadding,
+        m_itemSpacing,
+        [this] { m_selection->startSelecting(); },
+        this
+    );
+    prompt->setFixedHeight(rowHeight());
+    return prompt;
 }
 
 QWidget* GeometrySelectorWidget::makeReferenceList()
