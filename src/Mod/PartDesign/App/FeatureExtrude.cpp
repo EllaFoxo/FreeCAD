@@ -22,6 +22,7 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <algorithm>
 #include <limits>
 #include <Mod/Part/App/FCBRepAlgoAPI_Fuse.h>
 #include <BRep_Builder.hxx>
@@ -164,10 +165,51 @@ void FeatureExtrude::keepReferenceAxisWithProfile()
     }
 }
 
+void FeatureExtrude::onBeforeChange(const App::Property* prop)
+{
+    if (prop == &Profile) {
+        // Capture the outgoing profile so onChanged can re-show it once the swap completes
+        // and it turns out to be unused.
+        previousProfile = Profile.getValue();
+    }
+    ProfileBased::onBeforeChange(prop);
+}
+
+void FeatureExtrude::showDetachedPreviousProfile()
+{
+    App::DocumentObject* previous = previousProfile;
+    previousProfile = nullptr;
+
+    // Only act on a genuine swap away from a real object; an unchanged or previously empty
+    // profile leaves nothing to reveal.
+    if (!previous || previous == Profile.getValue()) {
+        return;
+    }
+
+    // Leave it hidden while it still serves as another feature's profile.
+    if (isProfileConsumedElsewhere(previous)) {
+        return;
+    }
+
+    previous->Visibility.setValue(true);
+}
+
+bool FeatureExtrude::isProfileConsumedElsewhere(App::DocumentObject* profile) const
+{
+    if (!profile) {
+        return false;
+    }
+    return std::ranges::any_of(profile->getInList(), [this, profile](App::DocumentObject* consumer) {
+        auto* profileBased = dynamic_cast<ProfileBased*>(consumer);
+        return consumer != this && profileBased && profileBased->Profile.getValue() == profile;
+    });
+}
+
 void FeatureExtrude::onChanged(const App::Property* prop)
 {
     if (!isRestoring() && prop == &Profile) {
         keepReferenceAxisWithProfile();
+        showDetachedPreviousProfile();
     }
 
     if (!isRestoring() && prop == &Midplane) {
