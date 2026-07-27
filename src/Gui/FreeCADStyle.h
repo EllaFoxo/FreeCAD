@@ -340,6 +340,13 @@ public:
     BoxGeometryDefinition resolveBoxGeometry(const StyleParameters::StyleContext& context) const;
 
     /**
+     * @brief Paints the themed box (fill, border, overlay) resolved from @p context into
+     * @p rect, so a custom widget can reuse the same painting the delegates use — e.g. a
+     * list row drawing its own hovered background from the ListRow* tokens.
+     */
+    void paintBox(QPainter* painter, const QRect& rect, const StyleParameters::StyleContext& context) const;
+
+    /**
      * @brief Builds a StyleContext from a widget and its current style option.
      *
      * Derives component from the widget type, variant slots from widget properties

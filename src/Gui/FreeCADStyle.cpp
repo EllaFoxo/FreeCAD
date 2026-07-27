@@ -886,6 +886,18 @@ void FreeCADStyle::drawTabCloseButton(
     painter->restore();
 }
 
+void FreeCADStyle::paintBox(
+    QPainter* painter,
+    const QRect& rect,
+    const StyleParameters::StyleContext& context
+) const
+{
+    // Inset by the resolved Margin before painting, matching drawComponent — the margin is a
+    // BoxGeometry property, so a box painted from a bare rect would otherwise ignore it.
+    const QRect borderRect = resolveBoxGeometry(context).borderRect(rect);
+    drawBoxBackground(painter, borderRect, resolveBoxStyle(context));
+}
+
 void FreeCADStyle::drawItemViewRow(
     QPainter* painter,
     const QStyleOptionViewItem* vopt,
@@ -905,10 +917,11 @@ void FreeCADStyle::drawItemViewRow(
     }
 
     // Qt installs a per-cell clip before calling PE_PanelItemViewItem; replace it
-    // temporarily so the wider fill is not clipped to the cell column.
+    // temporarily so the wider fill is not clipped to the cell column. paintBox insets the
+    // fill by the row's Margin token, so a list row highlight can float clear of the frame.
     painter->save();
     painter->setClipRect(rowRect, Qt::ReplaceClip);
-    drawBoxBackground(painter, rowRect, resolveBoxStyle(rowContext));
+    paintBox(painter, rowRect, rowContext);
     painter->restore();
 }
 
@@ -984,7 +997,7 @@ void FreeCADStyle::drawPrimitive(
         }
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+        paintBox(painter, option->rect, context);
 
         return;
     }
