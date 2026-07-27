@@ -36,7 +36,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
-#include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QStackedLayout>
 #include <QStyleOptionFrame>
@@ -64,12 +64,27 @@ namespace
 /// Standard glyph size for the inline action icons.
 constexpr int IconSize = 16;
 
+/// The reference list grows to this many row strides before it caps and scrolls; the
+/// fractional part leaves the next row partially visible to signal more content.
+constexpr double MaxVisibleRows = 3.25;
+
+/// At or below this many rows the list fits without scrolling and is laid out directly;
+/// beyond it the rows go into a height-capped QScrollArea.
+constexpr int MaxRowsWithoutScroll = 3;
+
+/// Opacity of the scrim that dims the reference list beneath the selecting overlay; high
+/// enough that the committed references stay only barely visible through it.
+constexpr double ScrimOpacity = 0.94;
+
+/// Frame border thickness; the content is inset by this so the painted border stays fully
+/// visible even when the selecting overlay's scrim is drawn on top of the rows.
+constexpr int FrameBorderThickness = 1;
+
 // Style-metric fallbacks used only when no Gui::Application (and thus no
 // FreeCADStyle) is available, e.g. in the headless test harness. In the running
-// application these are superseded by the resolved LineEdit box geometry.
-constexpr QMargins FallbackPadding {6, 4, 6, 4};
+// application these are superseded by the resolved List item box geometry.
+constexpr QMargins FallbackItemPadding {6, 4, 6, 4};
 constexpr int FallbackSpacing = 6;
-constexpr int FallbackHeight = 28;
 
 /// A compact, flat (auto-raise) icon button styled by the ambient QStyle.
 QToolButton* makeActionButton(QWidget* parent, const QIcon& icon)
@@ -92,6 +107,23 @@ void styleAsInternalButton(QToolButton* button)
     }
 }
 
+/// A chromed (non-flat) text tool button at the Internal (18px) control size, painted by
+/// FreeCADStyle. When @p primary it also carries the accent Primary ButtonType variant.
+QToolButton* makeInternalTextButton(QWidget* parent, const QString& text, bool primary)
+{
+    auto* button = new QToolButton(parent);
+    button->setText(text);
+    button->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    button->setProperty("controlSize", "internal");
+    if (primary) {
+        button->setProperty("buttonType", "primary");
+    }
+    if (Gui::Application::Instance) {
+        button->setStyle(Gui::Application::Instance->freeCADStyle());
+    }
+    return button;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -107,6 +139,8 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     setProperty("component", "List");
     // Makes real keyboard focus show the focused style like any input.
     setFocusPolicy(Qt::StrongFocus);
+    // Repaint on pointer enter/leave so the frame reflects its hovered background.
+    setAttribute(Qt::WA_Hover);
 
     // The outer layout insets child widgets to the frame border + padding drawn
     // by paintEvent; the concrete margins come from applyStyleMetrics().
@@ -168,14 +202,13 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QStylePainter painter(this);
     QStyleOptionFrame option;
-    option.initFrom(this);  // carries real keyboard-focus state
+    option.initFrom(this);  // carries real keyboard-focus and hover state
     option.state |= QStyle::State_Sunken;
     if (m_selection->isSelecting()) {
         option.state |= QStyle::State_HasFocus;  // stay "focused" through viewport picking
     }
-    option.state.setFlag(QStyle::State_MouseOver, false);
     option.features = QStyleOptionFrame::None;
-    option.lineWidth = 1;
+    option.lineWidth = FrameBorderThickness;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
 }
 
@@ -188,38 +221,75 @@ void GeometrySelectorWidget::changeEvent(QEvent* event)
     }
 }
 
+void GeometrySelectorWidget::mousePressEvent(QMouseEvent* event)
+{
+    // Accept the press only in the empty state so the matching release is delivered here;
+    // in every other state the rows and their controls handle their own clicks.
+    if (event->button() == Qt::LeftButton && visualState() == VisualState::Empty) {
+        // Take real keyboard focus so the frame shows its focused ring; the early return
+        // otherwise skips the base class's click-to-focus handling.
+        setFocus(Qt::MouseFocusReason);
+        event->accept();
+        return;
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void GeometrySelectorWidget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && visualState() == VisualState::Empty) {
+        m_selection->startSelecting();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
 // ---------------------------------------------------------------------------
 // Style metrics — margins, spacing and fixed height sourced from tokens.
 // ---------------------------------------------------------------------------
 
 void GeometrySelectorWidget::applyStyleMetrics()
 {
-    QMargins padding = FallbackPadding;
-    int spacing = FallbackSpacing;
-    int height = FallbackHeight;
+    QMargins itemPadding = FallbackItemPadding;
+    int iconSpacing = FallbackSpacing;
 
-    // Pull the LineEdit box geometry through the cached, enum-based token path;
-    // the padding, spacing and height match every other native input field.
+    // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing):
+    // a list frame draws no container padding, so the per-row inset lives on each row.
     if (Application::Instance) {
         auto* fcStyle = Application::Instance->freeCADStyle();
-        const FreeCADStyle::BoxGeometryDefinition geometry = fcStyle->resolveBoxGeometry(
-            FreeCADStyle::contextOf(this)
-        );
-        padding = geometry.padding.toMargins();
-        spacing = geometry.iconSpacing;
-        if (geometry.height) {
-            height = *geometry.height;
-        }
+        // contextOf only honours a non-Root element for recognised item-view widget types;
+        // for this plain QWidget (tagged component="List") it leaves element=Root, so pin
+        // Item explicitly to reach the ListItem* tokens instead of the empty List root.
+        StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
+        context.element = StyleParameters::StyleComponentElement::Item;
+        const FreeCADStyle::BoxGeometryDefinition item = fcStyle->resolveBoxGeometry(context);
+        itemPadding = item.padding.toMargins();
+        iconSpacing = item.iconSpacing;
     }
 
-    m_itemSpacing = spacing;
-    layout()->setContentsMargins(padding);
-    m_contentLayout->setSpacing(spacing);
+    m_itemPadding = itemPadding;
+    m_itemSpacing = iconSpacing;
 
-    // A single-value selector is exactly one line-edit tall; a multi-value one
-    // grows with its rows, so only the single-value form pins its height.
+    // Inset content by the frame border only; each row supplies its own padding via
+    // m_itemPadding, and rows abut with no inter-row gap so the control reads as one
+    // continuous list. The border inset keeps the painted frame clear of the overlay scrim.
+    layout()->setContentsMargins(
+        FrameBorderThickness,
+        FrameBorderThickness,
+        FrameBorderThickness,
+        FrameBorderThickness
+    );
+    m_contentLayout->setSpacing(0);
+
+    // A single-value selector is exactly one row tall; a multi-value one grows with its rows.
+    // Either way the height is driven entirely by the current state's content, so a Fixed
+    // vertical policy keeps the parent from stretching the widget when the task panel has
+    // spare vertical space — it tracks the content's sizeHint like a line edit.
+    QSizePolicy policy = sizePolicy();
+    policy.setVerticalPolicy(QSizePolicy::Fixed);
+    setSizePolicy(policy);
     if (m_selection->quantity() == GeometryQuantity::Single) {
-        setFixedHeight(height);
+        setFixedHeight(rowHeight());
     }
     else {
         setMinimumHeight(0);
@@ -256,11 +326,11 @@ static QIcon viewProviderIconFor(App::DocumentObject* object)
     return viewProvider->getIcon();
 }
 
-/// Builds a row's horizontal layout with the given item spacing.
-static QHBoxLayout* makeRowLayout(QWidget* container, int spacing)
+/// Builds a row's horizontal layout with the given item padding and icon spacing.
+static QHBoxLayout* makeRowLayout(QWidget* container, QMargins padding, int spacing)
 {
     auto* layout = new QHBoxLayout(container);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(padding);
     layout->setSpacing(spacing);
     return layout;
 }
@@ -275,10 +345,22 @@ static QString referenceLabel(const GeometryReference& ref)
     return subName.isEmpty() ? objectName : objectName + u'.' + subName;
 }
 
-/// The single canonical "select geometry" prompt, shared by the inline row and the overlay.
-static QString selectingPlaceholderText()
+/// The selecting-state prompt: the "pick geometry" hint until something is committed, then a
+/// running count so the user sees why the widget grows as references accumulate.
+static QString selectingPromptText(int referenceCount)
 {
-    return QCoreApplication::translate("Gui::GeometrySelectorWidget", "Select sketch, face…");
+    if (referenceCount == 0) {
+        return QCoreApplication::translate("Gui::GeometrySelectorWidget", "Select sketch, face…");
+    }
+    // %n is Qt's numerus mechanism: a single source string that Qt Linguist expands into each
+    // language's plural forms, picked at runtime from the count. Untranslated it renders the
+    // source with %n substituted, hence the "(s)" placeholder for the source language.
+    return QCoreApplication::translate(
+        "Gui::GeometrySelectorWidget",
+        "%n item(s) selected",
+        nullptr,
+        referenceCount
+    );
 }
 
 namespace
@@ -291,6 +373,7 @@ class ReferenceRow: public QWidget
 public:
     ReferenceRow(
         const GeometryReference& reference,
+        QMargins padding,
         int spacing,
         std::function<void()> onActivate,
         std::function<void()> onRemove,
@@ -301,7 +384,7 @@ public:
     {
         setObjectName(QStringLiteral("gsw_reference_row"));
         auto* rowLayout = new QHBoxLayout(this);
-        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setContentsMargins(padding);
         rowLayout->setSpacing(spacing);
 
         const QIcon icon = viewProviderIconFor(reference.object);
@@ -338,6 +421,16 @@ protected:
     {
         m_remove->hide();
     }
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        // Accept the press so the matching release is delivered to this row; the child
+        // labels do not accept events, so without this the release could be lost.
+        if (event->button() == Qt::LeftButton) {
+            event->accept();
+            return;
+        }
+        QWidget::mousePressEvent(event);
+    }
     void mouseReleaseEvent(QMouseEvent* event) override
     {
         // A click anywhere on the row body (not consumed by the remove button) re-selects.
@@ -351,139 +444,139 @@ private:
     std::function<void()> m_activate;
 };
 
-/// Dims whatever sits beneath it in a StackAll QStackedLayout, centring an italic
-/// placeholder above a Done (accent) + Cancel row. Opaque to mouse events so clicks
-/// never reach the dimmed content underneath.
+/// The selecting-state chrome: a scrim that dims whatever sits beneath it in a StackAll
+/// QStackedLayout, with the italic prompt filling the padded area and the Done/Cancel action
+/// buttons positioned absolutely over the right edge — vertically centred in the full overlay
+/// height and outside the layout flow, so their taller internal size never dictates the
+/// overlay's height. Opaque to mouse events so clicks never reach the dimmed content beneath.
 class SelectingOverlay: public QWidget
 {
 public:
     SelectingOverlay(
         const QString& promptText,
+        QMargins padding,
+        int spacing,
+        bool showConfirm,
         std::function<void()> onDone,
         std::function<void()> onCancel,
         QWidget* parent
     )
         : QWidget(parent)
+        , m_padding(padding)
+        , m_spacing(spacing)
     {
         setObjectName(QStringLiteral("gsw_overlay"));
         setAttribute(Qt::WA_NoSystemBackground);  // we paint our own scrim
         setAutoFillBackground(false);
 
-        auto* column = new QVBoxLayout(this);
-        column->addStretch(1);
+        auto* layout = new QHBoxLayout(this);
+        layout->setContentsMargins(padding);
+        layout->setSpacing(spacing);
 
-        auto* prompt = new QLabel(promptText);
+        auto* prompt = new QLabel(promptText, this);
         QFont italicFont = prompt->font();
         italicFont.setItalic(true);
         prompt->setFont(italicFont);
         prompt->setForegroundRole(QPalette::PlaceholderText);
-        prompt->setAlignment(Qt::AlignCenter);
-        column->addWidget(prompt, 0, Qt::AlignHCenter);
+        prompt->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        prompt->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        layout->addWidget(prompt, 1);
 
-        auto* buttons = new QHBoxLayout;
-        buttons->addStretch(1);
-
-        // Done accepts the accumulated Ctrl-multiselect; a QPushButton with the default
-        // flag so FreeCADStyle resolves the accent (Primary) ButtonType variant — a
-        // QToolButton has no equivalent "default" style feature.
-        auto* done = new QPushButton(this);
-        done->setObjectName(QStringLiteral("gsw_done"));
-        done->setText(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Done"));
-        done->setProperty("component", "InternalButton");
-        done->setDefault(true);
-        done->setAutoDefault(false);
-        if (Gui::Application::Instance) {
-            done->setStyle(Gui::Application::Instance->freeCADStyle());
+        // Done commits an accumulated Ctrl-multiselect; only the multi-select mode can
+        // accumulate, so the caller asks for it only then. The accent Primary variant is
+        // carried via the buttonType property inside makeInternalTextButton.
+        if (showConfirm) {
+            addFloatingButton(
+                QCoreApplication::translate("Gui::GeometrySelectorWidget", "Done"),
+                /*primary=*/true,
+                std::move(onDone),
+                QStringLiteral("gsw_confirm")
+            );
         }
-        QObject::connect(done, &QPushButton::clicked, this, [handler = std::move(onDone)] {
-            handler();
-        });
-        buttons->addWidget(done);
-
-        auto* cancel = new QToolButton(this);
-        cancel->setObjectName(QStringLiteral("gsw_cancel"));
-        cancel->setText(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Cancel"));
-        cancel->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        styleAsInternalButton(cancel);
-        QObject::connect(cancel, &QToolButton::clicked, this, [handler = std::move(onCancel)] {
-            handler();
-        });
-        buttons->addWidget(cancel);
-        buttons->addStretch(1);
-        column->addLayout(buttons);
-        column->addStretch(1);
+        // Cancel reverts the session; a neutral chromed internal-size tool button beside Done.
+        addFloatingButton(
+            QCoreApplication::translate("Gui::GeometrySelectorWidget", "Cancel"),
+            /*primary=*/false,
+            std::move(onCancel),
+            QStringLiteral("gsw_cancel")
+        );
     }
 
 protected:
+    void resizeEvent(QResizeEvent* event) override
+    {
+        QWidget::resizeEvent(event);
+        layoutFloatingButtons();
+    }
+
     void paintEvent(QPaintEvent* /*event*/) override
     {
         QPainter painter(this);
         QColor scrim = palette().color(QPalette::Base);
-        scrim.setAlphaF(0.75F);  // dim the list beneath while keeping it visible
+        scrim.setAlphaF(static_cast<float>(ScrimOpacity));  // dim the list, keep it faintly visible
         painter.fillRect(rect(), scrim);
     }
+
+private:
+    /// Creates a chromed internal-size button that floats over the overlay instead of joining
+    /// the layout, so its height never contributes to the overlay's size hint.
+    void addFloatingButton(
+        const QString& text,
+        bool primary,
+        std::function<void()> onClick,
+        const QString& name
+    )
+    {
+        auto* button = makeInternalTextButton(this, text, primary);
+        button->setObjectName(name);
+        QObject::connect(button, &QToolButton::clicked, this, [handler = std::move(onClick)] {
+            handler();
+        });
+        m_buttons.push_back(button);
+    }
+
+    /// Right-aligns the floating buttons from the padded right edge inwards, each vertically
+    /// centred in the overlay. The height is clamped to the overlay so a button taller than a
+    /// single row is bounded by the frame instead of protruding past it — the buttons are
+    /// positioned absolutely and never dictate (nor overflow) the widget height.
+    void layoutFloatingButtons()
+    {
+        int rightEdge = width() - m_padding.right();
+        for (std::size_t index = m_buttons.size(); index-- > 0;) {
+            QToolButton* button = m_buttons[index];
+            const QSize hint = button->sizeHint();
+            const int buttonHeight = qMin(hint.height(), height());
+            const int left = rightEdge - hint.width();
+            const int top = (height() - buttonHeight) / 2;
+            button->setGeometry(left, top, hint.width(), buttonHeight);
+            rightEdge = left - m_spacing;
+        }
+    }
+
+    QMargins m_padding;
+    int m_spacing;
+    std::vector<QToolButton*> m_buttons;
 };
 }  // namespace
 
 QWidget* GeometrySelectorWidget::makeEmptyRow()
 {
     auto* container = new QWidget(this);
-    auto* layout = makeRowLayout(container, m_itemSpacing);
+    container->setFixedHeight(rowHeight());
+    // Let hover and clicks fall through to the frame itself: the empty row carries no
+    // interactive control, so the whole frame acts as one button. Without this the label
+    // would swallow the mouse and the frame's WA_Hover would never see State_MouseOver.
+    container->setAttribute(Qt::WA_TransparentForMouseEvents);
+    auto* layout = makeRowLayout(container, m_itemPadding, m_itemSpacing);
 
-    // Full-width prompt: "+ Select geometry", styled like the other internal
-    // buttons. Its text is drawn in the placeholder colour, matching a native
-    // input's placeholder.
-    auto* selectButton = makeActionButton(
-        container,
-        IconManager::instance().icon(":/icons/tabler/outline/plus.svg")
-    );
-    selectButton->setText(tr("Select geometry"));
-    selectButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    selectButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    styleAsInternalButton(selectButton);
-    QPalette buttonPalette = selectButton->palette();
-    buttonPalette.setBrush(QPalette::ButtonText, palette().placeholderText());
-    selectButton->setPalette(buttonPalette);
-    layout->addWidget(selectButton);
-
-    connect(selectButton, &QToolButton::clicked, this, [this] { m_selection->startSelecting(); });
-
-    return container;
-}
-
-QWidget* GeometrySelectorWidget::makeSelectingInlineRow()
-{
-    auto* container = new QWidget(this);
-    auto* rowLayout = makeRowLayout(container, m_itemSpacing);
-
-    auto* prompt = new QLabel(selectingPlaceholderText(), container);
-    QFont italicFont = prompt->font();
-    italicFont.setItalic(true);
-    prompt->setFont(italicFont);
-    prompt->setForegroundRole(QPalette::PlaceholderText);
-    prompt->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    rowLayout->addWidget(prompt, 1);
-
-    // Confirm commits an accumulated Ctrl-multiselect; only AllowMultiple can accumulate.
-    if (m_selection->quantity() == GeometryQuantity::AllowMultiple) {
-        auto* confirmButton = makeActionButton(
-            container,
-            IconManager::instance().icon(":/icons/tabler/outline/check.svg")
-        );
-        confirmButton->setObjectName(QStringLiteral("gsw_confirm"));
-        confirmButton->setToolTip(tr("Confirm"));
-        styleAsInternalButton(confirmButton);
-        connect(confirmButton, &QToolButton::clicked, this, [this] { m_selection->stopSelecting(); });
-        rowLayout->addWidget(confirmButton);
-    }
-
-    auto* cancelButton = new QToolButton(container);
-    cancelButton->setObjectName(QStringLiteral("gsw_cancel"));
-    cancelButton->setText(tr("Cancel"));
-    cancelButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    styleAsInternalButton(cancelButton);
-    connect(cancelButton, &QToolButton::clicked, this, [this] { m_selection->cancelSelecting(); });
-    rowLayout->addWidget(cancelButton);
+    // Idle prompt: a plain placeholder label, drawn in the placeholder colour like a
+    // native input. Clicking anywhere on the empty frame starts selecting (see
+    // mouseReleaseEvent), so no button is needed here — a button would only inflate the row.
+    auto* placeholder = new QLabel(tr("Select geometry"), container);
+    placeholder->setForegroundRole(QPalette::PlaceholderText);
+    placeholder->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    placeholder->setAttribute(Qt::WA_TransparentForMouseEvents);
+    layout->addWidget(placeholder, 1);
 
     return container;
 }
@@ -491,20 +584,35 @@ QWidget* GeometrySelectorWidget::makeSelectingInlineRow()
 QWidget* GeometrySelectorWidget::makeReferenceList()
 {
     const std::vector<GeometryReference>& references = m_selection->references();
+    const int singleRowHeight = rowHeight();
 
     auto* rowsContainer = new QWidget;
     auto* rowsLayout = new QVBoxLayout(rowsContainer);
     rowsLayout->setContentsMargins(0, 0, 0, 0);
-    rowsLayout->setSpacing(m_itemSpacing);
+    // Rows abut with no gap; each row's own padding provides the vertical rhythm.
+    rowsLayout->setSpacing(0);
 
     for (std::size_t index = 0; index < references.size(); ++index) {
-        rowsLayout->addWidget(new ReferenceRow(
+        auto* referenceRow = new ReferenceRow(
             references[index],
+            m_itemPadding,
             m_itemSpacing,
             [this] { m_selection->startSelecting(); },
             [this, index] { m_selection->removeReference(index); },
             rowsContainer
-        ));
+        );
+        // Pin every row to the resolved row height so the list matches other list-like
+        // controls and does not stretch its rows apart to fill spare vertical space.
+        referenceRow->setFixedHeight(singleRowHeight);
+        rowsLayout->addWidget(referenceRow);
+    }
+
+    // While the rows fit, lay them out directly: the container sizes exactly to its rows,
+    // matching the neighbouring form controls. A QScrollArea is only introduced once the
+    // rows overflow, because it defaults to Expanding and imposes a minimum-size floor
+    // that would otherwise inflate a short list.
+    if (static_cast<int>(references.size()) <= MaxRowsWithoutScroll) {
+        return rowsContainer;
     }
 
     auto* scroll = new QScrollArea(this);
@@ -514,44 +622,60 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scroll->setWidget(rowsContainer);
 
-    // Cap at 3.25 row strides so a 4th row peeks; below the cap the list sizes to content.
-    const int stride = rowHeight() + m_itemSpacing;
-    scroll->setMaximumHeight(qRound(3.25 * stride));
+    // Cap the viewport so a partial row peeks and the list starts scrolling; QScrollArea
+    // never collapses to its content on its own, so pin the height explicitly.
+    scroll->setFixedHeight(referenceListHeight());
     return scroll;
 }
 
-QWidget* GeometrySelectorWidget::makeSelectingOverlay()
+QWidget* GeometrySelectorWidget::makeSelecting()
 {
     auto* container = new QWidget(this);
     auto* stack = new QStackedLayout(container);
     stack->setStackingMode(QStackedLayout::StackAll);
     stack->setContentsMargins(0, 0, 0, 0);
 
-    // The committed references, shown dimmed beneath the overlay. Reuse the list builder
-    // so the rows are pixel-identical to the idle state.
-    stack->addWidget(makeReferenceList());
+    // The committed references sit dimmed beneath the overlay; reuse the list builder so the
+    // rows are pixel-identical to the idle state. With nothing committed there is nothing to
+    // dim, so the backdrop covers the bare frame rather than an idle placeholder row.
+    const bool hasReferences = !m_selection->references().empty();
+    if (hasReferences) {
+        stack->addWidget(makeReferenceList());
+    }
 
     auto* overlay = new SelectingOverlay(
-        selectingPlaceholderText(),
+        selectingPromptText(static_cast<int>(m_selection->references().size())),
+        m_itemPadding,
+        m_itemSpacing,
+        /*showConfirm=*/m_selection->quantity() == GeometryQuantity::AllowMultiple,
         [this] { m_selection->stopSelecting(); },
         [this] { m_selection->cancelSelecting(); },
         container
     );
     stack->addWidget(overlay);
     stack->setCurrentWidget(overlay);  // topmost in StackAll
+
+    // A QScrollArea reports its full content as its size hint regardless of its fixed height,
+    // so the stack would otherwise grow to every row. Pin the container to the capped list
+    // height (or a single row when there is nothing to list) so the selecting state keeps the
+    // idle list's height.
+    container->setFixedHeight(hasReferences ? referenceListHeight() : rowHeight());
     return container;
 }
 
 int GeometrySelectorWidget::rowHeight() const
 {
-    if (Application::Instance) {
-        const FreeCADStyle::BoxGeometryDefinition geometry
-            = Application::Instance->freeCADStyle()->resolveBoxGeometry(FreeCADStyle::contextOf(this));
-        if (geometry.height) {
-            return *geometry.height;
-        }
-    }
-    return qMax(IconSize, fontMetrics().height()) + 2 * FallbackPadding.top();
+    // One row is its content (icon or label, whichever is taller) plus the item's own
+    // vertical padding. m_itemPadding is resolved in applyStyleMetrics from the List item
+    // tokens, so a single-reference list stands one padded row tall.
+    return qMax(IconSize, fontMetrics().height()) + m_itemPadding.top() + m_itemPadding.bottom();
+}
+
+int GeometrySelectorWidget::referenceListHeight() const
+{
+    const int rowCount = static_cast<int>(m_selection->references().size());
+    const int cappedHeight = qRound(MaxVisibleRows * rowHeight());
+    return qMin(rowCount * rowHeight(), cappedHeight);
 }
 
 // ---------------------------------------------------------------------------
@@ -574,11 +698,10 @@ void GeometrySelectorWidget::clearRows()
 
 GeometrySelectorWidget::VisualState GeometrySelectorWidget::visualState() const
 {
-    const std::size_t count = m_selection->references().size();
     if (m_selection->isSelecting()) {
-        return count >= 2 ? VisualState::SelectingOverlay : VisualState::SelectingInline;
+        return VisualState::Selecting;
     }
-    return count == 0 ? VisualState::Empty : VisualState::ReferenceList;
+    return m_selection->references().empty() ? VisualState::Empty : VisualState::ReferenceList;
 }
 
 void GeometrySelectorWidget::rebuildRows()
@@ -589,11 +712,8 @@ void GeometrySelectorWidget::rebuildRows()
         case VisualState::Empty:
             m_contentLayout->addWidget(makeEmptyRow());
             break;
-        case VisualState::SelectingInline:
-            m_contentLayout->addWidget(makeSelectingInlineRow());
-            break;
-        case VisualState::SelectingOverlay:
-            m_contentLayout->addWidget(makeSelectingOverlay());
+        case VisualState::Selecting:
+            m_contentLayout->addWidget(makeSelecting());
             break;
         case VisualState::ReferenceList:
             m_contentLayout->addWidget(makeReferenceList());

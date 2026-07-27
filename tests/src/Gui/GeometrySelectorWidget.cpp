@@ -92,7 +92,7 @@ private Q_SLOTS:
         single.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
         QCOMPARE(single.visualState(), VS::ReferenceList);
         single.selection()->startSelecting();
-        QCOMPARE(single.visualState(), VS::SelectingInline);
+        QCOMPARE(single.visualState(), VS::Selecting);
         single.selection()->stopSelecting();
 
         Gui::GeometrySelectorWidget multi(Gui::GeometryQuantity::AllowMultiple);
@@ -101,12 +101,12 @@ private Q_SLOTS:
         );
         QCOMPARE(multi.visualState(), VS::ReferenceList);
         multi.selection()->startSelecting();
-        QCOMPARE(multi.visualState(), VS::SelectingOverlay);  // ≥2 committed → overlay
+        QCOMPARE(multi.visualState(), VS::Selecting);  // any committed count → one selecting state
         multi.selection()->stopSelecting();
 
         multi.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
         multi.selection()->startSelecting();
-        QCOMPARE(multi.visualState(), VS::SelectingInline);  // 1 committed → inline
+        QCOMPARE(multi.visualState(), VS::Selecting);
         multi.selection()->stopSelecting();
     }
 
@@ -162,7 +162,7 @@ private Q_SLOTS:
         multi.selection()->stopSelecting();
     }
 
-    // ≥2 committed references while selecting produce the overlay with Done + Cancel.
+    // Selecting with committed references produces the dimming overlay with Done + Cancel.
     void test_overlayChromeForMultiReselect()  // NOLINT
     {
         Gui::GeometrySelectorWidget multi(Gui::GeometryQuantity::AllowMultiple);
@@ -172,7 +172,7 @@ private Q_SLOTS:
         multi.selection()->startSelecting();
         QCoreApplication::processEvents();
         QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_overlay")) != nullptr);
-        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_done")) != nullptr);
+        QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_confirm")) != nullptr);
         QVERIFY(multi.findChild<QWidget*>(QStringLiteral("gsw_cancel")) != nullptr);
         multi.selection()->stopSelecting();
     }

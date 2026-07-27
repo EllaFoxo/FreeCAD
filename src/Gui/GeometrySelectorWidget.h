@@ -25,6 +25,7 @@
 
 #include <vector>
 
+#include <QMargins>
 #include <QWidget>
 
 #include <FCGlobal.h>
@@ -41,14 +42,13 @@ namespace Gui
  * as a list-styled frame. Exposes the core via selection() so callers can
  * configure gate, binding, and preview hooks.
  *
- * The frame is still painted via the ambient QStyle, and all spacing comes
- * from the design-system tokens resolved through the List token chain, so
- * any ambient QStyle themes it correctly — no hard dependency on
- * FreeCADStyle.
+ * The frame is painted via the ambient QStyle, and all spacing comes from the
+ * design-system tokens resolved through the List token chain, so any ambient
+ * QStyle themes it correctly — no hard dependency on FreeCADStyle.
  *
- * A filled reference presents only its icon and name at rest; the change and
- * remove controls are revealed while the pointer hovers the widget, matching
- * the Figma design.
+ * A filled reference presents its icon and name at rest; each row reveals its
+ * own remove control only while the pointer is over that row, matching the
+ * Figma design.
  */
 class GuiExport GeometrySelectorWidget: public QWidget
 {
@@ -70,13 +70,12 @@ public:
     GeometryQuantity quantity() const;
     void setQuantity(GeometryQuantity mode);
 
-    /// The four rendered states, derived from mode + references + session.
+    /// The three rendered states, derived from references + session.
     enum class VisualState
     {
-        Empty,             // idle, no references
-        SelectingInline,   // selecting with ≤1 committed reference (single-row chrome)
-        ReferenceList,     // idle with ≥1 references (capped scroll list)
-        SelectingOverlay,  // selecting with ≥2 committed references (overlay chrome)
+        Empty,          // idle, no references
+        Selecting,      // in a selection session: horizontal prompt chrome over a dimming backdrop
+        ReferenceList,  // idle with ≥1 references (capped scroll list)
     };
 
     /// Classifies the current state from the core alone; independent of any QStyle or
@@ -86,31 +85,36 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void changeEvent(QEvent* event) override;
+    // In the empty state a click anywhere on the frame starts selecting, so the prompt is
+    // a plain placeholder label rather than a button.
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
 
 private Q_SLOTS:
     void rebuildRows();
 
 private:
     QWidget* makeEmptyRow();
-    /// Single-row chrome for ≤1 committed reference: placeholder + Cancel, plus
-    /// Confirm only when the mode can accumulate a multi-select.
-    QWidget* makeSelectingInlineRow();
     /// A capped scroll list with one row per reference, each row revealing its own
     /// remove control on hover.
     QWidget* makeReferenceList();
-    /// Dims the reused reference list beneath a centred placeholder + Done + Cancel,
-    /// for ≥2 committed references while selecting.
-    QWidget* makeSelectingOverlay();
+    /// The selection-session chrome: a horizontal placeholder + Cancel (and Done for
+    /// multi-select) row over a dimming backdrop, above the committed references when any.
+    QWidget* makeSelecting();
 
     void clearRows();
     /// Resolves layout margins, spacing and fixed height from style tokens.
     void applyStyleMetrics();
-    /// The resolved List row height, or a font-based fallback when headless.
+    /// One row's height: its icon/label content plus the resolved item vertical padding.
     int rowHeight() const;
+    /// The reference list's rendered height: rows up to the visible-row cap.
+    int referenceListHeight() const;
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;
-    /// Item spacing within a row, resolved from the LineEdit icon-spacing token.
+    /// Per-row inset, resolved from the ListItemPadding token; the frame itself is flush.
+    QMargins m_itemPadding {6, 4, 6, 4};
+    /// Icon-to-label spacing within a row, resolved from the ListItemIconSpacing token.
     int m_itemSpacing = 6;
 };
 
