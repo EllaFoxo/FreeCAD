@@ -577,6 +577,12 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
     }, StyleComponent::Tree);
 
     registry.registerDescriptor({
+        .name     = "GeometrySelector",
+        .variants = {"ControlSize", "State", "RowType"},
+        .inherits = {"List"},
+    }, StyleComponent::GeometrySelector);
+
+    registry.registerDescriptor({
         .name     = "CheckBox",
         .variants = {"ControlSize", "State"},
         .inherits = {"FormControl"},

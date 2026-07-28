@@ -123,9 +123,14 @@ private:
     QMargins m_itemPadding {6, 4, 6, 4};
     /// Icon-to-label spacing within a row, resolved from the ListItemIconSpacing token.
     int m_itemSpacing = 6;
-    /// Floor for a row's height so the control is at least as tall as a native line edit,
-    /// keeping it aligned with sibling form fields. Resolved in applyStyleMetrics.
-    int m_minControlHeight = 0;
+    /// Total height of one line of the control, frame included: a single-value selector and one
+    /// row of a multi-value one are exactly this tall, matching sibling form fields. Resolved
+    /// from the GeometrySelector box geometry (GeometrySelectorMinHeight); 0 until resolved, when
+    /// the row falls back to its content height (headless harness with no FreeCADStyle).
+    int m_lineHeight = 0;
+    /// Frame border thickness resolved from the GeometrySelector box style; the outer layout
+    /// insets content by it so one row plus the frame equals one line height.
+    int m_frameThickness = 1;
 };
 
 }  // namespace Gui

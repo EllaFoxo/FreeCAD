@@ -33,7 +33,6 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
-#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
@@ -78,10 +77,6 @@ constexpr int MaxRowsWithoutScroll = 3;
 /// Opacity of the scrim that dims the reference list beneath the selecting overlay; high
 /// enough that the committed references stay only barely visible through it.
 constexpr double ScrimOpacity = 0.94;
-
-/// Frame border thickness; the content is inset by this so the painted border stays fully
-/// visible even when the selecting overlay's scrim is drawn on top of the rows.
-constexpr int FrameBorderThickness = 1;
 
 // Style-metric fallbacks used only when no Gui::Application (and thus no
 // FreeCADStyle) is available, e.g. in the headless test harness. In the running
@@ -137,8 +132,9 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     , m_selection(new GeometrySelection(mode, this))
     , m_contentLayout(nullptr)
 {
-    // Resolves the List token chain so the widget matches native lists.
-    setProperty("component", "List");
+    // Resolves the GeometrySelector token chain (which inherits List), so the widget matches
+    // native lists but can carry its own tokens such as the form-control min height.
+    setProperty("component", "GeometrySelector");
     // Makes real keyboard focus show the focused style like any input.
     setFocusPolicy(Qt::StrongFocus);
     // Repaint on pointer enter/leave so the frame reflects its hovered background.
@@ -210,7 +206,7 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
         option.state |= QStyle::State_HasFocus;  // stay "focused" through viewport picking
     }
     option.features = QStyleOptionFrame::None;
-    option.lineWidth = FrameBorderThickness;
+    option.lineWidth = m_frameThickness;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
 }
 
@@ -256,15 +252,30 @@ void GeometrySelectorWidget::applyStyleMetrics()
     int iconSpacing = FallbackSpacing;
 
     // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing):
-    // a list frame draws no container padding, so the per-row inset lives on each row.
+    // a list frame draws no container padding, so the per-row inset lives on each row. The line
+    // height comes from the GeometrySelector *root* box geometry and the frame from its box
+    // style, so a row inset by that frame measures exactly one line height.
     if (Application::Instance) {
         auto* fcStyle = Application::Instance->freeCADStyle();
+
+        const StyleParameters::StyleContext rootContext = FreeCADStyle::contextOf(this);
+        const FreeCADStyle::BoxGeometryDefinition rootGeometry = fcStyle->resolveBoxGeometry(
+            rootContext
+        );
+        if (rootGeometry.minHeight) {
+            m_lineHeight = *rootGeometry.minHeight;
+        }
+        const FreeCADStyle::BoxStyleDefinition rootStyle = fcStyle->resolveBoxStyle(rootContext);
+        if (rootStyle.borderThickness) {
+            m_frameThickness = qRound(rootStyle.borderThickness->top());
+        }
+
         // contextOf only honours a non-Root element for recognised item-view widget types;
-        // for this plain QWidget (tagged component="List") it leaves element=Root, so pin
-        // Item explicitly to reach the ListItem* tokens instead of the empty List root.
-        StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
-        context.element = StyleParameters::StyleComponentElement::Item;
-        const FreeCADStyle::BoxGeometryDefinition item = fcStyle->resolveBoxGeometry(context);
+        // for this plain QWidget it leaves element=Root, so pin Item explicitly to reach the
+        // ListItem* tokens (inherited via GeometrySelector→List) instead of the empty root.
+        StyleParameters::StyleContext itemContext = rootContext;
+        itemContext.element = StyleParameters::StyleComponentElement::Item;
+        const FreeCADStyle::BoxGeometryDefinition item = fcStyle->resolveBoxGeometry(itemContext);
         itemPadding = item.padding.toMargins();
         iconSpacing = item.iconSpacing;
     }
@@ -275,17 +286,8 @@ void GeometrySelectorWidget::applyStyleMetrics()
     // Inset content by the frame border only; each row supplies its own padding via
     // m_itemPadding, and rows abut with no inter-row gap so the control reads as one
     // continuous list. The border inset keeps the painted frame clear of the overlay scrim.
-    layout()->setContentsMargins(
-        FrameBorderThickness,
-        FrameBorderThickness,
-        FrameBorderThickness,
-        FrameBorderThickness
-    );
+    layout()->setContentsMargins(m_frameThickness, m_frameThickness, m_frameThickness, m_frameThickness);
     m_contentLayout->setSpacing(0);
-
-    // A native line edit's height, used as the row-height floor so the control lines up with
-    // sibling form fields (spin boxes, combo boxes) instead of standing shorter than them.
-    m_minControlHeight = QLineEdit().sizeHint().height();
 
     // Fill the field column like a line edit or combo box: Expanding horizontally so the
     // control stretches to the available width instead of hugging its content. Vertically
@@ -295,11 +297,14 @@ void GeometrySelectorWidget::applyStyleMetrics()
     policy.setHorizontalPolicy(QSizePolicy::Expanding);
     policy.setVerticalPolicy(QSizePolicy::Fixed);
     setSizePolicy(policy);
+    // One line is a row plus the frame the outer layout insets on top and bottom; a single-value
+    // selector is pinned to it, a multi-value one uses it as its one-row minimum.
+    const int lineHeight = rowHeight() + (2 * m_frameThickness);
     if (m_selection->quantity() == GeometryQuantity::Single) {
-        setFixedHeight(rowHeight());
+        setFixedHeight(lineHeight);
     }
     else {
-        setMinimumHeight(m_minControlHeight);
+        setMinimumHeight(lineHeight);
         setMaximumHeight(QWIDGETSIZE_MAX);
     }
 }
@@ -833,13 +838,13 @@ QWidget* GeometrySelectorWidget::makeSelecting()
 
 int GeometrySelectorWidget::rowHeight() const
 {
-    // One row is its content (icon or label, whichever is taller) plus the item's own
-    // vertical padding. m_itemPadding is resolved in applyStyleMetrics from the List item
-    // tokens, so a single-reference list stands one padded row tall. The row never falls
-    // below a native line edit's height, so the control aligns with sibling form fields.
-    const int contentHeight = qMax(IconSize, fontMetrics().height()) + m_itemPadding.top()
-        + m_itemPadding.bottom();
-    return qMax(contentHeight, m_minControlHeight);
+    // A row plus the frame the outer layout insets on top and bottom is exactly one resolved
+    // line height, so every selector shows the same height per line regardless of its content.
+    if (m_lineHeight > 0) {
+        return m_lineHeight - (2 * m_frameThickness);
+    }
+    // Headless fallback (no FreeCADStyle): size the row to its content plus the item padding.
+    return qMax(IconSize, fontMetrics().height()) + m_itemPadding.top() + m_itemPadding.bottom();
 }
 
 int GeometrySelectorWidget::referenceListHeight() const

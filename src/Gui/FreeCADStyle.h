@@ -340,6 +340,11 @@ public:
     BoxGeometryDefinition resolveBoxGeometry(const StyleParameters::StyleContext& context) const;
 
     /**
+     * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
+     */
+    BoxStyleDefinition resolveBoxStyle(const StyleParameters::StyleContext& context) const;
+
+    /**
      * @brief Paints the themed box (fill, border, overlay) resolved from @p context into
      * @p rect, so a custom widget can reuse the same painting the delegates use — e.g. a
      * list row drawing its own hovered background from the ListRow* tokens.
@@ -516,11 +521,6 @@ private:
     {
         return StyleParameters::valueAs<T>(resolve(context, property));
     }
-
-    /**
-     * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
-     */
-    BoxStyleDefinition resolveBoxStyle(const StyleParameters::StyleContext& context) const;
 
 private:
     static StyleParameters::StyleContext withNorthPosition(

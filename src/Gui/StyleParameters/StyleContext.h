@@ -46,22 +46,23 @@ enum class StyleComponent : uint8_t
     None,
     PushButton,
     ToolButton,
-    LineEdit,        // QLineEdit + QAbstractSpinBox edit frame
-    TextEdit,        // QPlainTextEdit, QTextEdit and derivatives
-    Select,          // QComboBox (non-editable), inherits Button styles
-    ComboBox,        // QComboBox (editable), inherits LineEdit styles
-    List,            // QListWidget, QListView
-    DropdownList,    // QListView inside a QComboBox popup
-    Tree,            // QTreeWidget, QTreeView
-    CheckBox,        // QCheckBox indicator
-    RadioButton,     // QRadioButton indicator
-    TabBar,          // QTabBar
-    TabWidget,       // QTabWidget pane (PE_FrameTabWidget)
-    ToolBar,         // QToolBar
-    ToolBarButton,   // QToolButton in QToolBar - semantically different
-    MenuBar,         // QMenuBar
-    Header,          // QHeaderView sections
-    InternalButton,  // Flat action button painted inside custom composite widgets
+    LineEdit,          // QLineEdit + QAbstractSpinBox edit frame
+    TextEdit,          // QPlainTextEdit, QTextEdit and derivatives
+    Select,            // QComboBox (non-editable), inherits Button styles
+    ComboBox,          // QComboBox (editable), inherits LineEdit styles
+    List,              // QListWidget, QListView
+    DropdownList,      // QListView inside a QComboBox popup
+    Tree,              // QTreeWidget, QTreeView
+    CheckBox,          // QCheckBox indicator
+    RadioButton,       // QRadioButton indicator
+    TabBar,            // QTabBar
+    TabWidget,         // QTabWidget pane (PE_FrameTabWidget)
+    ToolBar,           // QToolBar
+    ToolBarButton,     // QToolButton in QToolBar - semantically different
+    MenuBar,           // QMenuBar
+    Header,            // QHeaderView sections
+    InternalButton,    // Flat action button painted inside custom composite widgets
+    GeometrySelector,  // Gui::GeometrySelectorWidget composite field, inherits List
     // Add new components before COUNT
     COUNT
 };
