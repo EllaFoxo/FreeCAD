@@ -55,6 +55,26 @@ static std::string upToFacePython(const App::PropertyLinkSub& prop)
     return buildLinkSingleSubPythonStr(prop.getValue(), prop.getSubValues());
 }
 
+// Serializes the Profile link-sub to the Python RHS: "None", a whole object
+// "App...getObject('Sketch')", or an object with subs "(obj, ['Face1','Face2'])".
+static std::string profilePython(const App::PropertyLinkSub& prop)
+{
+    App::DocumentObject* obj = prop.getValue();
+    if (!obj) {
+        return "None";
+    }
+    const std::string objCmd = Gui::Command::getObjectCmd(obj);
+    const std::vector<std::string>& subs = prop.getSubValues();
+    if (subs.empty()) {
+        return objCmd;
+    }
+    std::string subList;
+    for (const auto& sub : subs) {
+        subList += "\"" + sub + "\",";
+    }
+    return "(" + objCmd + ", [" + subList + "])";
+}
+
 /* TRANSLATOR PartDesignGui::TaskExtrudeParameters */
 
 TaskExtrudeParameters::TaskExtrudeParameters(
@@ -1206,6 +1226,7 @@ void TaskExtrudeParameters::applyParameters()
     FCMD_OBJ_CMD(obj, "SideType = " << getSidesMode());
     FCMD_OBJ_CMD(obj, "Type = " << type1);
     FCMD_OBJ_CMD(obj, "Type2 = " << type2);
+    FCMD_OBJ_CMD(obj, "Profile = " << profilePython(getObject<PartDesign::ProfileBased>()->Profile));
     FCMD_OBJ_CMD(obj, "UpToFace = " << facename);
     FCMD_OBJ_CMD(obj, "UpToFace2 = " << facename2);
     FCMD_OBJ_CMD(obj, "Reversed = " << (getReversed() ? 1 : 0));
