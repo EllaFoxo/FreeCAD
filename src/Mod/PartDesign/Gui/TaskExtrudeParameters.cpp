@@ -268,7 +268,7 @@ void TaskExtrudeParameters::setupFaceSelector(SideController& side)
     });
 
     // Show the base solid and hide the sketch while picking, restoring on exit —
-    // the visibility swap the old SelectFace mode performed via onSelectReference.
+    // the visibility swap the old face-selection path performed via onSelectReference.
     connect(core, &Gui::GeometrySelection::selectionModeEntered, this, [this] {
         auto* profileBased = getObject<PartDesign::ProfileBased>();
         startReferenceSelection(
@@ -836,7 +836,15 @@ void TaskExtrudeParameters::updateSideUI(
     s.taperEdit->setVisible(finalTaperVisible);
     s.taperEdit->setEnabled(finalTaperVisible);
 
-    s.faceSelector->setVisible(isParentVisible && isFaceVisible);
+    const bool finalFaceVisible = isParentVisible && isFaceVisible;
+    // Hiding the selector does not stop its session, so end an in-progress pick when the
+    // face row disappears (e.g. the Type changed mid-selection). cancelSelecting() restores
+    // the prior reference and fires selectionModeExited, which unwinds the visibility swap —
+    // the old buttonFace->setChecked(false) on hide did the equivalent.
+    if (!finalFaceVisible && s.faceSelector->selection()->isSelecting()) {
+        s.faceSelector->selection()->cancelSelecting();
+    }
+    s.faceSelector->setVisible(finalFaceVisible);
 
     s.upToShapeList->setVisible(isParentVisible && isShapeVisible);
 }
