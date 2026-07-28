@@ -131,6 +131,9 @@ private:
     /// Frame border thickness resolved from the GeometrySelector box style; the outer layout
     /// insets content by it so one row plus the frame equals one line height.
     int m_frameThickness = 1;
+    /// Vertical gap between reference rows, resolved from ListItemSpacing (Item/Spacing). 0
+    /// until resolved (headless fallback), where rows abut like the current behaviour.
+    int m_rowSpacing = 0;
 };
 
 }  // namespace Gui

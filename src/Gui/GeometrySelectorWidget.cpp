@@ -250,6 +250,8 @@ void GeometrySelectorWidget::applyStyleMetrics()
 {
     QMargins itemPadding = FallbackItemPadding;
     int iconSpacing = FallbackSpacing;
+    QMargins containerPadding;  // default {0,0,0,0}: frame is flush until a theme sets ListPadding
+    int rowSpacing = 0;         // default: rows abut
 
     // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing):
     // a list frame draws no container padding, so the per-row inset lives on each row. The line
@@ -278,15 +280,24 @@ void GeometrySelectorWidget::applyStyleMetrics()
         const FreeCADStyle::BoxGeometryDefinition item = fcStyle->resolveBoxGeometry(itemContext);
         itemPadding = item.padding.toMargins();
         iconSpacing = item.iconSpacing;
+
+        containerPadding = rootGeometry.padding.toMargins();
+        rowSpacing = item.spacing;
     }
 
     m_itemPadding = itemPadding;
     m_itemSpacing = iconSpacing;
+    m_rowSpacing = rowSpacing;
 
-    // Inset content by the frame border only; each row supplies its own padding via
-    // m_itemPadding, and rows abut with no inter-row gap so the control reads as one
-    // continuous list. The border inset keeps the painted frame clear of the overlay scrim.
-    layout()->setContentsMargins(m_frameThickness, m_frameThickness, m_frameThickness, m_frameThickness);
+    // Inset content by the frame border plus the container padding (ListPadding). Each row still
+    // supplies its own item padding; ListItemSpacing (applied in makeReferenceList) provides the
+    // inter-row gap. The border inset keeps the painted frame clear of the overlay scrim.
+    layout()->setContentsMargins(
+        m_frameThickness + containerPadding.left(),
+        m_frameThickness + containerPadding.top(),
+        m_frameThickness + containerPadding.right(),
+        m_frameThickness + containerPadding.bottom()
+    );
     m_contentLayout->setSpacing(0);
 
     // Fill the field column like a line edit or combo box: Expanding horizontally so the
@@ -760,8 +771,8 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
     auto* rowsContainer = new QWidget;
     auto* rowsLayout = new QVBoxLayout(rowsContainer);
     rowsLayout->setContentsMargins(0, 0, 0, 0);
-    // Rows abut with no gap; each row's own padding provides the vertical rhythm.
-    rowsLayout->setSpacing(0);
+    // Inter-row gap from ListItemSpacing; 0 (default) leaves rows abutting.
+    rowsLayout->setSpacing(m_rowSpacing);
 
     for (std::size_t index = 0; index < references.size(); ++index) {
         auto* referenceRow = new ReferenceRow(
@@ -850,8 +861,12 @@ int GeometrySelectorWidget::rowHeight() const
 int GeometrySelectorWidget::referenceListHeight() const
 {
     const int rowCount = static_cast<int>(m_selection->references().size());
-    const int cappedHeight = qRound(MaxVisibleRows * rowHeight());
-    return qMin(rowCount * rowHeight(), cappedHeight);
+    // Full content height: rows plus one gap between each adjacent pair.
+    const int fullHeight = rowCount * rowHeight() + qMax(0, rowCount - 1) * m_rowSpacing;
+    // Cap so a partial row peeks; include the gaps between the visible rows.
+    const int visibleGapCount = static_cast<int>(MaxVisibleRows);
+    const int cappedHeight = qRound(MaxVisibleRows * rowHeight()) + visibleGapCount * m_rowSpacing;
+    return qMin(fullHeight, cappedHeight);
 }
 
 // ---------------------------------------------------------------------------

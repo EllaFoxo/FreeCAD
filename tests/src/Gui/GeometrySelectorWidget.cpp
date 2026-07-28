@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <QLayout>
 #include <QTest>
 
 #include <App/Application.h>
@@ -182,6 +183,32 @@ private Q_SLOTS:
     {
         Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
         QCOMPARE(widget.property("component").toString(), QStringLiteral("List"));
+    }
+
+    // Headless fallback: no inter-row gap is applied, so the reference rows abut.
+    void test_defaultRowSpacingIsZeroHeadless()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        widget.selection()->setReferences(
+            {{.object = m_object, .subName = "Edge1"}, {.object = m_object, .subName = "Edge2"}}
+        );
+        QCoreApplication::processEvents();
+        auto* rowsContainer
+            = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"))->parentWidget();
+        QVERIFY(rowsContainer != nullptr);
+        QVERIFY(rowsContainer->layout() != nullptr);
+        QCOMPARE(rowsContainer->layout()->spacing(), 0);
+    }
+
+    // Headless fallback: the outer frame inset carries no extra container padding, so the
+    // content margins equal the frame thickness on every side.
+    void test_defaultContainerPaddingIsFrameOnlyHeadless()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        const QMargins margins = widget.layout()->contentsMargins();
+        QCOMPARE(margins.left(), margins.right());
+        QCOMPARE(margins.top(), margins.bottom());
+        QCOMPARE(margins.left(), margins.top());
     }
 
 private:
