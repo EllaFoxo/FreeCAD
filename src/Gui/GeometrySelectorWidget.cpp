@@ -862,10 +862,10 @@ int GeometrySelectorWidget::referenceListHeight() const
 {
     const int rowCount = static_cast<int>(m_selection->references().size());
     // Full content height: rows plus one gap between each adjacent pair.
-    const int fullHeight = rowCount * rowHeight() + qMax(0, rowCount - 1) * m_rowSpacing;
+    const int fullHeight = (rowCount * rowHeight()) + (qMax(0, rowCount - 1) * m_rowSpacing);
     // Cap so a partial row peeks; include the gaps between the visible rows.
     const int visibleGapCount = static_cast<int>(MaxVisibleRows);
-    const int cappedHeight = qRound(MaxVisibleRows * rowHeight()) + visibleGapCount * m_rowSpacing;
+    const int cappedHeight = qRound(MaxVisibleRows * rowHeight()) + (visibleGapCount * m_rowSpacing);
     return qMin(fullHeight, cappedHeight);
 }
 

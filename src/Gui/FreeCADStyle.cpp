@@ -619,16 +619,8 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
             if (qobject_cast<const QAbstractSpinBox*>(widget)) {
                 return 0;
             }
-            if (qobject_cast<const QAbstractItemView*>(widget)) {
-                const BoxGeometryDefinition geometry = resolveBoxGeometry(
-                    element(StyleComponentElement::Root)
-                );
-                // Symmetric only: a scalar frame width expresses one inset, so item-view
-                // container padding uses the top inset for all four sides (see design doc).
-                const int containerPadding = static_cast<int>(geometry.padding.top());
-                if (containerPadding > 0) {
-                    return QProxyStyle::pixelMetric(metric, option, widget) + containerPadding;
-                }
+            if (const auto itemViewFrameWidth = resolveItemViewFrameWidth(option, widget)) {
+                return itemViewFrameWidth;
             }
             return {};
         }
@@ -701,6 +693,28 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
             return {};
         }
     }
+}
+
+std::optional<int> FreeCADStyle::resolveItemViewFrameWidth(
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    if (!qobject_cast<const QAbstractItemView*>(widget)) {
+        return {};
+    }
+
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(
+        contextOf(widget, option, StyleComponentElement::Root)
+    );
+    // Symmetric only: a scalar frame width expresses one inset, so item-view
+    // container padding uses the top inset for all four sides (see design doc).
+    const int containerPadding = static_cast<int>(geometry.padding.top());
+    if (containerPadding > 0) {
+        return QProxyStyle::pixelMetric(PM_DefaultFrameWidth, option, widget) + containerPadding;
+    }
+
+    return {};
 }
 
 int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const

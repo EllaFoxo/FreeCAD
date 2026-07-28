@@ -536,6 +536,14 @@ private:
     static StyleParameters::Position toolbarPositionOf(const QToolBar* toolbar);
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
+    /**
+     * @brief Frame width for an item view widget, expanded by the root list container padding.
+     *
+     * Returns nullopt for widgets other than QAbstractItemView, or when no positive
+     * container padding is defined.
+     */
+    std::optional<int> resolveItemViewFrameWidth(const QStyleOption* option, const QWidget* widget) const;
+
 
     static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
 
