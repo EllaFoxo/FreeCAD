@@ -253,10 +253,10 @@ void GeometrySelectorWidget::applyStyleMetrics()
     QMargins containerPadding;  // default {0,0,0,0}: frame is flush until a theme sets ListPadding
     int rowSpacing = 0;         // default: rows abut
 
-    // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing):
-    // a list frame draws no container padding, so the per-row inset lives on each row. The line
-    // height comes from the GeometrySelector *root* box geometry and the frame from its box
-    // style, so a row inset by that frame measures exactly one line height.
+    // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing); the
+    // line height and container padding come from the GeometrySelector *root* box geometry and the
+    // frame from its box style. One line follows the border-box model: frame + container padding +
+    // row content sum to the resolved line height, so padding never grows the control.
     if (Application::Instance) {
         auto* fcStyle = Application::Instance->freeCADStyle();
 
@@ -288,6 +288,7 @@ void GeometrySelectorWidget::applyStyleMetrics()
     m_itemPadding = itemPadding;
     m_itemSpacing = iconSpacing;
     m_rowSpacing = rowSpacing;
+    m_containerPadding = containerPadding;
 
     // Inset content by the frame border plus the container padding (ListPadding). Each row still
     // supplies its own item padding; ListItemSpacing (applied in makeReferenceList) provides the
@@ -308,9 +309,11 @@ void GeometrySelectorWidget::applyStyleMetrics()
     policy.setHorizontalPolicy(QSizePolicy::Expanding);
     policy.setVerticalPolicy(QSizePolicy::Fixed);
     setSizePolicy(policy);
-    // One line is a row plus the frame the outer layout insets on top and bottom; a single-value
+    // One line is the border-box height: the row content plus the frame and container padding the
+    // outer layout insets on top and bottom, which sums back to m_lineHeight. A single-value
     // selector is pinned to it, a multi-value one uses it as its one-row minimum.
-    const int lineHeight = rowHeight() + (2 * m_frameThickness);
+    const int lineHeight = rowHeight() + (2 * m_frameThickness) + m_containerPadding.top()
+        + m_containerPadding.bottom();
     if (m_selection->quantity() == GeometryQuantity::Single) {
         setFixedHeight(lineHeight);
     }
@@ -849,10 +852,12 @@ QWidget* GeometrySelectorWidget::makeSelecting()
 
 int GeometrySelectorWidget::rowHeight() const
 {
-    // A row plus the frame the outer layout insets on top and bottom is exactly one resolved
-    // line height, so every selector shows the same height per line regardless of its content.
+    // Border-box: one line (m_lineHeight) is the frame, the container padding and the row content
+    // combined, so the content shrinks as ListPadding grows and every selector stays exactly one
+    // line height tall regardless of its padding.
     if (m_lineHeight > 0) {
-        return m_lineHeight - (2 * m_frameThickness);
+        return m_lineHeight - (2 * m_frameThickness)
+            - (m_containerPadding.top() + m_containerPadding.bottom());
     }
     // Headless fallback (no FreeCADStyle): size the row to its content plus the item padding.
     return qMax(IconSize, fontMetrics().height()) + m_itemPadding.top() + m_itemPadding.bottom();

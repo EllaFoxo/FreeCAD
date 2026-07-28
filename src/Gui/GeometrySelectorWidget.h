@@ -134,6 +134,10 @@ private:
     /// Vertical gap between reference rows, resolved from ListItemSpacing (Item/Spacing). 0
     /// until resolved (headless fallback), where rows abut like the current behaviour.
     int m_rowSpacing = 0;
+    /// Container inner padding, resolved from the ListPadding token. Follows the border-box
+    /// model: one line stays m_lineHeight tall, so this padding eats into the row content
+    /// rather than expanding the control. {0,0,0,0} until resolved (frame flush).
+    QMargins m_containerPadding;
 };
 
 }  // namespace Gui
