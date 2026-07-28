@@ -269,6 +269,12 @@ GeometrySelectorMinHeight: "@FormControlHeight"
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 ListItemIconSpacing: "@Spacing.150"
 
+# Container inner padding (frame → item content) and inter-row gap. Default 0 so every list
+# is unchanged until a theme opts in. ListPadding is symmetric-only for real item views
+# (a scalar frame width); GeometrySelectorWidget honours the full asymmetric value.
+ListPadding: "padding(0px)"
+ListItemSpacing: "0px"
+
 # ── List Row ───────────────────────────────────────────────────────────────
 # Default rows are transparent; alternate rows use the QPalette AlternateBase
 # color. The Alternate variant prefix (ListRowAlternate*) is tried before the

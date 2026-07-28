@@ -204,6 +204,11 @@ public:
 
         int iconSpacing = qtBuiltInIconGap;  // fallback matches Qt's built-in
 
+        /** Vertical gap reserved between consecutive item-view rows (ListItemSpacing). The gap
+         *  is excluded from the content rect and the row highlight, so it renders as the list
+         *  background between rows. 0 = rows abut. */
+        int spacing = 0;
+
         /**
          * @brief Width delta to replace Qt's hardcoded icon–text gap with the token spacing.
          *

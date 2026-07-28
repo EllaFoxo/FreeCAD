@@ -3371,6 +3371,10 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
         result.iconSpacing = static_cast<int>(*spacing);
     }
 
+    if (const auto resolvedSpacing = resolve<Numeric>(context, StyleProperty::Spacing)) {
+        result.spacing = static_cast<int>(*resolvedSpacing);
+    }
+
     boxGeometryCache.store(key, result);
     return result;
 }
