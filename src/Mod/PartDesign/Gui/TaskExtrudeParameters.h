@@ -149,6 +149,7 @@ protected:
         Gui::PrefQuantitySpinBox* lengthEdit = nullptr;
         Gui::PrefQuantitySpinBox* offsetEdit = nullptr;
         Gui::PrefQuantitySpinBox* taperEdit = nullptr;
+        QLabel* labelFace = nullptr;
         Gui::GeometrySelectorWidget* faceSelector = nullptr;
         QLineEdit* lineShapeName = nullptr;
         QToolButton* buttonShape = nullptr;

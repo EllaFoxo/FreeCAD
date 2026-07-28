@@ -202,6 +202,7 @@ void TaskExtrudeParameters::createSideControllers()
     m_side1.lengthEdit = ui->lengthEdit;
     m_side1.offsetEdit = ui->offsetEdit;
     m_side1.taperEdit = ui->taperEdit;
+    m_side1.labelFace = ui->labelFace;
     m_side1.faceSelector = ui->faceGeometrySelector;
     m_side1.lineShapeName = ui->lineShapeName;
     m_side1.buttonShape = ui->buttonShape;
@@ -227,6 +228,7 @@ void TaskExtrudeParameters::createSideControllers()
     m_side2.lengthEdit = ui->lengthEdit2;
     m_side2.offsetEdit = ui->offsetEdit2;
     m_side2.taperEdit = ui->taperEdit2;
+    m_side2.labelFace = ui->labelFace2;
     m_side2.faceSelector = ui->faceGeometrySelector2;
     m_side2.lineShapeName = ui->lineShapeName2;
     m_side2.buttonShape = ui->buttonShape2;
@@ -844,6 +846,7 @@ void TaskExtrudeParameters::updateSideUI(
     if (!finalFaceVisible && s.faceSelector->selection()->isSelecting()) {
         s.faceSelector->selection()->cancelSelecting();
     }
+    s.labelFace->setVisible(finalFaceVisible);
     s.faceSelector->setVisible(finalFaceVisible);
 
     s.upToShapeList->setVisible(isParentVisible && isShapeVisible);
