@@ -123,6 +123,9 @@ private:
     QMargins m_itemPadding {6, 4, 6, 4};
     /// Icon-to-label spacing within a row, resolved from the ListItemIconSpacing token.
     int m_itemSpacing = 6;
+    /// Floor for a row's height so the control is at least as tall as a native line edit,
+    /// keeping it aligned with sibling form fields. Resolved in applyStyleMetrics.
+    int m_minControlHeight = 0;
 };
 
 }  // namespace Gui

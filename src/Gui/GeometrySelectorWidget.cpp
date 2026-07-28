@@ -33,6 +33,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
@@ -282,6 +283,10 @@ void GeometrySelectorWidget::applyStyleMetrics()
     );
     m_contentLayout->setSpacing(0);
 
+    // A native line edit's height, used as the row-height floor so the control lines up with
+    // sibling form fields (spin boxes, combo boxes) instead of standing shorter than them.
+    m_minControlHeight = QLineEdit().sizeHint().height();
+
     // Fill the field column like a line edit or combo box: Expanding horizontally so the
     // control stretches to the available width instead of hugging its content. Vertically
     // Fixed, since the height is driven entirely by the current state's content, so the parent
@@ -294,7 +299,7 @@ void GeometrySelectorWidget::applyStyleMetrics()
         setFixedHeight(rowHeight());
     }
     else {
-        setMinimumHeight(0);
+        setMinimumHeight(m_minControlHeight);
         setMaximumHeight(QWIDGETSIZE_MAX);
     }
 }
@@ -830,8 +835,11 @@ int GeometrySelectorWidget::rowHeight() const
 {
     // One row is its content (icon or label, whichever is taller) plus the item's own
     // vertical padding. m_itemPadding is resolved in applyStyleMetrics from the List item
-    // tokens, so a single-reference list stands one padded row tall.
-    return qMax(IconSize, fontMetrics().height()) + m_itemPadding.top() + m_itemPadding.bottom();
+    // tokens, so a single-reference list stands one padded row tall. The row never falls
+    // below a native line edit's height, so the control aligns with sibling form fields.
+    const int contentHeight = qMax(IconSize, fontMetrics().height()) + m_itemPadding.top()
+        + m_itemPadding.bottom();
+    return qMax(contentHeight, m_minControlHeight);
 }
 
 int GeometrySelectorWidget::referenceListHeight() const
