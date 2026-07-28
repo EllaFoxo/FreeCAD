@@ -610,11 +610,28 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         // SpinBox to be inflated, which is not intended as the style handles all the necessary
         // size calculations.
         case PM_SpinBoxFrameWidth:
-        case PM_DefaultFrameWidth:
             if (qobject_cast<const QAbstractSpinBox*>(widget)) {
                 return 0;
             }
             return {};
+
+        case PM_DefaultFrameWidth: {
+            if (qobject_cast<const QAbstractSpinBox*>(widget)) {
+                return 0;
+            }
+            if (qobject_cast<const QAbstractItemView*>(widget)) {
+                const BoxGeometryDefinition geometry = resolveBoxGeometry(
+                    element(StyleComponentElement::Root)
+                );
+                // Symmetric only: a scalar frame width expresses one inset, so item-view
+                // container padding uses the top inset for all four sides (see design doc).
+                const int containerPadding = static_cast<int>(geometry.padding.top());
+                if (containerPadding > 0) {
+                    return QProxyStyle::pixelMetric(metric, option, widget) + containerPadding;
+                }
+            }
+            return {};
+        }
 
         // PM_TabBarTabOverlap is a pure painting hint: it tells CE_TabBarTabShape how many pixels
         // to extend (positive) or shrink (negative) the trailing edge of each non-last tab's paint
@@ -916,6 +933,12 @@ void FreeCADStyle::drawItemViewRow(
         }
     }
 
+    const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(
+        contextOf(widget, vopt, StyleComponentElement::Item)
+    );
+    // Exclude the reserved inter-row gap so the highlight floats above the background gap.
+    rowRect.adjust(0, 0, 0, -itemGeometry.spacing);
+
     // Qt installs a per-cell clip before calling PE_PanelItemViewItem; replace it
     // temporarily so the wider fill is not clipped to the cell column. paintBox insets the
     // fill by the row's Margin token, so a list row highlight can float clear of the frame.
@@ -1205,7 +1228,12 @@ QSize FreeCADStyle::itemViewItemSizeFromContents(
         baseSize = QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
     }
 
-    return geometry.sizeFromContents(baseSize);
+    QSize itemSize = geometry.sizeFromContents(baseSize);
+    // ListItemSpacing: reserve an inter-row gap below each row. The gap is excluded from the
+    // content rect (subElementRect) and the highlight (drawItemViewRow), so it renders as the
+    // list background between rows.
+    itemSize.rheight() += geometry.spacing;
+    return itemSize;
 }
 
 QSize FreeCADStyle::sizeFromContents(
@@ -1299,7 +1327,9 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
         }
         const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
         QStyleOptionViewItem adjustedOption = *vopt;
-        adjustedOption.rect = geometry.contentRect(vopt->rect);
+        // Exclude the reserved inter-row gap (ListItemSpacing) from the bottom so the content
+        // centres within the row area above the gap, not within the taller item rect.
+        adjustedOption.rect = geometry.contentRect(vopt->rect).adjusted(0, 0, 0, -geometry.spacing);
         return QProxyStyle::subElementRect(el, &adjustedOption, widget);
     };
 
