@@ -264,16 +264,13 @@ ListDisabledTextColor: "@LineEditDisabledTextColor"
 # sized like a form control, so it never stands shorter than the line edits and
 # spin boxes beside it in a task form.
 GeometrySelectorMinHeight: "@FormControlHeight"
+GeometrySelectorPadding: "padding(@Spacing.050)"
+GeometrySelectorItemSpacing: "@Spacing.050"
+GeometrySelectorItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.050)"
 
 # ── List Item ──────────────────────────────────────────────────────────────
 ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 ListItemIconSpacing: "@Spacing.150"
-
-# Container inner padding (frame → item content) and inter-row gap. Default 0 so every list
-# is unchanged until a theme opts in. ListPadding is symmetric-only for real item views
-# (a scalar frame width); GeometrySelectorWidget honours the full asymmetric value.
-ListPadding: "padding(0px)"
-ListItemSpacing: "0px"
 
 # ── List Row ───────────────────────────────────────────────────────────────
 # Default rows are transparent; alternate rows use the QPalette AlternateBase
