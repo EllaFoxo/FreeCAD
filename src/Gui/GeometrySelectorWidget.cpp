@@ -493,29 +493,31 @@ private:
     bool m_hovered = false;
 };
 
-/// The idle-state prompt, rendered as an InternalButton sized to its label: transparent at
-/// rest, a light flat gray box (the label plus the button's own padding) while the pointer is
-/// over the row, left-aligned like a native input placeholder. A click starts selecting.
-/// Painted directly rather than hosting a QToolButton so the label stays left-aligned without
-/// wrestling the button's centred layout, and so the box tracks the resolved BoxGeometry.
+/// The idle-state prompt. Its plus icon and label are laid out exactly like a committed
+/// reference row — inset by the item padding, with the item icon spacing between them — so the
+/// prompt aligns with the rows that will replace it. Its *look* is an InternalButton, though:
+/// transparent at rest, and on hover the whole row fills with the InternalButton background
+/// (its colour and radius), not the list-row highlight. A click starts selecting. Painted
+/// directly rather than hosting a QToolButton so the label stays left-aligned.
 class PromptButton: public QWidget
 {
 public:
     PromptButton(
         QString text,
-        QMargins outerPadding,
+        QMargins itemPadding,
         int iconSpacing,
         std::function<void()> onActivate,
         QWidget* parent
     )
         : QWidget(parent)
         , m_text(std::move(text))
-        , m_outerPadding(outerPadding)
+        , m_itemPadding(itemPadding)
         , m_iconSpacing(iconSpacing)
         , m_activate(std::move(onActivate))
     {
         setObjectName(QStringLiteral("gsw_prompt"));
-        // Resolve the InternalButton token chain so its BoxStyle/BoxGeometry drive the paint.
+        // The InternalButton token chain drives only the hovered background style; the layout
+        // and size come from the item padding, matching a reference row.
         setProperty("component", "InternalButton");
     }
 
@@ -544,19 +546,19 @@ protected:
     void paintEvent(QPaintEvent* /*event*/) override
     {
         QPainter painter(this);
-        // The button box is inset from the frame by the item padding (plus 1px so its rounded
-        // corners clear the frame's 1px border); it then spans the rest of the width.
-        // Transparent at rest — hovering fills that box with the InternalButton background, and
-        // the leading plus icon and label are inset within it by the box's own padding.
-        const QRect box = rect().marginsRemoved(boxMargin());
+        // Transparent at rest; on hover the whole row fills with the InternalButton background
+        // style (its colour and radius) so the prompt reads as an internal button while occupying
+        // the same extent as a committed reference row.
         if (m_hovered && Application::Instance) {
             StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
             context.state |= StyleParameters::StyleState::Hovered;
-            Application::Instance->freeCADStyle()->paintBox(&painter, box, context);
+            Application::Instance->freeCADStyle()->paintBox(&painter, rect(), context);
         }
 
+        // Lay the icon and label out like a reference row: inset from the row by the item padding,
+        // with the item icon spacing between them.
         const QColor foreground = palette().color(QPalette::PlaceholderText);
-        QRect content = box.marginsRemoved(buttonPadding());
+        QRect content = rect().marginsRemoved(m_itemPadding);
 
         const QPixmap icon = IconManager::instance().pixmap(
             QStringLiteral(":/icons/tabler/outline/plus.svg"),
@@ -594,43 +596,20 @@ protected:
     }
 
 private:
-    /// The InternalButton box padding resolved from tokens (the label's inset within the box),
-    /// or the outer padding as a fallback when no Gui::Application (and thus no FreeCADStyle) is
-    /// available, e.g. in the headless harness.
-    QMargins buttonPadding() const
-    {
-        if (Application::Instance) {
-            return Application::Instance->freeCADStyle()
-                ->resolveBoxGeometry(FreeCADStyle::contextOf(this))
-                .padding.toMargins();
-        }
-        return m_outerPadding;
-    }
-
-    /// The box inset: the item padding less 1px on each side, expanding the box outward so it
-    /// sits closer to the frame.
-    QMargins boxMargin() const
-    {
-        return m_outerPadding - QMargins(1, 1, 1, 1);
-    }
-
-    /// The intrinsic extent — icon and label plus the box's own padding plus the box inset —
-    /// used only as the minimum/hint size; the painted box expands to fill the column beyond it.
+    /// The intrinsic extent — icon and label plus the item padding — reported only as the
+    /// minimum/hint size; the row expands to fill the column beyond it, exactly like a
+    /// reference row.
     QSize contentExtent() const
     {
-        const QMargins inner = buttonPadding();
-        const QMargins outer = boxMargin();
         const QSize label = fontMetrics().size(Qt::TextSingleLine, m_text);
         return {
-            outer.left() + outer.right() + inner.left() + inner.right() + IconSize + m_iconSpacing
-                + label.width(),
-            outer.top() + outer.bottom() + inner.top() + inner.bottom()
-                + qMax(IconSize, label.height())
+            m_itemPadding.left() + m_itemPadding.right() + IconSize + m_iconSpacing + label.width(),
+            m_itemPadding.top() + m_itemPadding.bottom() + qMax(IconSize, label.height())
         };
     }
 
     QString m_text;
-    QMargins m_outerPadding;
+    QMargins m_itemPadding;
     int m_iconSpacing;
     std::function<void()> m_activate;
     bool m_hovered = false;
