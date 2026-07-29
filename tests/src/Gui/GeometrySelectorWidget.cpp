@@ -9,6 +9,7 @@
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 
+#include <Gui/GeometrySelectorPopup.h>
 #include <Gui/GeometrySelectorWidget.h>
 
 #include <src/App/InitApplication.h>
@@ -394,6 +395,55 @@ private Q_SLOTS:
         widget.setCurrentIndex(0);
         widget.selection()->setReferences({});
         QCOMPARE(widget.currentIndex(), 0);
+    }
+
+    // The popup builds one row per option, plus a Custom row when enabled.
+    void test_popupRowCount()  // NOLINT
+    {
+        std::vector<Gui::GeometrySelectorOption> options = {
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
+        };
+        Gui::GeometrySelectorPopup closed(options, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        QCOMPARE(closed.optionCount(), 2);
+        QCOMPARE(closed.findChildren<QWidget*>(QStringLiteral("gsw_option_row")).size(), 2);
+        QVERIFY(closed.findChild<QWidget*>(QStringLiteral("gsw_option_custom")) == nullptr);
+
+        Gui::GeometrySelectorPopup withCustom(options, /*allowCustom=*/true, /*currentIndex=*/-1, nullptr);
+        QCOMPARE(withCustom.optionCount(), 3);
+        QVERIFY(withCustom.findChild<QWidget*>(QStringLiteral("gsw_option_custom")) != nullptr);
+    }
+
+    // Activating an index emits optionActivated with that index (Custom == options.size()).
+    void test_popupActivateEmits()  // NOLINT
+    {
+        std::vector<Gui::GeometrySelectorOption> options = {
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
+        };
+        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/true, /*currentIndex=*/0, nullptr);
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+
+        popup.activateIndex(1);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 1);
+
+        popup.activateIndex(2);  // the Custom index
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
+    }
+
+    // Out-of-range activation is ignored.
+    void test_popupActivateOutOfRangeIgnored()  // NOLINT
+    {
+        std::vector<Gui::GeometrySelectorOption> options = {
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        };
+        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+        popup.activateIndex(5);
+        popup.activateIndex(-1);
+        QCOMPARE(spy.count(), 0);
     }
 
 private:
