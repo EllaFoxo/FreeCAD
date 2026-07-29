@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <QLayout>
+#include <QSignalSpy>
 #include <QTest>
 #include <QVariant>
 
@@ -254,6 +255,145 @@ private Q_SLOTS:
         const Gui::GeometrySelectorOption custom = Gui::GeometrySelectorOption::customEntry();
         QVERIFY(!custom.label.isEmpty());
         QVERIFY(custom.references.empty());
+    }
+
+    // Setting options enters combo mode.
+    void test_comboModeActiveWhenOptionsSet()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        QVERIFY(!widget.isComboMode());
+        widget.setOptions(
+            {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
+        );
+        QVERIFY(widget.isComboMode());
+    }
+
+    // Choosing a predefined option applies its references and emits currentIndexChanged.
+    void test_setCurrentIndexAppliesReferences()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
+        });
+        QSignalSpy spy(&widget, &Gui::GeometrySelectorWidget::currentIndexChanged);
+        widget.setCurrentIndex(1);
+        QCOMPARE(widget.currentIndex(), 1);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 1);
+        QCOMPARE(static_cast<int>(widget.selection()->references().size()), 1);
+        QCOMPARE(widget.selection()->references().front().subName, std::string("Edge2"));
+    }
+
+    // A logical option (no references) clears the selection but sets the index.
+    void test_logicalOptionClearsReferences()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        Gui::GeometrySelectorOption logical;
+        logical.label = QStringLiteral("Document origin");
+        logical.userData = QStringLiteral("doc-origin");
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            logical,
+        });
+        widget.setCurrentIndex(1);
+        QCOMPARE(widget.currentIndex(), 1);
+        QVERIFY(widget.selection()->references().empty());
+        QCOMPARE(widget.currentData().toString(), QStringLiteral("doc-origin"));
+        QCOMPARE(widget.currentText(), QStringLiteral("Document origin"));
+    }
+
+    // Reverse match: references equal to an option's references select that option.
+    void test_reverseMatchSelectsOption()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
+        });
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge2"}});
+        QCOMPARE(widget.currentIndex(), 1);
+    }
+
+    // Reverse match: non-matching references fall to the Custom index when Custom is enabled.
+    void test_reverseMatchFallsToCustom()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setAllowCustom(true);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.selection()->setReferences({{.object = m_object, .subName = "Face9"}});
+        // Custom index == number of predefined options (1 here).
+        QCOMPARE(widget.currentIndex(), 1);
+        QVERIFY(widget.currentOption() == nullptr);
+    }
+
+    // Custom disabled ⇒ no Custom index; a non-matching load leaves the index unchanged.
+    void test_reverseMatchNoCustomLeavesIndex()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.setCurrentIndex(0);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Face9"}});
+        QCOMPARE(widget.currentIndex(), 0);  // unchanged: no Custom to fall to
+    }
+
+    // Choosing Custom starts a free-pick session.
+    void test_customIndexStartsSelecting()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setAllowCustom(true);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.setCurrentIndex(1);  // the Custom index
+        QVERIFY(widget.selection()->isSelecting());
+        QVERIFY(widget.currentOption() == nullptr);
+        widget.selection()->stopSelecting();
+    }
+
+    // With Custom disabled, setCurrentIndex(-1) (the "nothing current" sentinel) must NOT
+    // start a selection session: customIndex() is -1 when Custom is off, so the guard must
+    // also check m_allowCustom.
+    void test_setCurrentIndexMinusOneNoCustomDoesNotSelect()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.setCurrentIndex(0);
+        widget.setCurrentIndex(-1);
+        QCOMPARE(widget.currentIndex(), -1);
+        QVERIFY(!widget.selection()->isSelecting());
+    }
+
+    // Custom disabled + nothing selected (currentIndex == -1): currentText/currentData must be
+    // empty, not the managed Custom entry (customIndex() is -1 when Custom is off).
+    void test_currentTextEmptyWhenNothingSelectedNoCustom()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        QCOMPARE(widget.currentIndex(), -1);
+        QVERIFY(widget.currentText().isEmpty());
+        QVERIFY(!widget.currentData().isValid());
+        QVERIFY(widget.currentOption() == nullptr);
+    }
+
+    // An empty external load leaves currentIndex unchanged.
+    void test_emptyLoadLeavesIndexUnchanged()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.setCurrentIndex(0);
+        widget.selection()->setReferences({});
+        QCOMPARE(widget.currentIndex(), 0);
     }
 
 private:

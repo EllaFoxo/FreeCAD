@@ -23,6 +23,7 @@
 
 #include "GeometrySelectorWidget.h"
 
+#include <algorithm>
 #include <functional>
 
 #include <QCoreApplication>
@@ -83,6 +84,16 @@ constexpr double ScrimOpacity = 0.94;
 // application these are superseded by the resolved List item box geometry.
 constexpr QMargins FallbackItemPadding {6, 4, 6, 4};
 constexpr int FallbackSpacing = 6;
+
+/// True multiset equality: same elements with the same multiplicity, order-independent.
+/// Lists are tiny, so is_permutation's O(n²) is fine.
+bool referencesEqualAsSet(
+    const std::vector<GeometryReference>& left,
+    const std::vector<GeometryReference>& right
+)
+{
+    return std::ranges::is_permutation(left, right);
+}
 
 /// A compact, flat (auto-raise) icon button styled by the ambient QStyle.
 QToolButton* makeActionButton(QWidget* parent, const QIcon& icon)
@@ -150,6 +161,13 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->addWidget(contentContainer);
 
+    // Keep the combo index in step with external reference changes (bound-property loads).
+    connect(
+        m_selection,
+        &GeometrySelection::referencesChanged,
+        this,
+        &GeometrySelectorWidget::reconcileIndexFromReferences
+    );
     // React to model changes — every signal simply rebuilds the visible rows.
     connect(m_selection, &GeometrySelection::referencesChanged, this, &GeometrySelectorWidget::rebuildRows);
     connect(
@@ -190,6 +208,134 @@ void GeometrySelectorWidget::setQuantity(GeometryQuantity mode)
     // The mode changes both the fixed-height rule and the rendered rows.
     applyStyleMetrics();
     rebuildRows();
+}
+
+// ---------------------------------------------------------------------------
+// Combo mode — predefined options with QComboBox-like read-back.
+// ---------------------------------------------------------------------------
+
+void GeometrySelectorWidget::setOptions(std::vector<GeometrySelectorOption> options)
+{
+    m_options = std::move(options);
+    m_currentIndex = -1;             // a changed option set invalidates the index
+    reconcileIndexFromReferences();  // reverse-match against any references already present
+    applyStyleMetrics();             // re-resolve layout metrics for the current mode
+    rebuildRows();
+}
+
+void GeometrySelectorWidget::addOption(GeometrySelectorOption option)
+{
+    m_options.push_back(std::move(option));
+    applyStyleMetrics();
+    rebuildRows();
+}
+
+void GeometrySelectorWidget::setAllowCustom(bool on)
+{
+    if (m_allowCustom == on) {
+        return;
+    }
+    m_allowCustom = on;
+    reconcileIndexFromReferences();
+    rebuildRows();
+}
+
+bool GeometrySelectorWidget::isComboMode() const
+{
+    return !m_options.empty();
+}
+
+int GeometrySelectorWidget::customIndex() const
+{
+    return m_allowCustom ? static_cast<int>(m_options.size()) : -1;
+}
+
+bool GeometrySelectorWidget::isCustomIndex(int index) const
+{
+    return m_allowCustom && index == customIndex();
+}
+
+int GeometrySelectorWidget::currentIndex() const
+{
+    return m_currentIndex;
+}
+
+void GeometrySelectorWidget::setCurrentIndex(int index)
+{
+    if (index == m_currentIndex) {
+        return;
+    }
+    m_currentIndex = index;
+
+    m_applyingChoice = true;
+    if (isCustomIndex(index)) {
+        // The Custom entry turns the widget back into a free-pick Select Box.
+        m_selection->startSelecting();
+    }
+    else if (index >= 0 && index < static_cast<int>(m_options.size())) {
+        m_selection->setReferences(m_options[index].references);
+    }
+    m_applyingChoice = false;
+
+    Q_EMIT currentIndexChanged(index);
+    rebuildRows();
+}
+
+QVariant GeometrySelectorWidget::currentData() const
+{
+    if (m_currentIndex >= 0 && m_currentIndex < static_cast<int>(m_options.size())) {
+        return m_options[m_currentIndex].userData;
+    }
+    if (isCustomIndex(m_currentIndex)) {
+        return GeometrySelectorOption::customEntry().userData;
+    }
+    return {};
+}
+
+QString GeometrySelectorWidget::currentText() const
+{
+    if (m_currentIndex >= 0 && m_currentIndex < static_cast<int>(m_options.size())) {
+        return m_options[m_currentIndex].label;
+    }
+    if (isCustomIndex(m_currentIndex)) {
+        return GeometrySelectorOption::customEntry().label;
+    }
+    return {};
+}
+
+const GeometrySelectorOption* GeometrySelectorWidget::currentOption() const
+{
+    if (m_currentIndex >= 0 && m_currentIndex < static_cast<int>(m_options.size())) {
+        return &m_options[m_currentIndex];
+    }
+    return nullptr;
+}
+
+void GeometrySelectorWidget::reconcileIndexFromReferences()
+{
+    if (m_applyingChoice || !isComboMode()) {
+        return;
+    }
+    const std::vector<GeometryReference>& references = m_selection->references();
+    if (references.empty()) {
+        return;  // an empty set cannot be told apart among logical options — leave as-is
+    }
+
+    int resolved = -1;
+    for (std::size_t index = 0; index < m_options.size(); ++index) {
+        if (referencesEqualAsSet(m_options[index].references, references)) {
+            resolved = static_cast<int>(index);
+            break;
+        }
+    }
+    if (resolved < 0) {
+        resolved = m_allowCustom ? customIndex() : m_currentIndex;
+    }
+
+    if (resolved != m_currentIndex) {
+        m_currentIndex = resolved;
+        Q_EMIT currentIndexChanged(resolved);
+    }
 }
 
 // ---------------------------------------------------------------------------
