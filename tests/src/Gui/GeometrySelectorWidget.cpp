@@ -2,6 +2,7 @@
 
 #include <QLayout>
 #include <QTest>
+#include <QVariant>
 
 #include <App/Application.h>
 #include <App/Document.h>
@@ -209,6 +210,50 @@ private Q_SLOTS:
         QCOMPARE(margins.left(), margins.right());
         QCOMPARE(margins.top(), margins.bottom());
         QCOMPARE(margins.left(), margins.top());
+    }
+
+    // GeometrySelectorOption::fromReference derives the label from the object even headless.
+    void test_optionFromReferenceDerivesLabel()  // NOLINT
+    {
+        const Gui::GeometrySelectorOption option = Gui::GeometrySelectorOption::fromReference(
+            {.object = m_object, .subName = "Edge1"}
+        );
+        // Label is "Object.Sub" using the object's Label ("TestObj") and the subelement.
+        QCOMPARE(option.label, QStringLiteral("TestObj.Edge1"));
+        QCOMPARE(static_cast<int>(option.references.size()), 1);
+        QCOMPARE(option.references.front().object, m_object);
+        QCOMPARE(option.references.front().subName, std::string("Edge1"));
+    }
+
+    // A whole-object reference (empty subName) yields just the object label.
+    void test_optionFromReferenceWholeObjectLabel()  // NOLINT
+    {
+        const Gui::GeometrySelectorOption option = Gui::GeometrySelectorOption::fromReference(
+            {.object = m_object, .subName = ""}
+        );
+        QCOMPARE(option.label, QStringLiteral("TestObj"));
+    }
+
+    // fromReferences stores the whole group as one option; label comes from the first reference.
+    void test_optionFromReferencesGroups()  // NOLINT
+    {
+        std::vector<Gui::GeometryReference> references = {
+            {.object = m_object, .subName = "Edge1"},
+            {.object = m_object, .subName = "Edge2"},
+        };
+        const Gui::GeometrySelectorOption option = Gui::GeometrySelectorOption::fromReferences(
+            references
+        );
+        QCOMPARE(static_cast<int>(option.references.size()), 2);
+        QCOMPARE(option.label, QStringLiteral("TestObj.Edge1"));
+    }
+
+    // The managed Custom entry has a non-empty label and no references.
+    void test_optionCustomEntry()  // NOLINT
+    {
+        const Gui::GeometrySelectorOption custom = Gui::GeometrySelectorOption::customEntry();
+        QVERIFY(!custom.label.isEmpty());
+        QVERIFY(custom.references.empty());
     }
 
 private:

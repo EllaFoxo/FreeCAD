@@ -362,6 +362,37 @@ static QString referenceLabel(const GeometryReference& ref)
     return subName.isEmpty() ? objectName : objectName + u'.' + subName;
 }
 
+GeometrySelectorOption GeometrySelectorOption::fromReference(const GeometryReference& reference)
+{
+    return {
+        .icon = viewProviderIconFor(reference.object),
+        .label = referenceLabel(reference),
+        .references = {reference},
+        .userData = {},
+    };
+}
+
+GeometrySelectorOption GeometrySelectorOption::fromReferences(std::vector<GeometryReference> references)
+{
+    const GeometryReference first = references.empty() ? GeometryReference {} : references.front();
+    return {
+        .icon = viewProviderIconFor(first.object),
+        .label = referenceLabel(first),
+        .references = std::move(references),
+        .userData = {},
+    };
+}
+
+GeometrySelectorOption GeometrySelectorOption::customEntry()
+{
+    GeometrySelectorOption option;
+    option.label = QCoreApplication::translate("Gui::GeometrySelectorWidget", "Custom…");
+    if (Gui::Application::Instance) {
+        option.icon = IconManager::instance().icon(QStringLiteral(":/icons/tabler/outline/plus.svg"));
+    }
+    return option;
+}
+
 /// The selecting-state prompt: the "pick geometry" hint until something is committed, then a
 /// running count so the user sees why the widget grows as references accumulate.
 static QString selectingPromptText(int referenceCount)

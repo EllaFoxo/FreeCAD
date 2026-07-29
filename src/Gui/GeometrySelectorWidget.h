@@ -25,7 +25,10 @@
 
 #include <vector>
 
+#include <QIcon>
 #include <QMargins>
+#include <QString>
+#include <QVariant>
 #include <QWidget>
 
 #include <FCGlobal.h>
@@ -36,6 +39,28 @@ class QVBoxLayout;
 
 namespace Gui
 {
+
+/**
+ * One predefined choice for the selector's combo mode: an icon and label to show,
+ * the geometry references it stands for (empty for a logical option that carries no
+ * geometry, e.g. "Document origin"), and optional user data surfaced via currentData().
+ */
+struct GuiExport GeometrySelectorOption
+{
+    QIcon icon;
+    QString label;
+    std::vector<GeometryReference> references;
+    QVariant userData;
+
+    /// One option standing for a single reference, its icon and label derived from the
+    /// object's view provider exactly like the reference rows (label only, when headless).
+    static GeometrySelectorOption fromReference(const GeometryReference& reference);
+    /// One option standing for a whole group of references; icon and label are taken from
+    /// the first reference.
+    static GeometrySelectorOption fromReferences(std::vector<GeometryReference> references);
+    /// The managed "Custom…" entry that turns the widget back into a free-pick Select Box.
+    static GeometrySelectorOption customEntry();
+};
 
 /**
  * Composite view widget that owns a GeometrySelection core and renders it
