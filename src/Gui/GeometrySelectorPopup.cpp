@@ -151,6 +151,9 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     , m_currentIndex(currentIndex)
 {
     setObjectName(QStringLiteral("gsw_options_popup"));
+    // Any close() — Escape or an outside click — schedules deletion, so a dismissed popup
+    // never lingers as a hidden child of the widget.
+    setAttribute(Qt::WA_DeleteOnClose);
     if (Application::Instance) {
         setStyle(Application::Instance->freeCADStyle());
     }
@@ -253,4 +256,15 @@ void GeometrySelectorPopup::keyPressEvent(QKeyEvent* event)
         default:
             QWidget::keyPressEvent(event);
     }
+}
+
+void GeometrySelectorPopup::mousePressEvent(QMouseEvent* event)
+{
+    // A Qt::Popup grabs the mouse; a press outside its geometry dismisses it. WA_DeleteOnClose
+    // then frees the popup, so both the outside-click and Escape paths release it.
+    if (!rect().contains(event->pos())) {
+        close();
+        return;
+    }
+    QWidget::mousePressEvent(event);
 }

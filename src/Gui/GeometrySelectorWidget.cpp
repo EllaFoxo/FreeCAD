@@ -40,6 +40,7 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QStackedLayout>
+#include <QStyleOption>
 #include <QStyleOptionFrame>
 #include <QStylePainter>
 #include <QToolButton>
@@ -52,6 +53,7 @@
 #include "Document.h"
 #include "ElideLabel.h"
 #include "FreeCADStyle.h"
+#include "GeometrySelectorPopup.h"
 #include "IconManager.h"
 #include "Selection/Selection.h"
 #include "ViewProvider.h"
@@ -84,6 +86,10 @@ constexpr double ScrimOpacity = 0.94;
 // application these are superseded by the resolved List item box geometry.
 constexpr QMargins FallbackItemPadding {6, 4, 6, 4};
 constexpr int FallbackSpacing = 6;
+
+/// Width of the strip reserved on the right of the control for the dropdown chevron in combo
+/// mode; the row content is inset by this so it never runs under the chevron.
+constexpr int ChevronWidth = 20;
 
 /// True multiset equality: same elements with the same multiplicity, order-independent.
 /// Lists are tiny, so is_permutation's O(n²) is fine.
@@ -354,6 +360,13 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
     option.features = QStyleOptionFrame::None;
     option.lineWidth = m_frameThickness;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
+
+    if (isComboMode() && Application::Instance) {
+        QStyleOption arrowOption;
+        arrowOption.initFrom(this);
+        arrowOption.rect = chevronRect();
+        painter.drawPrimitive(QStyle::PE_IndicatorArrowDown, arrowOption);
+    }
 }
 
 void GeometrySelectorWidget::changeEvent(QEvent* event)
@@ -382,10 +395,43 @@ void GeometrySelectorWidget::mousePressEvent(QMouseEvent* event)
 void GeometrySelectorWidget::mouseReleaseEvent(QMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton && visualState() == VisualState::Empty) {
-        m_selection->startSelecting();
+        activatePrimary();
         return;
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+void GeometrySelectorWidget::activatePrimary()
+{
+    if (isComboMode()) {
+        openOptionsPopup();
+    }
+    else {
+        m_selection->startSelecting();
+    }
+}
+
+void GeometrySelectorWidget::openOptionsPopup()
+{
+    auto* popup = new GeometrySelectorPopup(m_options, m_allowCustom, m_currentIndex, this);
+    popup->setFixedWidth(width());
+    popup->move(mapToGlobal(QPoint(0, height())));
+    connect(popup, &GeometrySelectorPopup::optionActivated, this, [this, popup](int index) {
+        onOptionActivated(index);
+        popup->close();  // WA_DeleteOnClose frees the popup; also the outside-click/Escape path
+    });
+    popup->show();
+}
+
+void GeometrySelectorWidget::onOptionActivated(int index)
+{
+    // Re-choosing Custom while already at the Custom index must still restart the pick;
+    // setCurrentIndex would no-op on an unchanged index.
+    if (m_allowCustom && index == customIndex() && index == m_currentIndex) {
+        m_selection->startSelecting();
+        return;
+    }
+    setCurrentIndex(index);
 }
 
 // ---------------------------------------------------------------------------
@@ -436,13 +482,14 @@ void GeometrySelectorWidget::applyStyleMetrics()
     m_rowSpacing = rowSpacing;
     m_containerPadding = containerPadding;
 
-    // Inset content by the frame border plus the container padding (ListPadding). Each row still
-    // supplies its own item padding; ListItemSpacing (applied in makeReferenceList) provides the
-    // inter-row gap. The border inset keeps the painted frame clear of the overlay scrim.
+    // Inset content by the frame border plus the container padding (ListPadding). In combo mode
+    // also reserve a strip on the right for the chevron so the rows never run under it. Each row
+    // still supplies its own item padding; ListItemSpacing provides the inter-row gap.
+    const int chevronReserve = isComboMode() ? ChevronWidth : 0;
     layout()->setContentsMargins(
         m_frameThickness + containerPadding.left(),
         m_frameThickness + containerPadding.top(),
-        m_frameThickness + containerPadding.right(),
+        m_frameThickness + containerPadding.right() + chevronReserve,
         m_frameThickness + containerPadding.bottom()
     );
     m_contentLayout->setSpacing(0);
@@ -569,6 +616,7 @@ public:
         const GeometryReference& reference,
         QMargins padding,
         int spacing,
+        bool showRemove,
         std::function<void()> onActivate,
         std::function<void()> onRemove,
         std::function<void()> onHoverEnter,
@@ -599,17 +647,19 @@ public:
         label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
         rowLayout->addWidget(label, 1);
 
-        m_remove = makeActionButton(
-            this,
-            IconManager::instance().icon(":/icons/tabler/outline/trash.svg")
-        );
-        m_remove->setToolTip(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Remove"));
-        styleAsLinkButton(m_remove);
-        m_remove->hide();
-        QObject::connect(m_remove, &QToolButton::clicked, this, [handler = std::move(onRemove)] {
-            handler();
-        });
-        rowLayout->addWidget(m_remove);
+        if (showRemove) {
+            m_remove = makeActionButton(
+                this,
+                IconManager::instance().icon(":/icons/tabler/outline/trash.svg")
+            );
+            m_remove->setToolTip(QCoreApplication::translate("Gui::GeometrySelectorWidget", "Remove"));
+            styleAsLinkButton(m_remove);
+            m_remove->hide();
+            QObject::connect(m_remove, &QToolButton::clicked, this, [handler = std::move(onRemove)] {
+                handler();
+            });
+            rowLayout->addWidget(m_remove);
+        }
     }
 
 protected:
@@ -617,7 +667,9 @@ protected:
     {
         m_hovered = true;
         update();  // repaint with the hovered row background
-        m_remove->show();
+        if (m_remove) {
+            m_remove->show();
+        }
         if (m_hoverEnter) {
             m_hoverEnter();
         }
@@ -626,7 +678,9 @@ protected:
     {
         m_hovered = false;
         update();
-        m_remove->hide();
+        if (m_remove) {
+            m_remove->hide();
+        }
         if (m_hoverLeave) {
             m_hoverLeave();
         }
@@ -915,7 +969,7 @@ QWidget* GeometrySelectorWidget::makeEmptyRow()
         tr("Select geometry"),
         m_itemPadding,
         m_itemSpacing,
-        [this] { m_selection->startSelecting(); },
+        [this] { activatePrimary(); },
         this
     );
     prompt->setFixedHeight(rowHeight());
@@ -938,7 +992,8 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
             references[index],
             m_itemPadding,
             m_itemSpacing,
-            [this] { m_selection->startSelecting(); },
+            /*showRemove=*/!isComboMode(),
+            [this] { activatePrimary(); },
             [this, index] { m_selection->removeReference(index); },
             [this, reference = references[index]] { previewReferenceInView(reference); },
             [this] { clearReferencePreview(); },
@@ -1004,6 +1059,15 @@ QWidget* GeometrySelectorWidget::makeSelecting()
     // idle list's height.
     container->setFixedHeight(hasReferences ? referenceListHeight() : rowHeight());
     return container;
+}
+
+QRect GeometrySelectorWidget::chevronRect() const
+{
+    // The reserved strip on the right, spanning the first row band so a multi-row list reads as
+    // a single dropdown control.
+    const int top = m_frameThickness + m_containerPadding.top();
+    const int right = width() - m_frameThickness - m_containerPadding.right();
+    return {right - ChevronWidth, top, ChevronWidth, rowHeight()};
 }
 
 int GeometrySelectorWidget::rowHeight() const

@@ -27,6 +27,7 @@
 
 #include <QIcon>
 #include <QMargins>
+#include <QRect>
 #include <QString>
 #include <QVariant>
 #include <QWidget>
@@ -174,6 +175,16 @@ private:
     /// True while setCurrentIndex is applying references, so the referencesChanged reaction
     /// does not clobber the just-set index.
     bool m_applyingChoice = false;
+
+    /// Primary activation for a click on the frame/rows/prompt: opens the options popup in
+    /// combo mode, otherwise starts a free-pick session (the pre-combo behaviour).
+    void activatePrimary();
+    /// Shows the dropdown popup under the control (combo mode only).
+    void openOptionsPopup();
+    /// Applies the popup's choice: sets the current index, or re-starts a pick for Custom.
+    void onOptionActivated(int index);
+    /// The strip on the right of the frame in which the chevron is painted (combo mode).
+    QRect chevronRect() const;
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;

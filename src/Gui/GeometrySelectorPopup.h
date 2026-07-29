@@ -64,6 +64,7 @@ Q_SIGNALS:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
 
 private:
     void buildRows();

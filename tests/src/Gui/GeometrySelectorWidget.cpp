@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <QEvent>
 #include <QLayout>
 #include <QSignalSpy>
 #include <QTest>
+#include <QToolButton>
 #include <QVariant>
 
 #include <App/Application.h>
@@ -444,6 +446,93 @@ private Q_SLOTS:
         popup.activateIndex(5);
         popup.activateIndex(-1);
         QCOMPARE(spy.count(), 0);
+    }
+
+    // Combo mode reserves extra room on the right for the chevron; free-pick mode does not.
+    void test_comboModeReservesChevronMargin()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        const QMargins plain = widget.layout()->contentsMargins();
+        QCOMPARE(plain.right(), plain.left());  // symmetric in free-pick mode (headless)
+
+        widget.setOptions(
+            {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
+        );
+        const QMargins combo = widget.layout()->contentsMargins();
+        QVERIFY(combo.right() > combo.left());  // chevron strip reserved on the right
+    }
+
+    // In combo mode a reference row is display-only: no remove (trash) button.
+    void test_comboModeRowsHaveNoRemoveButton()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        widget.setAllowCustom(true);
+        widget.setOptions(
+            {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
+        );
+        // A non-matching load ⇒ Custom index ⇒ the references render as rows.
+        widget.selection()->setReferences({{.object = m_object, .subName = "Face9"}});
+        QCoreApplication::processEvents();
+        auto* row = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QVERIFY(row != nullptr);
+        QCOMPARE(row->findChildren<QToolButton*>().size(), 0);
+    }
+
+    // Free-pick mode keeps the per-row remove button.
+    void test_freePickModeRowsKeepRemoveButton()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+        auto* row = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QVERIFY(row != nullptr);
+        QVERIFY(row->findChildren<QToolButton*>().size() >= 1);
+    }
+
+    // Activating the control in combo mode opens the options popup rather than selecting.
+    void test_comboActivationOpensPopup()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setAllowCustom(true);
+        widget.setOptions(
+            {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
+        );
+        widget.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&widget));
+
+        // Empty state ⇒ the prompt handles the click; click it to activate.
+        auto* prompt = widget.findChild<QWidget*>(QStringLiteral("gsw_prompt"));
+        QVERIFY(prompt != nullptr);
+        QTest::mouseClick(prompt, Qt::LeftButton);
+        QCoreApplication::processEvents();
+
+        QVERIFY(widget.findChild<Gui::GeometrySelectorPopup*>() != nullptr);
+        QVERIFY(!widget.selection()->isSelecting());  // did NOT start a free pick
+        widget.hide();
+    }
+
+    // A dismissed popup (here via close(), same path as Escape/click-away) is destroyed, not
+    // leaked — WA_DeleteOnClose frees it rather than leaving it parented to the widget.
+    void test_popupDismissedIsDestroyed()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setAllowCustom(true);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        widget.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&widget));
+        auto* prompt = widget.findChild<QWidget*>(QStringLiteral("gsw_prompt"));
+        QVERIFY(prompt != nullptr);
+        QTest::mouseClick(prompt, Qt::LeftButton);
+        QCoreApplication::processEvents();
+        auto* popup = widget.findChild<Gui::GeometrySelectorPopup*>();
+        QVERIFY(popup != nullptr);
+
+        popup->close();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        QCOMPARE(widget.findChild<Gui::GeometrySelectorPopup*>(), nullptr);
+        widget.hide();
     }
 
 private:
