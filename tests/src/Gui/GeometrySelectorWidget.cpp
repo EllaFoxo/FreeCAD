@@ -477,17 +477,21 @@ private Q_SLOTS:
     }
 
     // Combo mode reserves extra room on the right for the chevron; free-pick mode does not.
-    void test_comboModeReservesChevronMargin()  // NOLINT
+    // A non-empty options list turns the widget into a combo; an empty list restores free-pick.
+    // The dropdown frame/arrow and its right-side reserve are the style's job (CC_ComboBox), so
+    // there is nothing pixel-wise to assert in the headless harness — only the mode transition.
+    void test_setOptionsTogglesComboMode()  // NOLINT
     {
         Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
-        const QMargins plain = widget.layout()->contentsMargins();
-        QCOMPARE(plain.right(), plain.left());  // symmetric in free-pick mode (headless)
+        QVERIFY(!widget.isComboMode());
 
         widget.setOptions(
             {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
         );
-        const QMargins combo = widget.layout()->contentsMargins();
-        QVERIFY(combo.right() > combo.left());  // chevron strip reserved on the right
+        QVERIFY(widget.isComboMode());
+
+        widget.setOptions({});
+        QVERIFY(!widget.isComboMode());
     }
 
     // In combo mode a reference row is display-only: no remove (trash) button.

@@ -144,6 +144,11 @@ private Q_SLOTS:
     void rebuildRows();
 
 private:
+    /// True when the control should look like a native combo box: combo mode, but not while a
+    /// Custom free-pick session is active — during a pick it falls back to the GeometrySelector
+    /// list frame (no chevron, list paddings) so the picking chrome matches the ordinary selector.
+    bool rendersAsComboBox() const;
+
     /// True in the states the widget paints and clicks itself (the empty prompt and the native
     /// combo box), where a press should be accepted here rather than by a child row.
     bool widgetHandlesClick() const;
@@ -192,8 +197,6 @@ private:
     void openOptionsPopup();
     /// Applies the popup's choice: sets the current index, or re-starts a pick for Custom.
     void onOptionActivated(int index);
-    /// The strip on the right of the frame in which the chevron is painted (combo mode).
-    QRect chevronRect() const;
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;
@@ -206,6 +209,9 @@ private:
     /// from the GeometrySelector box geometry (GeometrySelectorMinHeight); 0 until resolved, when
     /// the row falls back to its content height (headless harness with no FreeCADStyle).
     int m_lineHeight = 0;
+    /// Row content height in combo mode: the style's combo edit-field band, so a row aligns with
+    /// the combo label. 0 in free-pick mode, where the border-box row height is used instead.
+    int m_comboRowHeight = 0;
     /// Frame border thickness resolved from the GeometrySelector box style; the outer layout
     /// insets content by it so one row plus the frame equals one line height.
     int m_frameThickness = 1;

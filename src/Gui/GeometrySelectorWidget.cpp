@@ -88,10 +88,6 @@ constexpr double ScrimOpacity = 0.94;
 constexpr QMargins FallbackItemPadding {6, 4, 6, 4};
 constexpr int FallbackSpacing = 6;
 
-/// Width of the strip reserved on the right of the control for the dropdown chevron in combo
-/// mode; the row content is inset by this so it never runs under the chevron.
-constexpr int ChevronWidth = 20;
-
 /// True multiset equality: same elements with the same multiplicity, order-independent.
 /// Lists are tiny, so is_permutation's O(n²) is fine.
 bool referencesEqualAsSet(
@@ -360,10 +356,11 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QStylePainter painter(this);
 
-    // A current predefined option reads as a plain Select Box: paint it with the ambient
-    // QStyle's combo-box primitives (frame + arrow + label) so it is pixel-consistent with
-    // every other QComboBox. Choosing Custom drops out of this state into the free-pick chrome.
-    if (visualState() == VisualState::Option) {
+    // At rest in combo mode the whole control is a native combo box: the ambient QStyle paints the
+    // frame and dropdown arrow, and — in the Option state — the selected option's label. Other
+    // combo states render their own child rows (reference list, prompt) inside the edit-field area,
+    // over this frame. Free-pick mode, and a combo mid-Custom-pick, use the list line-edit frame.
+    if (rendersAsComboBox()) {
         paintAsComboBox(painter);
         return;
     }
@@ -377,30 +374,26 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
     option.features = QStyleOptionFrame::None;
     option.lineWidth = m_frameThickness;
     painter.drawPrimitive(QStyle::PE_PanelLineEdit, option);
-
-    if (isComboMode() && Application::Instance) {
-        QStyleOption arrowOption;
-        arrowOption.initFrom(this);
-        arrowOption.rect = chevronRect();
-        painter.drawPrimitive(QStyle::PE_IndicatorArrowDown, arrowOption);
-    }
 }
 
 void GeometrySelectorWidget::paintAsComboBox(QStylePainter& painter) const
 {
-    const GeometrySelectorOption* option = currentOption();
-
     QStyleOptionComboBox combo;
     combo.initFrom(this);  // real hover / focus state
     combo.rect = rect();
     combo.subControls = QStyle::SC_ComboBoxFrame | QStyle::SC_ComboBoxArrow;
     combo.frame = true;
-    combo.currentText = option->label;
-    combo.currentIcon = option->icon;
     combo.iconSize = QSize(IconSize, IconSize);
 
-    // The complex control paints the frame + arrow; the label (icon + text) is a separate
-    // control element, exactly as QComboBox::paintEvent drives it.
+    // Only the Option state shows a value in the frame itself; every other combo state leaves the
+    // label empty and lets its child rows render the content over the frame.
+    if (const GeometrySelectorOption* option = currentOption()) {
+        combo.currentText = option->label;
+        combo.currentIcon = option->icon;
+    }
+
+    // The complex control paints the frame + arrow; the label (icon + text) is a separate control
+    // element, exactly as QComboBox::paintEvent drives it. An empty label draws nothing.
     painter.drawComplexControl(QStyle::CC_ComboBox, combo);
     painter.drawControl(QStyle::CE_ComboBoxLabel, combo);
 }
@@ -438,10 +431,16 @@ void GeometrySelectorWidget::mouseReleaseEvent(QMouseEvent* event)
     QWidget::mouseReleaseEvent(event);
 }
 
+bool GeometrySelectorWidget::rendersAsComboBox() const
+{
+    return isComboMode() && !m_selection->isSelecting();
+}
+
 bool GeometrySelectorWidget::widgetHandlesClick() const
 {
-    const VisualState state = visualState();
-    return state == VisualState::Empty || state == VisualState::Option;
+    // Free-pick empty state starts a pick on click; a combo-box appearance opens the popup on a
+    // click a child row did not consume (e.g. the arrow or the padding around the value).
+    return visualState() == VisualState::Empty || rendersAsComboBox();
 }
 
 void GeometrySelectorWidget::activatePrimary()
@@ -520,21 +519,49 @@ void GeometrySelectorWidget::applyStyleMetrics()
         rowSpacing = item.spacing;
     }
 
-    m_itemPadding = itemPadding;
     m_itemSpacing = iconSpacing;
     m_rowSpacing = rowSpacing;
     m_containerPadding = containerPadding;
+    m_comboRowHeight = 0;
 
-    // Inset content by the frame border plus the container padding (ListPadding). In combo mode
-    // also reserve a strip on the right for the chevron so the rows never run under it. Each row
-    // still supplies its own item padding; ListItemSpacing provides the inter-row gap.
-    const int chevronReserve = isComboMode() ? ChevronWidth : 0;
-    layout()->setContentsMargins(
-        m_frameThickness + containerPadding.left(),
-        m_frameThickness + containerPadding.top(),
-        m_frameThickness + containerPadding.right() + chevronReserve,
-        m_frameThickness + containerPadding.bottom()
-    );
+    // Combo mode is a native combo box (Select component): inset content to the style's
+    // edit-field rect and let CC_ComboBox paint the frame + arrow, so padding and the dropdown
+    // arrow are exactly a QComboBox's. Rows carry no extra item padding, so a reference row aligns
+    // with where the combo label sits. Free-pick mode keeps the list-styled line edit with its
+    // ListItem padding and a flush frame.
+    if (rendersAsComboBox() && Application::Instance) {
+        const int comboHeight = m_lineHeight > 0 ? m_lineHeight
+                                                 : qMax(IconSize, fontMetrics().height());
+        // The left/top/bottom insets are width-independent; only the right inset (the arrow
+        // reserve) scales with width, so read them off a generous nominal rect.
+        constexpr int nominalWidth = 400;
+        QStyleOptionComboBox combo;
+        combo.initFrom(this);
+        combo.frame = true;
+        combo.rect = QRect(0, 0, nominalWidth, comboHeight);
+        const QRect editField
+            = style()->subControlRect(QStyle::CC_ComboBox, &combo, QStyle::SC_ComboBoxEditField, this);
+
+        m_itemPadding = {0, 0, 0, 0};
+        m_comboRowHeight = editField.height();
+        layout()->setContentsMargins(
+            editField.left(),
+            editField.top(),
+            nominalWidth - editField.right() - 1,
+            comboHeight - editField.bottom() - 1
+        );
+    }
+    else {
+        m_itemPadding = itemPadding;
+        // Inset content by the frame border plus the container padding (ListPadding); each row
+        // supplies its own item padding and ListItemSpacing the inter-row gap.
+        layout()->setContentsMargins(
+            m_frameThickness + containerPadding.left(),
+            m_frameThickness + containerPadding.top(),
+            m_frameThickness + containerPadding.right(),
+            m_frameThickness + containerPadding.bottom()
+        );
+    }
     m_contentLayout->setSpacing(0);
 
     // Fill the field column like a line edit or combo box: Expanding horizontally so the
@@ -545,11 +572,12 @@ void GeometrySelectorWidget::applyStyleMetrics()
     policy.setHorizontalPolicy(QSizePolicy::Expanding);
     policy.setVerticalPolicy(QSizePolicy::Fixed);
     setSizePolicy(policy);
-    // One line is the border-box height: the row content plus the frame and container padding the
-    // outer layout insets on top and bottom, which sums back to m_lineHeight. A single-value
-    // selector is pinned to it, a multi-value one uses it as its one-row minimum.
-    const int lineHeight = rowHeight() + (2 * m_frameThickness) + m_containerPadding.top()
-        + m_containerPadding.bottom();
+    // One line is the combo height in combo mode, otherwise the border-box height: the row content
+    // plus the frame and container padding the outer layout insets on top and bottom. A
+    // single-value selector is pinned to it; a multi-value one uses it as its one-row minimum.
+    const int lineHeight = rendersAsComboBox() && m_lineHeight > 0 ? m_lineHeight
+                                                                   : rowHeight()
+            + (2 * m_frameThickness) + m_containerPadding.top() + m_containerPadding.bottom();
     if (m_selection->quantity() == GeometryQuantity::Single) {
         setFixedHeight(lineHeight);
     }
@@ -1104,17 +1132,12 @@ QWidget* GeometrySelectorWidget::makeSelecting()
     return container;
 }
 
-QRect GeometrySelectorWidget::chevronRect() const
-{
-    // The reserved strip on the right, spanning the first row band so a multi-row list reads as
-    // a single dropdown control.
-    const int top = m_frameThickness + m_containerPadding.top();
-    const int right = width() - m_frameThickness - m_containerPadding.right();
-    return {right - ChevronWidth, top, ChevronWidth, rowHeight()};
-}
-
 int GeometrySelectorWidget::rowHeight() const
 {
+    // Combo mode: the row fills the style's combo edit-field band, so it aligns with the label.
+    if (m_comboRowHeight > 0) {
+        return m_comboRowHeight;
+    }
     // Border-box: one line (m_lineHeight) is the frame, the container padding and the row content
     // combined, so the content shrinks as ListPadding grows and every selector stays exactly one
     // line height tall regardless of its padding.
@@ -1210,10 +1233,11 @@ void GeometrySelectorWidget::rebuildRows()
 
     const VisualState state = visualState();
 
-    // A current predefined option paints as a real non-editable combo box; the style resolves
-    // that from the Select component, so present as Select in this state and as the ordinary
-    // GeometrySelector frame in every other. contextOf() reads this property fresh at paint time.
-    setProperty("component", state == VisualState::Option ? "Select" : "GeometrySelector");
+    // A resting combo is a native combo box (Select component); free-pick mode — and a combo
+    // during its Custom pick — use the list-styled GeometrySelector frame. Switching the component
+    // re-derives the padding, height and arrow reserve, so nothing is stale from a previous state.
+    setProperty("component", rendersAsComboBox() ? "Select" : "GeometrySelector");
+    applyStyleMetrics();
 
     switch (state) {
         case VisualState::Empty:
