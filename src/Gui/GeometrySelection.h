@@ -119,6 +119,11 @@ Q_SIGNALS:
     void referencesChanged();
     void selectionModeEntered();
     void selectionModeExited();
+    /// Forwards each raw selection change observed during an active picking
+    /// session, before the reference model reduces it. A consumer that needs
+    /// more than the {object, subName} reference — the picked point for
+    /// snapping, the link path for instance placement — connects here.
+    void pickSelectionChanged(const Gui::SelectionChanges& msg);
 
 protected:
     // Single place every model mutation routes through, so later tasks (binding)

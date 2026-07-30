@@ -563,6 +563,52 @@ private Q_SLOTS:
         widget.hide();
     }
 
+    // The core forwards raw pick events only while a session is active, so a
+    // consumer (the transform dialog) can read the picked point / link path the
+    // {object, subName} reference model drops.
+    void test_pickSelectionChangedForwardsRawEventWhileSelecting()  // NOLINT
+    {
+        struct PickProbe: Gui::GeometrySelection
+        {
+            using Gui::GeometrySelection::GeometrySelection;
+            using Gui::GeometrySelection::onSelectionChanged;
+        };
+
+        PickProbe selection(Gui::GeometryQuantity::Single);
+
+        int emitted = 0;
+        Gui::SelectionChanges::MsgType seenType {};
+        std::string seenObject;
+        QObject::connect(
+            &selection,
+            &Gui::GeometrySelection::pickSelectionChanged,
+            [&](const Gui::SelectionChanges& change) {
+                ++emitted;
+                seenType = change.Type;
+                seenObject = change.pObjectName ? change.pObjectName : "";
+            }
+        );
+
+        const Gui::SelectionChanges preselect(
+            Gui::SelectionChanges::SetPreselect,
+            m_docName,
+            std::string("TestObj"),
+            std::string("Edge1")
+        );
+
+        // Not selecting: no forward.
+        selection.onSelectionChanged(preselect);
+        QCOMPARE(emitted, 0);
+
+        // Selecting: forwards the untouched event.
+        selection.startSelecting();
+        selection.onSelectionChanged(preselect);
+        QCOMPARE(emitted, 1);
+        QCOMPARE(seenType, Gui::SelectionChanges::SetPreselect);
+        QCOMPARE(seenObject, std::string("TestObj"));
+        selection.stopSelecting();
+    }
+
 private:
     std::string m_docName;
     App::Document* m_doc = nullptr;

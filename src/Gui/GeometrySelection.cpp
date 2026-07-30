@@ -278,6 +278,7 @@ void GeometrySelection::onSelectionChanged(const Gui::SelectionChanges& msg)
     if (!_selecting) {
         return;
     }
+    Q_EMIT pickSelectionChanged(msg);
     if (msg.Type == Gui::SelectionChanges::ClrSelection) {
         scheduleConfirmOnClear();
         return;
