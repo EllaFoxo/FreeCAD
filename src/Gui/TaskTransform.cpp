@@ -196,12 +196,16 @@ void TaskTransform::buildTransformOriginSelector()
 
     std::vector<GeometrySelectorOption> options;
     options.push_back({
+        .icon = {},
         .label = tr("Object origin"),
+        .references = {},
         .userData = QVariant::fromValue(PlacementMode::ObjectOrigin),
     });
     if (centerOfMassProvider->supports(vp->getObject())) {
         options.push_back({
+            .icon = {},
             .label = tr("Center of mass / centroid"),
+            .references = {},
             .userData = QVariant::fromValue(PlacementMode::Centroid),
         });
     }
