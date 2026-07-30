@@ -37,6 +37,7 @@
 #include "GeometrySelection.h"
 
 class QVBoxLayout;
+class QStylePainter;
 
 namespace Gui
 {
@@ -115,12 +116,13 @@ public:
     /// The current predefined option, or nullptr at the Custom index / when nothing is current.
     const GeometrySelectorOption* currentOption() const;
 
-    /// The three rendered states, derived from references + session.
+    /// The rendered states, derived from references + session + current combo option.
     enum class VisualState
     {
         Empty,          // idle, no references
         Selecting,      // in a selection session: horizontal prompt chrome over a dimming backdrop
         ReferenceList,  // idle with ≥1 references (capped scroll list)
+        Option,         // combo mode with a predefined option current: show its icon + label
     };
 
     /// Classifies the current state from the core alone; independent of any QStyle or
@@ -142,7 +144,14 @@ private Q_SLOTS:
     void rebuildRows();
 
 private:
+    /// True in the states the widget paints and clicks itself (the empty prompt and the native
+    /// combo box), where a press should be accepted here rather than by a child row.
+    bool widgetHandlesClick() const;
+
     QWidget* makeEmptyRow();
+    /// Paints the Option state as a native combo box (frame + arrow + label) through the ambient
+    /// QStyle, so a selected predefined option matches every other QComboBox.
+    void paintAsComboBox(QStylePainter& painter) const;
     /// A capped scroll list with one row per reference, each row revealing its own
     /// remove control on hover.
     QWidget* makeReferenceList();

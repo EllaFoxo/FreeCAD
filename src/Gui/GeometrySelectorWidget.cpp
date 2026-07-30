@@ -41,6 +41,7 @@
 #include <QScrollArea>
 #include <QStackedLayout>
 #include <QStyleOption>
+#include <QStyleOptionComboBox>
 #include <QStyleOptionFrame>
 #include <QStylePainter>
 #include <QToolButton>
@@ -358,6 +359,15 @@ void GeometrySelectorWidget::reconcileIndexFromReferences()
 void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
 {
     QStylePainter painter(this);
+
+    // A current predefined option reads as a plain Select Box: paint it with the ambient
+    // QStyle's combo-box primitives (frame + arrow + label) so it is pixel-consistent with
+    // every other QComboBox. Choosing Custom drops out of this state into the free-pick chrome.
+    if (visualState() == VisualState::Option) {
+        paintAsComboBox(painter);
+        return;
+    }
+
     QStyleOptionFrame option;
     option.initFrom(this);  // carries real keyboard-focus and hover state
     option.state |= QStyle::State_Sunken;
@@ -376,6 +386,25 @@ void GeometrySelectorWidget::paintEvent(QPaintEvent* /*event*/)
     }
 }
 
+void GeometrySelectorWidget::paintAsComboBox(QStylePainter& painter) const
+{
+    const GeometrySelectorOption* option = currentOption();
+
+    QStyleOptionComboBox combo;
+    combo.initFrom(this);  // real hover / focus state
+    combo.rect = rect();
+    combo.subControls = QStyle::SC_ComboBoxFrame | QStyle::SC_ComboBoxArrow;
+    combo.frame = true;
+    combo.currentText = option->label;
+    combo.currentIcon = option->icon;
+    combo.iconSize = QSize(IconSize, IconSize);
+
+    // The complex control paints the frame + arrow; the label (icon + text) is a separate
+    // control element, exactly as QComboBox::paintEvent drives it.
+    painter.drawComplexControl(QStyle::CC_ComboBox, combo);
+    painter.drawControl(QStyle::CE_ComboBoxLabel, combo);
+}
+
 void GeometrySelectorWidget::changeEvent(QEvent* event)
 {
     QWidget::changeEvent(event);
@@ -387,9 +416,10 @@ void GeometrySelectorWidget::changeEvent(QEvent* event)
 
 void GeometrySelectorWidget::mousePressEvent(QMouseEvent* event)
 {
-    // Accept the press only in the empty state so the matching release is delivered here;
-    // in every other state the rows and their controls handle their own clicks.
-    if (event->button() == Qt::LeftButton && visualState() == VisualState::Empty) {
+    // Accept the press in the states the widget paints itself — the empty prompt and the native
+    // combo box — so the matching release is delivered here; in every other state the child rows
+    // and their controls handle their own clicks.
+    if (event->button() == Qt::LeftButton && widgetHandlesClick()) {
         // Take real keyboard focus so the frame shows its focused ring; the early return
         // otherwise skips the base class's click-to-focus handling.
         setFocus(Qt::MouseFocusReason);
@@ -401,11 +431,17 @@ void GeometrySelectorWidget::mousePressEvent(QMouseEvent* event)
 
 void GeometrySelectorWidget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && visualState() == VisualState::Empty) {
+    if (event->button() == Qt::LeftButton && widgetHandlesClick()) {
         activatePrimary();
         return;
     }
     QWidget::mouseReleaseEvent(event);
+}
+
+bool GeometrySelectorWidget::widgetHandlesClick() const
+{
+    const VisualState state = visualState();
+    return state == VisualState::Empty || state == VisualState::Option;
 }
 
 void GeometrySelectorWidget::activatePrimary()
@@ -1160,6 +1196,11 @@ GeometrySelectorWidget::VisualState GeometrySelectorWidget::visualState() const
     if (m_selection->isSelecting()) {
         return VisualState::Selecting;
     }
+    // A current predefined option (logical or reference-bearing) reads as a Select Box value:
+    // show its icon + label rather than the empty prompt or the bare reference rows.
+    if (isComboMode() && currentOption() != nullptr) {
+        return VisualState::Option;
+    }
     return m_selection->references().empty() ? VisualState::Empty : VisualState::ReferenceList;
 }
 
@@ -1167,9 +1208,20 @@ void GeometrySelectorWidget::rebuildRows()
 {
     clearRows();
 
-    switch (visualState()) {
+    const VisualState state = visualState();
+
+    // A current predefined option paints as a real non-editable combo box; the style resolves
+    // that from the Select component, so present as Select in this state and as the ordinary
+    // GeometrySelector frame in every other. contextOf() reads this property fresh at paint time.
+    setProperty("component", state == VisualState::Option ? "Select" : "GeometrySelector");
+
+    switch (state) {
         case VisualState::Empty:
             m_contentLayout->addWidget(makeEmptyRow());
+            break;
+        case VisualState::Option:
+            // Painted natively as a combo box in paintEvent; the frame owns the whole row, so
+            // there is no child widget — clicks are handled by the widget itself.
             break;
         case VisualState::Selecting:
             m_contentLayout->addWidget(makeSelecting());

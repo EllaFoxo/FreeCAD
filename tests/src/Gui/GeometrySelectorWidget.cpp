@@ -563,6 +563,22 @@ private Q_SLOTS:
         widget.hide();
     }
 
+    // A current predefined logical option (empty references) is the combo-box Option state — it
+    // must not fall through to the empty "Select geometry" prompt. The state is painted natively
+    // (no child row); the reported label is the option's.
+    void test_comboCurrentLogicalOptionRendersAsOptionState()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            {.icon = {}, .label = QStringLiteral("Object origin"), .references = {}, .userData = {}},
+        });
+        widget.setCurrentIndex(0);
+
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::Option);
+        QCOMPARE(widget.currentText(), QStringLiteral("Object origin"));
+        QVERIFY(widget.findChild<QWidget*>(QStringLiteral("gsw_prompt")) == nullptr);
+    }
+
     // The core forwards raw pick events only while a session is active, so a
     // consumer (the transform dialog) can read the picked point / link path the
     // {object, subName} reference model drops.
