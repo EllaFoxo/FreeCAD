@@ -61,8 +61,7 @@ public:
     enum class SelectionMode
     {
         None,
-        SelectAlignTarget,
-        SelectCustomCS
+        SelectAlignTarget
     };
     enum class PlacementMode
     {
@@ -115,14 +114,11 @@ private:
     void onSelectionChanged(const SelectionChanges& msg) override;
 
 private Q_SLOTS:
-    void onPickCoordinateSystemReference();
     void onTransformOriginReset();
     void onAlignRotationChanged();
 
     void onAlignToOtherObject();
     void onFlip();
-
-    void onCoordinateSystemChange(int mode);
 
     void onPositionChange();
     void onRotationChange(QuantitySpinBox* changed);
@@ -147,13 +143,17 @@ private:
     void loadPreferences();
     void savePreferences();
 
-    void loadPositionModeItems() const;
-
     void buildTransformOriginSelector();
     void onTransformOriginModeChanged(int index);
     void onTransformOriginPick(const Gui::SelectionChanges& msg);
     /// Dragger unpickable + read-only spin-boxes while the origin is being picked.
     void setTransformOriginPicking(bool active);
+
+    void buildCoordinateSystemSelector();
+    void onCoordinateSystemModeChanged(int index);
+    void onCoordinateSystemPick(const Gui::SelectionChanges& msg);
+    /// Dragger unpickable + read-only spin-boxes while the custom coordinate system is picked.
+    void setCoordinateSystemPicking(bool active);
 
     void updatePositionAndRotationUi() const;
     void updateDraggerLabels() const;
@@ -168,8 +168,6 @@ private:
         const SelectionChanges& msg,
         ReferencePlacementOptions options
     ) const;
-    void setCustomCoordinateSystemFromSelection(const SelectionChanges& msg);
-
     ViewProviderDragger::DraggerComponents getRelevantComponents();
     void moveObjectToDragger(
         ViewProviderDragger::DraggerComponents components = ViewProviderDragger::DraggerComponent::All
@@ -196,6 +194,7 @@ private:
     PlacementMode placementMode {PlacementMode::ObjectOrigin};
     PositionMode positionMode {PositionMode::Local};
     bool pickingTransformOrigin {false};
+    bool pickingCoordinateSystem {false};
 
     std::optional<Base::Placement> customTransformOrigin {};
     std::optional<Base::Placement> customCoordinateSystemPlacement {};
