@@ -61,7 +61,6 @@ public:
     enum class SelectionMode
     {
         None,
-        SelectTransformOrigin,
         SelectAlignTarget,
         SelectCustomCS
     };
@@ -116,9 +115,6 @@ private:
     void onSelectionChanged(const SelectionChanges& msg) override;
 
 private Q_SLOTS:
-    void onPlacementModeChange(int index);
-
-    void onPickTransformOrigin();
     void onPickCoordinateSystemReference();
     void onTransformOriginReset();
     void onAlignRotationChanged();
@@ -152,7 +148,12 @@ private:
     void savePreferences();
 
     void loadPositionModeItems() const;
-    void loadPlacementModeItems() const;
+
+    void buildTransformOriginSelector();
+    void onTransformOriginModeChanged(int index);
+    void onTransformOriginPick(const Gui::SelectionChanges& msg);
+    /// Dragger unpickable + read-only spin-boxes while the origin is being picked.
+    void setTransformOriginPicking(bool active);
 
     void updatePositionAndRotationUi() const;
     void updateDraggerLabels() const;
@@ -194,6 +195,7 @@ private:
     SelectionMode selectionMode {SelectionMode::None};
     PlacementMode placementMode {PlacementMode::ObjectOrigin};
     PositionMode positionMode {PositionMode::Local};
+    bool pickingTransformOrigin {false};
 
     std::optional<Base::Placement> customTransformOrigin {};
     std::optional<Base::Placement> customCoordinateSystemPlacement {};
