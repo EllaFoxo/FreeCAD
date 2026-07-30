@@ -232,6 +232,7 @@ void GeometrySelectorWidget::setOptions(std::vector<GeometrySelectorOption> opti
 void GeometrySelectorWidget::addOption(GeometrySelectorOption option)
 {
     m_options.push_back(std::move(option));
+    reconcileIndexFromReferences();
     applyStyleMetrics();
     rebuildRows();
 }
@@ -268,6 +269,12 @@ int GeometrySelectorWidget::currentIndex() const
 
 void GeometrySelectorWidget::setCurrentIndex(int index)
 {
+    // Ignore out-of-range indices (QComboBox-like). Valid: -1, any predefined option, and the
+    // Custom index only when Custom is enabled.
+    const int lastValid = m_allowCustom ? customIndex() : static_cast<int>(m_options.size()) - 1;
+    if (index < -1 || index > lastValid) {
+        return;
+    }
     if (index == m_currentIndex) {
         return;
     }

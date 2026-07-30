@@ -318,6 +318,34 @@ private Q_SLOTS:
         QCOMPARE(widget.currentIndex(), 1);
     }
 
+    // addOption reconciles: an option added after references are present reverse-matches.
+    void test_addOptionReconcilesCurrentIndex()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge2"}});
+        widget.addOption(
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})
+        );
+        widget.addOption(
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"})
+        );
+        // The second option matches the existing references ⇒ reverse-match selects index 1.
+        QCOMPARE(widget.currentIndex(), 1);
+    }
+
+    // setCurrentIndex ignores an out-of-range index (no state change, no signal).
+    void test_setCurrentIndexOutOfRangeIgnored()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+        });
+        QSignalSpy spy(&widget, &Gui::GeometrySelectorWidget::currentIndexChanged);
+        widget.setCurrentIndex(99);
+        QCOMPARE(widget.currentIndex(), -1);
+        QCOMPARE(spy.count(), 0);
+    }
+
     // Reverse match: non-matching references fall to the Custom index when Custom is enabled.
     void test_reverseMatchFallsToCustom()  // NOLINT
     {
