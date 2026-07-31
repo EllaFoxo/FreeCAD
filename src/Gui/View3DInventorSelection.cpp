@@ -107,6 +107,13 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
         role.group->ref();
 
         role.style = new SoDrawStyle;
+        // Only the line width is ours to force. An override applies to every field
+        // that is not ignored, which would otherwise also pin the replayed geometry
+        // to FILLED, a zero point size and a solid line pattern — a vertex reference
+        // would lose its point size and a dashed view provider its pattern.
+        role.style->style.setIgnored(true);
+        role.style->pointSize.setIgnored(true);
+        role.style->linePattern.setIgnored(true);
         role.style->setOverride(true);
         role.group->addChild(role.style);
 
