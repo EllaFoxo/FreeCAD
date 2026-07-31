@@ -17,6 +17,7 @@ add_executable(Gui_tests_run
         InputHintTest.cpp
         SelectionTest.cpp
         GeometrySelectionTest.cpp
+        GeometryHighlighterTest.cpp
 )
 
 # Qt tests

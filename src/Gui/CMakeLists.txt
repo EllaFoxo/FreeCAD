@@ -1184,6 +1184,7 @@ SET(Widget_CPP_SRCS
     ElideCheckBox.cpp
     FontScaledSVG.cpp
     SplitButton.cpp
+    GeometryHighlighter.cpp
     GeometrySelection.cpp
     GeometrySelectionGate.cpp
     GeometrySelectorWidget.cpp
@@ -1221,6 +1222,7 @@ SET(Widget_HPP_SRCS
     ElideCheckBox.h
     FontScaledSVG.h
     SplitButton.h
+    GeometryHighlighter.h
     GeometryReference.h
     GeometrySelection.h
     GeometrySelectionGate.h
