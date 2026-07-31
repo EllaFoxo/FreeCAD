@@ -76,9 +76,11 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
 
     // While picking a profile, hide this Pad's transparent result preview and its
     // final solid so the profile is selected against the geometry that precedes it
-    // (the visibility swap DressUp/Fillet use). The profile highlight is kept on so
-    // the current selection stays visible. The prior visibility is snapshotted and
-    // restored on exit so the Preview box's own checkboxes are respected.
+    // (the visibility swap DressUp/Fillet use). The current selection is shown by the
+    // geometry highlighter instead, so the profile preview is left alone here rather
+    // than forced on — forcing it would draw the same profile twice. The prior
+    // visibility is snapshotted and restored on exit so the Preview box's own
+    // checkboxes are respected.
     connect(core, &Gui::GeometrySelection::selectionModeEntered, this, [this] {
         auto* viewObject = getViewObject<PartDesignGui::ViewProviderSketchBased>();
         if (!viewObject) {
@@ -87,7 +89,6 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
         previewShownBeforeSelecting = viewObject->isPreviewEnabled();
         finalShownBeforeSelecting = viewObject->isVisible();
         viewObject->showPreview(false);
-        viewObject->showProfile(true);
         viewObject->showPreviousFeature(true);
     });
     connect(core, &Gui::GeometrySelection::selectionModeExited, this, [this] {
