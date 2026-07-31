@@ -29,12 +29,14 @@
 class SoGroup;
 class SoNode;
 class SoSeparator;
+class SoTempPath;
 
 namespace Gui
 {
 
 class Document;
 class SoFCUnifiedSelection;
+class ViewProviderDocumentObject;
 
 class GuiExport View3DInventorSelection
 {
@@ -55,6 +57,11 @@ public:
     void clearGroupOnTop();
 
 private:
+    /// Prefixes @p path with the scene-graph path through every enclosing
+    /// geo-feature group. False when @p vp is hidden inside one of them, which
+    /// means no on-top rendering is possible.
+    bool appendGroupPath(ViewProviderDocumentObject* vp, SoTempPath& path) const;
+
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;
     SoGroup* pcGroupOnTopPreSel;

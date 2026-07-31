@@ -232,53 +232,12 @@ void View3DInventorSelection::checkGroupOnTop(const SelectionChanges& Reason)
         }
     }
 
-    std::vector<ViewProvider*> groups;
-    auto grpVp = vp;
-    std::set<ViewProvider*> visited;
-    for (auto childVp = vp;; childVp = grpVp) {
-        auto grp = App::GeoFeatureGroupExtension::getGroupOfObject(childVp->getObject());
-        if (!grp || !grp->isAttachedToDocument()) {
-            break;
-        }
-
-        grpVp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(grp));
-        if (!grpVp) {
-            break;
-        }
-
-        // avoid endless-loops
-        if (!visited.insert(childVp).second) {
-            break;
-        }
-
-        auto childRoot = grpVp->getChildRoot();
-        auto modeSwitch = grpVp->getModeSwitch();
-        auto idx = modeSwitch->whichChild.getValue();
-        if (idx < 0 || idx >= modeSwitch->getNumChildren() || modeSwitch->getChild(idx) != childRoot) {
-            FC_LOG(
-                "skip " << obj->getFullName() << '.' << (subname ? subname : "")
-                        << ", hidden inside geo group"
-            );
-            return;
-        }
-        if (childRoot->findChild(childVp->getRoot()) < 0) {
-            FC_LOG(
-                "cannot find '" << childVp->getObject()->getFullName() << "' in geo group '"
-                                << grp->getNameInDocument() << "'"
-            );
-            break;
-        }
-        groups.push_back(grpVp);
-    }
-
     SoTempPath path(10);
     path.ref();
 
-    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
-        auto grpVp = *it;
-        path.append(grpVp->getRoot());
-        path.append(grpVp->getModeSwitch());
-        path.append(grpVp->getChildRoot());
+    if (!appendGroupPath(vp, path)) {
+        path.unrefNoDelete();
+        return;
     }
 
     SoDetail* det = nullptr;
@@ -304,6 +263,53 @@ void View3DInventorSelection::checkGroupOnTop(const SelectionChanges& Reason)
     }
     delete det;
     path.unrefNoDelete();
+}
+
+bool View3DInventorSelection::appendGroupPath(ViewProviderDocumentObject* vp, SoTempPath& path) const
+{
+    std::vector<ViewProvider*> groups;
+    auto grpVp = vp;
+    std::set<ViewProvider*> visited;
+    for (auto childVp = vp;; childVp = grpVp) {
+        auto grp = App::GeoFeatureGroupExtension::getGroupOfObject(childVp->getObject());
+        if (!grp || !grp->isAttachedToDocument()) {
+            break;
+        }
+
+        grpVp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(grp));
+        if (!grpVp) {
+            break;
+        }
+
+        // avoid endless-loops
+        if (!visited.insert(childVp).second) {
+            break;
+        }
+
+        auto childRoot = grpVp->getChildRoot();
+        auto modeSwitch = grpVp->getModeSwitch();
+        auto idx = modeSwitch->whichChild.getValue();
+        if (idx < 0 || idx >= modeSwitch->getNumChildren() || modeSwitch->getChild(idx) != childRoot) {
+            FC_LOG("skip " << vp->getObject()->getFullName() << ", hidden inside geo group");
+            return false;
+        }
+        if (childRoot->findChild(childVp->getRoot()) < 0) {
+            FC_LOG(
+                "cannot find '" << childVp->getObject()->getFullName() << "' in geo group '"
+                                << grp->getNameInDocument() << "'"
+            );
+            break;
+        }
+        groups.push_back(grpVp);
+    }
+
+    for (auto it = groups.rbegin(); it != groups.rend(); ++it) {
+        auto grpVp = *it;
+        path.append(grpVp->getRoot());
+        path.append(grpVp->getModeSwitch());
+        path.append(grpVp->getChildRoot());
+    }
+    return true;
 }
 
 void View3DInventorSelection::clearGroupOnTop()
