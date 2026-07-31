@@ -43,6 +43,24 @@ FC_LOG_LEVEL_INIT("3DViewerSelection", true, true)
 
 using namespace Gui;
 
+namespace
+{
+/// The scene-graph node name a highlight role's subgroup carries, for the sake of
+/// anyone reading the graph in the scene inspector.
+const char* highlightRoleName(HighlightRole role)
+{
+    switch (role) {
+        case HighlightRole::Reference:
+            return "HighlightReference";
+        case HighlightRole::Hovered:
+            return "HighlightHovered";
+        case HighlightRole::COUNT:
+            break;
+    }
+    return "Highlight";
+}
+}  // namespace
+
 View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
     : selectionRoot(root)
 {
@@ -120,8 +138,11 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
         pcGroupHighlight->addChild(role.group);
     };
 
-    makeRoleGroup("HighlightReference", highlightRoles.at(highlightRoleIndex(HighlightRole::Reference)));
-    makeRoleGroup("HighlightHovered", highlightRoles.at(highlightRoleIndex(HighlightRole::Hovered)));
+    // Every slot, not the two named ones: a role added later that was missed here
+    // would leave a null group for the destructor to unref.
+    for (std::size_t index = 0; index < highlightRoleCount; ++index) {
+        makeRoleGroup(highlightRoleName(static_cast<HighlightRole>(index)), highlightRoles.at(index));
+    }
 }
 
 View3DInventorSelection::~View3DInventorSelection()

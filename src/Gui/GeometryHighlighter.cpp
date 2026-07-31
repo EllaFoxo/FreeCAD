@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <map>
 #include <set>
 #include <utility>
@@ -25,11 +26,16 @@ using namespace Gui;
 
 std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role)
 {
+    // COUNT sizes the storage, it does not name a slot, so reaching here with it is a
+    // caller bug rather than a runtime condition: it trips the assertion in a debug
+    // build and throws out of at() in a release one, never reading past the array.
+    assert(role != HighlightRole::COUNT && "HighlightRole::COUNT is not a role");
     return _byRole.at(highlightRoleIndex(role));
 }
 
 const std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role) const
 {
+    assert(role != HighlightRole::COUNT && "HighlightRole::COUNT is not a role");
     return _byRole.at(highlightRoleIndex(role));
 }
 
