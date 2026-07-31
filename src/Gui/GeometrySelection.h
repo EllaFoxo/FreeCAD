@@ -12,7 +12,6 @@
 
 #include <fastsignals/signal.h>
 
-#include <App/DocumentObserver.h>
 #include <FCGlobal.h>
 #include <Gui/GeometryHighlighter.h>
 #include <Gui/GeometryReference.h>
@@ -146,20 +145,6 @@ private:
     /// References captured at startSelecting(), restored by cancelSelecting().
     std::vector<GeometryReference> _referencesBeforeSelecting;
 
-    /// One object whose visibility we forced on for a session. Tracked weakly so
-    /// restoration is skipped for any object deleted meanwhile (e.g. by an aborted
-    /// command), which is what keeps teardown from touching freed view providers.
-    struct ForcedVisibility
-    {
-        App::DocumentObjectWeakPtrT object;
-        bool restoreTo = false;
-    };
-    std::vector<ForcedVisibility> _forcedVisibility;
-
-    /// Shows referenced objects that are hidden so the user can see the current
-    /// selection while picking; the originals are restored by restoreReferencedObjects().
-    void showReferencedObjects();
-    void restoreReferencedObjects();
     /// Mirrors the current references into the 3D selection so they appear picked
     /// and can be toggled off with Ctrl (AllowMultiple only).
     void seedViewportSelection();

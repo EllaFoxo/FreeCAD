@@ -97,6 +97,60 @@ void GeometryHighlightModel::dropDocument(const App::Document* document)
 
 namespace
 {
+ViewProviderDocumentObject* viewProviderOf(const App::DocumentObject* object)
+{
+    if (!object || !Application::Instance) {
+        return nullptr;
+    }
+    return Application::Instance->getViewProvider<ViewProviderDocumentObject>(object);
+}
+}  // namespace
+
+HighlightVisibility::~HighlightVisibility()
+{
+    setRevealed({});
+}
+
+void HighlightVisibility::setRevealed(const std::vector<App::DocumentObject*>& objects)
+{
+    // Settle the outgoing set before taking on the new one.
+    std::erase_if(_revealed, [&objects](const App::DocumentObjectWeakPtrT& revealed) {
+        App::DocumentObject* object = revealed.get<App::DocumentObject>();
+        if (object && std::ranges::find(objects, object) != objects.end()) {
+            return false;
+        }
+        // A null resolve means the object was deleted meanwhile: there is nothing
+        // left to restore and nothing safe to dereference.
+        if (auto* viewProvider = viewProviderOf(object)) {
+            viewProvider->Gui::ViewProvider::hide();
+        }
+        return true;
+    });
+
+    for (App::DocumentObject* object : objects) {
+        const auto isRevealed = [object](const App::DocumentObjectWeakPtrT& revealed) {
+            return revealed.get<App::DocumentObject>() == object;
+        };
+        if (std::ranges::any_of(_revealed, isRevealed)) {
+            continue;
+        }
+        auto* viewProvider = viewProviderOf(object);
+        if (!viewProvider || viewProvider->isShow()) {
+            continue;
+        }
+        // The base call, so only the mode switch moves. ViewProviderDocumentObject's
+        // override writes the Visibility property, and that document change makes
+        // PartDesign hide every other feature of the body — precisely what a
+        // highlight must not do. A later recompute or an explicit property sync can
+        // still flip the switch back off underneath a revealed object; that is
+        // accepted rather than defended against here.
+        viewProvider->Gui::ViewProvider::show();
+        _revealed.emplace_back(object);
+    }
+}
+
+namespace
+{
 /// Every 3D viewer showing @p document, resolved fresh: a viewer can be destroyed
 /// at any time and takes its highlight group with it, so none are cached.
 std::vector<View3DInventorViewer*> viewersOf(App::Document* document)
@@ -136,6 +190,25 @@ std::map<App::Document*, ReferencesByRole> groupByDocument(const GeometryHighlig
         }
     }
     return byDocument;
+}
+
+/// Every object something is about to be drawn on, once each — visibility is a
+/// per-document view-provider concern, so it is decided per object and not per viewer.
+std::vector<App::DocumentObject*> objectsToDraw(
+    const std::map<App::Document*, ReferencesByRole>& byDocument
+)
+{
+    std::vector<App::DocumentObject*> objects;
+    for (const auto& entry : byDocument) {
+        for (const std::vector<GeometryReference>& references : entry.second) {
+            for (const GeometryReference& reference : references) {
+                if (std::ranges::find(objects, reference.object) == objects.end()) {
+                    objects.push_back(reference.object);
+                }
+            }
+        }
+    }
+    return objects;
 }
 }  // namespace
 
@@ -226,6 +299,10 @@ void GeometryHighlighter::refresh()
     // Withdraw before anything below can bail out, so a clear() never strands an
     // annotation in a view.
     withdrawAndAdopt(std::move(documents));
+    // After the withdrawal, so an object that stopped being drawn goes back to hidden
+    // in the same breath, and before any addHighlight() below, which ignores a hidden
+    // object. Ahead of every early return, so clear() always restores.
+    _visibility.setRevealed(objectsToDraw(byDocument));
 
     if (byDocument.empty()) {
         return;

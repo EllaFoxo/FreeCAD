@@ -8,6 +8,7 @@
 #include <QObject>
 #include <fastsignals/signal.h>
 
+#include <App/DocumentObserver.h>
 #include <FCGlobal.h>
 #include <Gui/GeometryReference.h>
 
@@ -51,13 +52,41 @@ private:
 };
 
 /**
+ * Keeps a set of hidden objects revealed for exactly as long as someone needs them.
+ *
+ * The whole revealed set is declared in one call rather than adjusted object by
+ * object, so whatever drops out of it is restored in the same breath and there is
+ * no separate restore step to forget; the destructor restores whatever is left.
+ * An object deleted while revealed is dropped rather than restored.
+ */
+class HighlightVisibility
+{
+public:
+    HighlightVisibility() = default;
+    ~HighlightVisibility();
+
+    FC_DISABLE_COPY_MOVE(HighlightVisibility)
+
+    /// Reveals every hidden object among @p objects and restores every one this
+    /// revealed earlier that @p objects no longer lists.
+    void setRevealed(const std::vector<App::DocumentObject*>& objects);
+
+private:
+    /// Only the objects this revealed, so restoring always means hiding again.
+    /// Held weakly: one deleted meanwhile resolves to null and is skipped instead
+    /// of dereferenced.
+    std::vector<App::DocumentObjectWeakPtrT> _revealed;
+};
+
+/**
  * Renders a set of geometry references on top in the 3D view.
  *
  * Instantiable and independent: several highlighters can be live at once, and
  * none of them touches the application selection. Highlighting a reference
  * never rebuilds geometry — it re-renders the nodes already in the scene.
  *
- * A hidden object is not revealed; that stays the caller's decision.
+ * A hidden object is revealed for as long as it is highlighted, and returned to
+ * hidden as soon as it is not.
  */
 class GuiExport GeometryHighlighter: public QObject
 {
@@ -88,6 +117,8 @@ private:
     GeometryHighlightModel _model;
     /// The documents whose views currently hold this highlighter's annotations.
     std::set<App::Document*> _touchedDocuments;
+    /// Declared afresh on every refresh(), so it always mirrors what is drawn.
+    HighlightVisibility _visibility;
     fastsignals::scoped_connection _objectDeletedConnection;
     fastsignals::scoped_connection _documentDeletedConnection;
 };

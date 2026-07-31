@@ -20,7 +20,6 @@
 #include <Gui/GeometryHighlighter.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
-#include <Gui/ViewProviderDocumentObject.h>
 
 #include "GeometrySelection.h"
 #include "GeometrySelectionGate.h"
@@ -139,10 +138,9 @@ void GeometrySelection::startSelecting()
     }
     _selecting = true;
     // Let observers react first (e.g. hide this feature's preview and show the
-    // previous feature). Only then reveal and highlight the references, so their
-    // scene rebuild cannot clear the seeded selection.
+    // previous feature). Only then seed the selection, so their scene rebuild
+    // cannot clear it again.
     Q_EMIT selectionModeEntered();
-    showReferencedObjects();
     seedViewportSelection();
     // Attach last, so the seeding picks above are not fed back into our own
     // onSelectionChanged().
@@ -156,48 +154,10 @@ void GeometrySelection::stopSelecting()
     }
     _selecting = false;
     detachSelection();
-    restoreReferencedObjects();
     if (_gateFactory) {
         Gui::Selection().rmvSelectionGate();
     }
     Q_EMIT selectionModeExited();
-}
-
-void GeometrySelection::showReferencedObjects()
-{
-    if (!Gui::Application::Instance) {
-        return;
-    }
-    for (const GeometryReference& ref : _references) {
-        auto* viewProvider
-            = Gui::Application::Instance->getViewProvider<Gui::ViewProviderDocumentObject>(ref.object);
-        if (viewProvider && !viewProvider->Visibility.getValue()) {
-            viewProvider->Visibility.setValue(true);
-            _forcedVisibility.push_back(
-                {.object = App::DocumentObjectWeakPtrT(ref.object), .restoreTo = false}
-            );
-        }
-    }
-}
-
-void GeometrySelection::restoreReferencedObjects()
-{
-    // Re-fetch each view provider through the weak pointer: an object deleted while
-    // selecting (e.g. by an aborted command) resolves to null and is simply skipped,
-    // so this never dereferences a freed view provider during teardown.
-    if (Gui::Application::Instance) {
-        for (const ForcedVisibility& forced : _forcedVisibility) {
-            App::DocumentObject* object = forced.object.get<App::DocumentObject>();
-            if (!object) {
-                continue;
-            }
-            if (auto* viewProvider = Gui::Application::Instance
-                                         ->getViewProvider<Gui::ViewProviderDocumentObject>(object)) {
-                viewProvider->Visibility.setValue(forced.restoreTo);
-            }
-        }
-    }
-    _forcedVisibility.clear();
 }
 
 void GeometrySelection::seedViewportSelection()
