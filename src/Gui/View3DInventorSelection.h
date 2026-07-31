@@ -24,12 +24,21 @@
 
 #include <map>
 #include <string>
+#include <Inventor/SbColor.h>
+#include <Base/Color.h>
+#include <Gui/GeometryReference.h>
 #include <Gui/Selection/Selection.h>
 
+class SoDrawStyle;
 class SoGroup;
 class SoNode;
 class SoSeparator;
 class SoTempPath;
+
+namespace App
+{
+class DocumentObject;
+}
 
 namespace Gui
 {
@@ -56,15 +65,33 @@ public:
     void checkGroupOnTop(const SelectionChanges& Reason);
     void clearGroupOnTop();
 
+    /// Sets the colour and line width every subsequent highlight of @p role uses.
+    void setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth);
+    /// Renders @p object's @p subName on top in @p role's style. A whole-object
+    /// reference passes an empty @p subName. Silently does nothing when the
+    /// reference cannot be resolved, or when its object is hidden.
+    void addHighlight(HighlightRole role, App::DocumentObject* object, const char* subName);
+    /// Removes every highlight of @p role.
+    void clearHighlight(HighlightRole role);
+
 private:
     /// Prefixes @p path with the scene-graph path through every enclosing
     /// geo-feature group. False when @p vp is hidden inside one of them, which
     /// means no on-top rendering is possible.
     bool appendGroupPath(ViewProviderDocumentObject* vp, SoTempPath& path) const;
 
+    SoGroup* highlightGroup(HighlightRole role) const;
+
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;
     SoGroup* pcGroupOnTopPreSel;
+    SoGroup* pcGroupHighlight;
+    SoGroup* pcHighlightReference;
+    SoGroup* pcHighlightHovered;
+    SoDrawStyle* pcHighlightReferenceStyle;
+    SoDrawStyle* pcHighlightHoveredStyle;
+    SbColor highlightReferenceColor;
+    SbColor highlightHoveredColor;
     SoFCUnifiedSelection* selectionRoot;
     std::map<std::string, SoNode*> objectsOnTop;
     std::map<std::string, SoNode*> objectsOnTopPreSel;

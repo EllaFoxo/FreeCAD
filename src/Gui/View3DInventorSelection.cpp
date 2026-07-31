@@ -22,6 +22,7 @@
 
 
 #include <Inventor/details/SoDetail.h>
+#include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/nodes/SoSeparator.h>
@@ -30,6 +31,7 @@
 #include "Application.h"
 #include "Document.h"
 #include "SoFCUnifiedSelection.h"
+#include "Utilities.h"
 #include "View3DInventorSelection.h"
 #include "ViewProviderDocumentObject.h"
 #include <App/Document.h>
@@ -82,6 +84,37 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
         pcGroupOnTopPreSel->ref();
         pcGroupOnTop->addChild(pcGroupOnTopPreSel);
     }
+
+    // A sibling of GroupOnTop rather than a child: GroupOnTopMaterial forces
+    // transparency 0.5 with override, which would wash out every highlight. Added
+    // after it so a reference highlight draws over an ordinary selection highlight.
+    pcGroupHighlight = new SoSeparator;
+    pcGroupHighlight->ref();
+    pcGroupHighlight->setName("GroupHighlight");
+    root->addChild(pcGroupHighlight);
+
+    auto pcHighlightPickStyle = new SoPickStyle;
+    pcHighlightPickStyle->style = SoPickStyle::UNPICKABLE;
+    pcHighlightPickStyle->setOverride(true);
+    pcHighlightPickStyle->setName("GroupHighlightPickStyle");
+    pcGroupHighlight->addChild(pcHighlightPickStyle);
+
+    const auto makeRoleGroup = [this](const char* name, SoGroup*& group, SoDrawStyle*& style) {
+        auto selRoot = new SoFCSelectionRoot;
+        selRoot->selectionStyle = SoFCSelectionRoot::PassThrough;
+        group = selRoot;
+        group->setName(name);
+        group->ref();
+
+        style = new SoDrawStyle;
+        style->setOverride(true);
+        group->addChild(style);
+
+        pcGroupHighlight->addChild(group);
+    };
+
+    makeRoleGroup("HighlightReference", pcHighlightReference, pcHighlightReferenceStyle);
+    makeRoleGroup("HighlightHovered", pcHighlightHovered, pcHighlightHoveredStyle);
 }
 
 View3DInventorSelection::~View3DInventorSelection()
@@ -90,6 +123,9 @@ View3DInventorSelection::~View3DInventorSelection()
     pcGroupOnTop->unref();
     pcGroupOnTopPreSel->unref();
     pcGroupOnTopSel->unref();
+    pcGroupHighlight->unref();
+    pcHighlightReference->unref();
+    pcHighlightHovered->unref();
 }
 
 void View3DInventorSelection::checkGroupOnTop(const SelectionChanges& Reason)
@@ -310,6 +346,89 @@ bool View3DInventorSelection::appendGroupPath(ViewProviderDocumentObject* vp, So
         path.append(grpVp->getChildRoot());
     }
     return true;
+}
+
+SoGroup* View3DInventorSelection::highlightGroup(HighlightRole role) const
+{
+    return role == HighlightRole::Hovered ? pcHighlightHovered : pcHighlightReference;
+}
+
+void View3DInventorSelection::setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth)
+{
+    const bool hovered = role == HighlightRole::Hovered;
+    (hovered ? pcHighlightHoveredStyle : pcHighlightReferenceStyle)->lineWidth = lineWidth;
+    (hovered ? highlightHoveredColor : highlightReferenceColor) = color.asValue<SbColor>();
+}
+
+void View3DInventorSelection::addHighlight(
+    HighlightRole role,
+    App::DocumentObject* object,
+    const char* subName
+)
+{
+    if (!object || !object->isAttachedToDocument() || !Application::Instance) {
+        return;
+    }
+    auto vp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(object));
+    // A hidden object contributes nothing: the stored path runs through its mode
+    // switch, and Coin's in-path traversal honours whichChild.
+    if (!vp || !vp->isSelectable() || !vp->isShow()) {
+        return;
+    }
+
+    SoTempPath path(10);
+    path.ref();
+    if (!appendGroupPath(vp, path)) {
+        path.unrefNoDelete();
+        return;
+    }
+
+    SoDetail* det = nullptr;
+    if (vp->getDetailPath(subName, &path, true, det) && path.getLength()) {
+        auto node = new SoFCPathAnnotation;
+        node->setPath(&path);
+        auto group = highlightGroup(role);
+        group->addChild(node);
+
+        // The colour rides in the secondary selection context rather than an
+        // overriding material, because that is what narrows the render to the
+        // detail; an override material would repaint the whole object.
+        SoSelectionElementAction action(
+            det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
+            true
+        );
+        action.setColor(
+            role == HighlightRole::Hovered ? highlightHoveredColor : highlightReferenceColor
+        );
+        action.setElement(det);
+
+        SoTempPath tmpPath(path.getLength() + 2);
+        tmpPath.ref();
+        tmpPath.append(group);
+        tmpPath.append(node);
+        tmpPath.append(&path);
+        action.apply(&tmpPath);
+        tmpPath.unrefNoDelete();
+
+        node->setDetail(det);
+        det = nullptr;
+    }
+    delete det;
+    path.unrefNoDelete();
+}
+
+void View3DInventorSelection::clearHighlight(HighlightRole role)
+{
+    auto group = highlightGroup(role);
+    if (group->getNumChildren() <= 1) {
+        return;  // only the draw style remains
+    }
+    SoSelectionElementAction action(SoSelectionElementAction::None, true);
+    action.apply(group);
+    // Keep the draw style, which is always child 0.
+    while (group->getNumChildren() > 1) {
+        group->removeChild(group->getNumChildren() - 1);
+    }
 }
 
 void View3DInventorSelection::clearGroupOnTop()
