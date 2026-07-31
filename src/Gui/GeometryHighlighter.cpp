@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <algorithm>
+#include <array>
+#include <map>
 #include <set>
 #include <utility>
 
@@ -132,6 +134,27 @@ std::vector<View3DInventorViewer*> viewersOf(App::Document* document)
     }
     return viewers;
 }
+
+/// One document's share of what each role has to render.
+using ReferencesByRole = std::array<std::vector<GeometryReference>, highlightRoleCount>;
+
+/// Splits everything @p model wants rendered by the document it lives in. An
+/// annotation holds a path into its own document's scene graph, so it may only ever
+/// be pushed into a viewer of that document.
+std::map<App::Document*, ReferencesByRole> groupByDocument(const GeometryHighlightModel& model)
+{
+    std::map<App::Document*, ReferencesByRole> byDocument;
+    for (std::size_t index = 0; index < highlightRoleCount; ++index) {
+        for (const GeometryReference& reference : model.effective(static_cast<HighlightRole>(index))) {
+            App::Document* document = reference.object ? reference.object->getDocument() : nullptr;
+            if (!document) {
+                continue;
+            }
+            byDocument[document].at(index).push_back(reference);
+        }
+    }
+    return byDocument;
+}
 }  // namespace
 
 GeometryHighlighter::GeometryHighlighter(QObject* parent)
@@ -181,8 +204,51 @@ void GeometryHighlighter::clear()
     refresh();
 }
 
+void GeometryHighlighter::withdrawAndAdopt(std::set<App::Document*> documents)
+{
+    // The documents drawn in last time as well: a role emptied since then must stop
+    // rendering in the views that used to show it. Those are compared by pointer
+    // against the still-open documents rather than dereferenced, so one closed
+    // meanwhile is simply dropped.
+    const std::vector<App::Document*> open = App::GetApplication().getDocuments();
+    std::set<App::Document*> stale;
+    for (App::Document* document : _touchedDocuments) {
+        if (std::ranges::find(open, document) != open.end()) {
+            stale.insert(document);
+        }
+    }
+    stale.insert(documents.begin(), documents.end());
+    _touchedDocuments = std::move(documents);
+
+    for (App::Document* document : stale) {
+        for (View3DInventorViewer* viewer : viewersOf(document)) {
+            View3DInventorSelection* selection = viewer->getInventorSelection();
+            if (!selection) {
+                continue;
+            }
+            for (std::size_t index = 0; index < highlightRoleCount; ++index) {
+                selection->clearHighlight(static_cast<HighlightRole>(index), this);
+            }
+        }
+    }
+}
+
 void GeometryHighlighter::refresh()
 {
+    const std::map<App::Document*, ReferencesByRole> byDocument = groupByDocument(_model);
+
+    std::set<App::Document*> documents;
+    for (const auto& [document, references] : byDocument) {
+        documents.insert(document);
+    }
+    // Withdraw before anything below can bail out, so a clear() never strands an
+    // annotation in a view.
+    withdrawAndAdopt(std::move(documents));
+
+    if (byDocument.empty()) {
+        return;
+    }
+
     auto* parameters = Base::provideService<Gui::StyleParameters::ParameterManager>();
     if (!parameters) {
         return;
@@ -198,39 +264,36 @@ void GeometryHighlighter::refresh()
     };
     // resolve(ParameterDefinition<T>) returns T, so the colour arrives as a
     // Base::Color and the width as a Numeric — no Value unwrapping here.
-    const RoleStyle styles[] = {
-        {.role = HighlightRole::Reference,
-         .color = parameters->resolve(StyleParameters::GeometryHighlightReferenceColor),
-         .lineWidth = static_cast<float>(
-             parameters->resolve(StyleParameters::GeometryHighlightReferenceLineWidth).value
-         )},
-        {.role = HighlightRole::Hovered,
-         .color = parameters->resolve(StyleParameters::GeometryHighlightHoveredColor),
-         .lineWidth = static_cast<float>(
-             parameters->resolve(StyleParameters::GeometryHighlightHoveredLineWidth).value
-         )},
+    const std::array<RoleStyle, highlightRoleCount> styles {
+        RoleStyle {
+            .role = HighlightRole::Reference,
+            .color = parameters->resolve(StyleParameters::GeometryHighlightReferenceColor),
+            .lineWidth = static_cast<float>(
+                parameters->resolve(StyleParameters::GeometryHighlightReferenceLineWidth).value
+            )
+        },
+        RoleStyle {
+            .role = HighlightRole::Hovered,
+            .color = parameters->resolve(StyleParameters::GeometryHighlightHoveredColor),
+            .lineWidth = static_cast<float>(
+                parameters->resolve(StyleParameters::GeometryHighlightHoveredLineWidth).value
+            )
+        },
     };
 
-    // Every viewer of every open document, not just the ones currently holding a
-    // highlight: a role emptied since the last refresh must still be cleared in the
-    // views that used to show it.
-    std::set<View3DInventorViewer*> viewers;
-    for (App::Document* document : App::GetApplication().getDocuments()) {
+    for (const auto& [document, references] : byDocument) {
         for (View3DInventorViewer* viewer : viewersOf(document)) {
-            viewers.insert(viewer);
-        }
-    }
-
-    for (View3DInventorViewer* viewer : viewers) {
-        View3DInventorSelection* selection = viewer->getInventorSelection();
-        if (!selection) {
-            continue;
-        }
-        for (const RoleStyle& style : styles) {
-            selection->clearHighlight(style.role);
-            selection->setHighlightStyle(style.role, style.color, style.lineWidth);
-            for (const GeometryReference& reference : _model.effective(style.role)) {
-                selection->addHighlight(style.role, reference.object, reference.subName.c_str());
+            View3DInventorSelection* selection = viewer->getInventorSelection();
+            if (!selection) {
+                continue;
+            }
+            for (const RoleStyle& style : styles) {
+                selection->setHighlightStyle(style.role, style.color, style.lineWidth);
+                for (const GeometryReference& reference :
+                     references.at(highlightRoleIndex(style.role))) {
+                    selection
+                        ->addHighlight(style.role, this, reference.object, reference.subName.c_str());
+                }
             }
         }
     }

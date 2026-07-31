@@ -3,6 +3,7 @@
 
 #include <array>
 #include <functional>
+#include <set>
 #include <vector>
 
 #include <QObject>
@@ -85,10 +86,16 @@ public:
     }
 
 private:
-    /// Rebuilds both roles in every 3D view that currently shows a reference.
+    /// Rebuilds both roles in every 3D view of every document holding a reference.
     void refresh();
+    /// Withdraws this highlighter's annotations from every view it drew in last time
+    /// as well as every view it is about to draw in, and adopts @p documents as the
+    /// new set. Nobody else's annotations are affected.
+    void withdrawAndAdopt(std::set<App::Document*> documents);
 
     GeometryHighlightModel _model;
+    /// The documents whose views currently hold this highlighter's annotations.
+    std::set<App::Document*> _touchedDocuments;
     fastsignals::scoped_connection _objectDeletedConnection;
     fastsignals::scoped_connection _documentDeletedConnection;
 };

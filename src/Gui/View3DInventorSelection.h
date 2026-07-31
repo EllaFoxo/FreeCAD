@@ -69,12 +69,20 @@ public:
 
     /// Sets the colour and line width every subsequent highlight of @p role uses.
     void setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth);
-    /// Renders @p object's @p subName on top in @p role's style. A whole-object
-    /// reference passes an empty @p subName. Silently does nothing when the
-    /// reference cannot be resolved, or when its object is hidden.
-    void addHighlight(HighlightRole role, App::DocumentObject* object, const char* subName);
-    /// Removes every highlight of @p role.
-    void clearHighlight(HighlightRole role);
+    /// Renders @p object's @p subName on top in @p role's style, attributed to
+    /// @p owner so it can be withdrawn without disturbing anyone else's. A
+    /// whole-object reference passes an empty @p subName. Silently does nothing
+    /// when the reference cannot be resolved, when its object is hidden, or when
+    /// it belongs to a document other than this one.
+    void addHighlight(
+        HighlightRole role,
+        const void* owner,
+        App::DocumentObject* object,
+        const char* subName
+    );
+    /// Removes the highlights @p owner added under @p role, leaving every other
+    /// owner's in place.
+    void clearHighlight(HighlightRole role, const void* owner);
 
 private:
     /// Prefixes @p path with the scene-graph path through every enclosing
@@ -83,15 +91,19 @@ private:
     bool appendGroupPath(ViewProviderDocumentObject* vp, SoTempPath& path) const;
 
     /// One highlight role's scene-graph slot: the draw style shared by every
-    /// annotation of that role, plus the colour subsequent ones are given.
+    /// annotation of that role, the colour subsequent ones are given, and one
+    /// subgroup per owner so each owner's annotations can be withdrawn alone.
     struct HighlightRoleNodes
     {
         SoGroup* group = nullptr;
         SoDrawStyle* style = nullptr;
         SbColor color {0.20F, 0.55F, 1.00F};
+        std::map<const void*, SoGroup*> owners;
     };
 
     HighlightRoleNodes* highlightRole(HighlightRole role);
+    /// The subgroup holding @p owner's annotations of a role, created on first use.
+    static SoGroup* highlightOwnerGroup(HighlightRoleNodes& nodes, const void* owner);
 
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;

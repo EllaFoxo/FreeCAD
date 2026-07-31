@@ -372,8 +372,27 @@ void View3DInventorSelection::setHighlightStyle(HighlightRole role, const Base::
     nodes->color = color.asValue<SbColor>();
 }
 
+SoGroup* View3DInventorSelection::highlightOwnerGroup(HighlightRoleNodes& nodes, const void* owner)
+{
+    auto found = nodes.owners.find(owner);
+    if (found != nodes.owners.end()) {
+        return found->second;
+    }
+    // A selection root rather than a plain separator: the secondary selection context
+    // carrying the highlight colour is keyed by the whole chain of SoFCSelectionRoot
+    // nodes on the path, so without one of its own two owners annotating the same
+    // subelement would share a context and either clearing it would strip the other.
+    auto selRoot = new SoFCSelectionRoot;
+    selRoot->selectionStyle = SoFCSelectionRoot::PassThrough;
+    selRoot->setName("HighlightOwner");
+    nodes.group->addChild(selRoot);
+    nodes.owners.emplace(owner, selRoot);
+    return selRoot;
+}
+
 void View3DInventorSelection::addHighlight(
     HighlightRole role,
+    const void* owner,
     App::DocumentObject* object,
     const char* subName
 )
@@ -388,6 +407,13 @@ void View3DInventorSelection::addHighlight(
     if (!vp || !vp->isSelectable() || !vp->isShow()) {
         return;
     }
+    // Public API, so the document is checked rather than assumed. An annotation holds
+    // a path into its own document's scene graph; hung under another document's viewer
+    // it would render that document's geometry here and expose its nodes to this
+    // viewer's traversals.
+    if (!guiDocument || vp->getDocument() != guiDocument) {
+        return;
+    }
 
     SoTempPath path(10);
     path.ref();
@@ -397,11 +423,15 @@ void View3DInventorSelection::addHighlight(
     }
 
     SoDetail* det = nullptr;
+    // The annotation holds a plain SoPath into the view provider's live nodes. A
+    // recompute that rebuilds that scene graph makes Coin's path auditing truncate the
+    // path rather than leave it dangling, so the highlight silently stops rendering
+    // until the next refresh. checkGroupOnTop() has exactly the same exposure.
     if (vp->getDetailPath(subName, &path, true, det) && path.getLength()) {
+        auto grp = highlightOwnerGroup(*nodes, owner);
         auto node = new SoFCPathAnnotation;
         node->setPath(&path);
-        auto group = nodes->group;
-        group->addChild(node);
+        grp->addChild(node);
 
         // The colour rides in the secondary selection context rather than an
         // overriding material, because that is what narrows the render to the
@@ -413,9 +443,10 @@ void View3DInventorSelection::addHighlight(
         action.setColor(nodes->color);
         action.setElement(det);
 
-        SoTempPath tmpPath(path.getLength() + 2);
+        SoTempPath tmpPath(path.getLength() + 3);
         tmpPath.ref();
-        tmpPath.append(group);
+        tmpPath.append(nodes->group);
+        tmpPath.append(grp);
         tmpPath.append(node);
         tmpPath.append(&path);
         action.apply(&tmpPath);
@@ -428,22 +459,31 @@ void View3DInventorSelection::addHighlight(
     path.unrefNoDelete();
 }
 
-void View3DInventorSelection::clearHighlight(HighlightRole role)
+void View3DInventorSelection::clearHighlight(HighlightRole role, const void* owner)
 {
     HighlightRoleNodes* nodes = highlightRole(role);
     if (!nodes) {
         return;
     }
-    auto group = nodes->group;
-    if (group->getNumChildren() <= 1) {
-        return;  // only the draw style remains
+    auto found = nodes->owners.find(owner);
+    if (found == nodes->owners.end()) {
+        return;
     }
+    SoGroup* grp = found->second;
+    nodes->owners.erase(found);
+
+    // Drop the secondary contexts this owner's annotations created before the nodes go
+    // away. Applied along the role group so the context key matches the one
+    // addHighlight() wrote under; every other owner's subtree is left untouched.
+    SoTempPath path(2);
+    path.ref();
+    path.append(nodes->group);
+    path.append(grp);
     SoSelectionElementAction action(SoSelectionElementAction::None, true);
-    action.apply(group);
-    // Keep the draw style, which is always child 0.
-    while (group->getNumChildren() > 1) {
-        group->removeChild(group->getNumChildren() - 1);
-    }
+    action.apply(&path);
+    path.unrefNoDelete();
+
+    nodes->group->removeChild(grp);
 }
 
 void View3DInventorSelection::clearGroupOnTop()
