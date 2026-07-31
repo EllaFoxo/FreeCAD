@@ -137,16 +137,44 @@ TEST_F(GeometryHighlighterTest, dropObjectRemovesItFromEveryRole)
 
 TEST_F(GeometryHighlighterTest, dropDocumentRemovesEveryReferenceInThatDocument)
 {
-    GeometryHighlightModel model = makeModel();
+    App::DocumentInitFlags createFlags;
+    createFlags.createView = false;
+    const std::string otherName = App::GetApplication().getUniqueDocumentName("geomhl_other");
+    App::Document* otherDocument
+        = App::GetApplication().newDocument(otherName.c_str(), "testUser", createFlags);
+    App::DocumentObject* otherObject = otherDocument->addObject("App::FeatureTest", "ObjectC");
+    const GeometryReference survivor {.object = otherObject, .subName = "Face3"};
 
+    GeometryHighlightModel model = makeModel();
     model.setHighlighted(
         HighlightRole::Reference,
-        {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}}
+        {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}, survivor}
     );
 
     model.dropDocument(_doc);
 
-    EXPECT_TRUE(model.effective(HighlightRole::Reference).empty());
+    // Only the closed document's references go; another document's are untouched.
+    EXPECT_EQ(model.effective(HighlightRole::Reference), std::vector {survivor});
+
+    App::GetApplication().closeDocument(otherName.c_str());
+}
+
+TEST_F(GeometryHighlighterTest, twoHighlightersHoldTheirOwnReferenceSets)
+{
+    Gui::GeometryHighlighter first;
+    Gui::GeometryHighlighter second;
+    const GeometryReference mine {.object = _objectA, .subName = "Face1"};
+
+    first.setHighlighted(HighlightRole::Reference, {mine});
+    second.setHighlighted(HighlightRole::Reference, {{.object = _objectB, .subName = "Face2"}});
+
+    // Several selectors of one task panel each drive their own highlighter, so one
+    // publishing must not withdraw another's references.
+    EXPECT_EQ(first.model().effective(HighlightRole::Reference), std::vector {mine});
+
+    second.clear();
+
+    EXPECT_EQ(first.model().effective(HighlightRole::Reference), std::vector {mine});
 }
 
 TEST_F(GeometryHighlighterTest, clearEmptiesEveryRole)
