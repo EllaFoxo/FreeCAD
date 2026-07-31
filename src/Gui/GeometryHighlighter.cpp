@@ -112,46 +112,50 @@ ViewProviderDocumentObject* viewProviderOf(const App::DocumentObject* object)
 }
 }  // namespace
 
-HighlightVisibility::~HighlightVisibility()
+// The Visibility property is what is written, not the mode switch alone: moving the
+// switch by itself does not survive contact with the rest of the application, and a
+// property write is what the mechanism this replaced did, back when revealing worked.
+// The price is that a write is a document change, so PartDesign reacts to it by hiding
+// every other feature of the body; that reaction came with the old mechanism too and is
+// accepted here. A later recompute or an explicit property sync can also flip a revealed
+// object back off; that is not defended against either.
+HighlightVisibility::Override::Override(App::DocumentObject* object)
+    : _object(object)
 {
-    setRevealed({});
+    auto* viewProvider = viewProviderOf(object);
+    if (!viewProvider) {
+        return;
+    }
+    _previous = viewProvider->Visibility.getValue();
+    viewProvider->Visibility.setValue(true);
+}
+
+HighlightVisibility::Override::~Override()
+{
+    // Resolved through the weak pointer rather than cached across the guard's
+    // lifetime: a null resolve means the object was deleted meanwhile, so there is
+    // nothing left to restore and nothing safe to dereference.
+    if (auto* viewProvider = viewProviderOf(_object.get<App::DocumentObject>())) {
+        viewProvider->Visibility.setValue(_previous);
+    }
 }
 
 void HighlightVisibility::setRevealed(const std::vector<App::DocumentObject*>& objects)
 {
-    // Settle the outgoing set before taking on the new one.
-    std::erase_if(_revealed, [&objects](const App::DocumentObjectWeakPtrT& revealed) {
-        App::DocumentObject* object = revealed.get<App::DocumentObject>();
-        if (object && std::ranges::find(objects, object) != objects.end()) {
-            return false;
-        }
-        // A null resolve means the object was deleted meanwhile: there is nothing
-        // left to restore and nothing safe to dereference.
-        if (auto* viewProvider = viewProviderOf(object)) {
-            viewProvider->Gui::ViewProvider::hide();
-        }
-        return true;
+    // Settle the outgoing set before taking on the new one: erasing an entry destroys
+    // its guard, and that is what restores the object.
+    std::erase_if(_revealed, [&objects](const auto& entry) {
+        return std::ranges::find(objects, entry.first) == objects.end();
     });
 
     for (App::DocumentObject* object : objects) {
-        const auto isRevealed = [object](const App::DocumentObjectWeakPtrT& revealed) {
-            return revealed.get<App::DocumentObject>() == object;
-        };
-        if (std::ranges::any_of(_revealed, isRevealed)) {
-            continue;
-        }
         auto* viewProvider = viewProviderOf(object);
-        if (!viewProvider || viewProvider->isShow()) {
+        // An object that is already visible is left ungoverned, so that hiding it
+        // while it is highlighted sticks instead of being undone on restore.
+        if (!viewProvider || viewProvider->Visibility.getValue()) {
             continue;
         }
-        // The base call, so only the mode switch moves. ViewProviderDocumentObject's
-        // override writes the Visibility property, and that document change makes
-        // PartDesign hide every other feature of the body — precisely what a
-        // highlight must not do. A later recompute or an explicit property sync can
-        // still flip the switch back off underneath a revealed object; that is
-        // accepted rather than defended against here.
-        viewProvider->Gui::ViewProvider::show();
-        _revealed.emplace_back(object);
+        _revealed.try_emplace(object, object);
     }
 }
 

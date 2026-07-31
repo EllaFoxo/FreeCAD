@@ -2,6 +2,7 @@
 #pragma once
 
 #include <array>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -55,15 +56,15 @@ private:
  * Keeps a set of hidden objects revealed for exactly as long as someone needs them.
  *
  * The whole revealed set is declared in one call rather than adjusted object by
- * object, so whatever drops out of it is restored in the same breath and there is
- * no separate restore step to forget; the destructor restores whatever is left.
- * An object deleted while revealed is dropped rather than restored.
+ * object, so whatever drops out of it is restored in the same breath. Every reveal
+ * is an RAII guard, so restoration happens on every path out — including
+ * destruction — and cannot be forgotten. An object deleted while revealed is
+ * skipped rather than restored.
  */
 class GuiExport HighlightVisibility
 {
 public:
     HighlightVisibility() = default;
-    ~HighlightVisibility();
 
     FC_DISABLE_COPY_MOVE(HighlightVisibility)
 
@@ -72,10 +73,27 @@ public:
     void setRevealed(const std::vector<App::DocumentObject*>& objects);
 
 private:
-    /// Only the objects this revealed, so restoring always means hiding again.
-    /// Held weakly: one deleted meanwhile resolves to null and is skipped instead
-    /// of dereferenced.
-    std::vector<App::DocumentObjectWeakPtrT> _revealed;
+    /// Holds one object visible and puts back the visibility it found, on
+    /// destruction, whenever that happens.
+    class Override
+    {
+    public:
+        explicit Override(App::DocumentObject* object);
+        ~Override();
+
+        FC_DISABLE_COPY_MOVE(Override)
+
+    private:
+        /// Held weakly: an object deleted meanwhile resolves to null and is skipped
+        /// instead of dereferenced.
+        App::DocumentObjectWeakPtrT _object;
+        bool _previous = false;
+    };
+
+    /// One entry per object this revealed; erasing an entry restores it. The key is
+    /// only ever compared, never dereferenced, so one belonging to a deleted object
+    /// does no harm.
+    std::map<App::DocumentObject*, Override> _revealed;
 };
 
 /**
