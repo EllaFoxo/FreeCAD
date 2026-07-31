@@ -59,7 +59,7 @@ private:
  * no separate restore step to forget; the destructor restores whatever is left.
  * An object deleted while revealed is dropped rather than restored.
  */
-class HighlightVisibility
+class GuiExport HighlightVisibility
 {
 public:
     HighlightVisibility() = default;
