@@ -14,6 +14,7 @@
 
 #include <App/DocumentObserver.h>
 #include <FCGlobal.h>
+#include <Gui/GeometryHighlighter.h>
 #include <Gui/GeometryReference.h>
 #include <Gui/GeometrySelectionGate.h>
 #include <Gui/Selection/Selection.h>
@@ -71,6 +72,16 @@ public:
     void setReferences(std::vector<GeometryReference> references);
     void removeReference(std::size_t index);
     void clear();
+
+    /// Marks the reference at @p index as hovered, or nothing when @p index is
+    /// -1 or out of range.
+    void setHoveredReference(int index);
+
+    /// The 3D-view highlight this selection drives. Never null.
+    GeometryHighlighter* highlighter() const
+    {
+        return _highlighter.get();
+    }
 
     using GateFactory = std::function<std::unique_ptr<Gui::SelectionGate>()>;
 
@@ -172,6 +183,15 @@ private:
 
     void reloadFromProperty();
     bool writeToProperty();
+
+    std::unique_ptr<GeometryHighlighter> _highlighter;
+
+    /// Republishes the current references to the highlighter. Called whenever the
+    /// model changes and whenever a session boundary changes what is selected,
+    /// since selected references are highlighted by the selection instead.
+    void refreshHighlight();
+    /// The hovered position, or -1. Held so a reference change can re-resolve it.
+    int _hoveredIndex = -1;
 };
 
 }  // namespace Gui

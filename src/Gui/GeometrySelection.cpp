@@ -17,6 +17,7 @@
 #include <App/Property.h>
 #include <App/PropertyLinks.h>
 #include <Gui/Application.h>
+#include <Gui/GeometryHighlighter.h>
 #include <Gui/Selection/Selection.h>
 #include <Gui/Selection/SelectionFilter.h>
 #include <Gui/ViewProviderDocumentObject.h>
@@ -30,6 +31,7 @@ GeometrySelection::GeometrySelection(GeometryQuantity mode, QObject* parent)
     : QObject(parent)
     , Gui::SelectionObserver(false)
     , _quantity(mode)
+    , _highlighter(std::make_unique<GeometryHighlighter>())
 {}
 
 GeometrySelection::~GeometrySelection()
@@ -74,12 +76,34 @@ void GeometrySelection::clear()
     updateReferences({});
 }
 
+void GeometrySelection::setHoveredReference(int index)
+{
+    const bool valid = index >= 0 && index < static_cast<int>(_references.size());
+    _hoveredIndex = valid ? index : -1;
+    if (_hoveredIndex < 0) {
+        _highlighter->clear(HighlightRole::Hovered);
+        return;
+    }
+    _highlighter->setHighlighted(
+        HighlightRole::Hovered,
+        {_references[static_cast<std::size_t>(_hoveredIndex)]}
+    );
+}
+
+void GeometrySelection::refreshHighlight()
+{
+    _highlighter->setHighlighted(HighlightRole::Reference, _references);
+    // Re-resolve the hover against the new model; a removal can invalidate it.
+    setHoveredReference(_hoveredIndex);
+}
+
 void GeometrySelection::updateReferences(std::vector<GeometryReference> references)
 {
     _references = std::move(references);
     if (_autoApply && isBound()) {
         writeToProperty();
     }
+    refreshHighlight();
     Q_EMIT referencesChanged();
 }
 
@@ -123,6 +147,9 @@ void GeometrySelection::startSelecting()
     // Attach last, so the seeding picks above are not fed back into our own
     // onSelectionChanged().
     attachSelection();
+    // Seeding just moved the references into the real 3D selection, so the
+    // highlighter's Reference role now has less to draw.
+    refreshHighlight();
 }
 
 void GeometrySelection::stopSelecting()
@@ -137,6 +164,9 @@ void GeometrySelection::stopSelecting()
         Gui::Selection().rmvSelectionGate();
     }
     Q_EMIT selectionModeExited();
+    // Teardown just took the references back out of the real 3D selection, so the
+    // highlighter's Reference role must draw them again.
+    refreshHighlight();
 }
 
 void GeometrySelection::showReferencedObjects()

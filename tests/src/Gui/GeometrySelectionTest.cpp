@@ -8,6 +8,7 @@
 #include <App/Document.h>
 #include <App/DocumentObject.h>
 #include <App/PropertyLinks.h>
+#include <Gui/GeometryHighlighter.h>
 #include <Gui/GeometrySelection.h>
 #include <Gui/GeometrySelectionGate.h>
 #include <Gui/Selection/Selection.h>
@@ -388,4 +389,63 @@ TEST_F(GeometrySelectionTest, kindGateWholeObjectAllowsEmptySub)
     Gui::GeometryKindGate gate(Gui::GeometryKind::WholeObject, nullptr);
     EXPECT_TRUE(gate.allow(_doc, _objectA, ""));
     EXPECT_FALSE(gate.allow(_doc, _objectA, "Face1"));
+}
+
+TEST_F(GeometrySelectionTest, referencesArePushedToTheHighlighter)
+{
+    GeometrySelection selection(GeometryQuantity::AllowMultiple);
+
+    selection.setReferences(
+        {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}}
+    );
+
+    const auto highlighted = selection.highlighter()->model().effective(Gui::HighlightRole::Reference);
+    EXPECT_EQ(highlighted.size(), 2U);
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferenceMarksThatOneHovered)
+{
+    GeometrySelection selection(GeometryQuantity::AllowMultiple);
+    selection.setReferences(
+        {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}}
+    );
+
+    selection.setHoveredReference(1);
+
+    const auto hovered = selection.highlighter()->model().effective(Gui::HighlightRole::Hovered);
+    ASSERT_EQ(hovered.size(), 1U);
+    EXPECT_EQ(hovered.front().object, _objectB);
+    // The hovered reference is drawn once, in the hovered style.
+    EXPECT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).size(), 1U);
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferenceClearsWithMinusOne)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+    selection.setHoveredReference(0);
+
+    selection.setHoveredReference(-1);
+
+    EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Hovered).empty());
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferenceIgnoresAnOutOfRangeIndex)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+
+    selection.setHoveredReference(7);
+
+    EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Hovered).empty());
+}
+
+TEST_F(GeometrySelectionTest, clearingReferencesClearsTheHighlight)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+
+    selection.clear();
+
+    EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).empty());
 }
