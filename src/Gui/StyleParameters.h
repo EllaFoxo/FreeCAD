@@ -31,4 +31,11 @@ namespace Gui::StyleParameters
 // rubberband selection colors
 DEFINE_STYLE_PARAMETER(ExpressionButtonSize, Numeric(18, "px"));  // green for touch selection
                                                                   // (right to left)
+
+// Reference highlighting in the 3D view. Blue so it reads as distinct from
+// selection green, preselection yellow, and the PartDesign preview colours.
+DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceColor, Base::Color(0.20F, 0.55F, 1.00F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceLineWidth, Numeric(3));
+DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredColor, Base::Color(0.45F, 0.78F, 1.00F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredLineWidth, Numeric(4));
 }  // namespace Gui::StyleParameters

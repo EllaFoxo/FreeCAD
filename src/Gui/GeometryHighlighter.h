@@ -4,6 +4,9 @@
 #include <functional>
 #include <vector>
 
+#include <QObject>
+#include <fastsignals/signal.h>
+
 #include <FCGlobal.h>
 #include <Gui/GeometryReference.h>
 
@@ -49,6 +52,42 @@ private:
     SelectionPredicate _isSelected;
     std::vector<GeometryReference> _reference;
     std::vector<GeometryReference> _hovered;
+};
+
+/**
+ * Renders a set of geometry references on top in the 3D view.
+ *
+ * Instantiable and independent: several highlighters can be live at once, and
+ * none of them touches the application selection. Highlighting a reference
+ * never rebuilds geometry — it re-renders the nodes already in the scene.
+ *
+ * A hidden object is not revealed; that stays the caller's decision.
+ */
+class GuiExport GeometryHighlighter: public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit GeometryHighlighter(QObject* parent = nullptr);
+    ~GeometryHighlighter() override;
+
+    /// Replaces everything highlighted under @p role.
+    void setHighlighted(HighlightRole role, std::vector<GeometryReference> references);
+    void clear(HighlightRole role);
+    void clear();
+
+    const GeometryHighlightModel& model() const
+    {
+        return _model;
+    }
+
+private:
+    /// Rebuilds both roles in every 3D view that currently shows a reference.
+    void refresh();
+
+    GeometryHighlightModel _model;
+    fastsignals::scoped_connection _objectDeletedConnection;
+    fastsignals::scoped_connection _documentDeletedConnection;
 };
 
 }  // namespace Gui
