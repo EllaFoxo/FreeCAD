@@ -40,20 +40,31 @@ GeometryHighlightModel::GeometryHighlightModel(SelectionPredicate isSelected)
     : _isSelected(isSelected ? std::move(isSelected) : SelectionPredicate(isInViewportSelection))
 {}
 
+std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role)
+{
+    return _byRole.at(highlightRoleIndex(role));
+}
+
+const std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role) const
+{
+    return _byRole.at(highlightRoleIndex(role));
+}
+
 void GeometryHighlightModel::setHighlighted(HighlightRole role, std::vector<GeometryReference> references)
 {
-    (role == HighlightRole::Hovered ? _hovered : _reference) = std::move(references);
+    slot(role) = std::move(references);
 }
 
 void GeometryHighlightModel::clear(HighlightRole role)
 {
-    (role == HighlightRole::Hovered ? _hovered : _reference).clear();
+    slot(role).clear();
 }
 
 void GeometryHighlightModel::clear()
 {
-    _reference.clear();
-    _hovered.clear();
+    for (std::vector<GeometryReference>& references : _byRole) {
+        references.clear();
+    }
 }
 
 std::vector<GeometryReference> GeometryHighlightModel::effective(HighlightRole role) const
@@ -61,13 +72,17 @@ std::vector<GeometryReference> GeometryHighlightModel::effective(HighlightRole r
     // A hovered reference is drawn only in the hovered style, and is exempt from the
     // selection rule: hovering must give feedback even for an already-selected reference.
     if (role == HighlightRole::Hovered) {
-        return _hovered;
+        return slot(role);
     }
 
+    const std::vector<GeometryReference>& hoveredReferences = slot(HighlightRole::Hovered);
+    const std::vector<GeometryReference>& references = slot(role);
+
     std::vector<GeometryReference> result;
-    result.reserve(_reference.size());
-    for (const GeometryReference& reference : _reference) {
-        const bool hovered = std::ranges::find(_hovered, reference) != _hovered.end();
+    result.reserve(references.size());
+    for (const GeometryReference& reference : references) {
+        const bool hovered = std::ranges::find(hoveredReferences, reference)
+            != hoveredReferences.end();
         if (hovered || _isSelected(reference)) {
             continue;
         }
@@ -81,8 +96,9 @@ void GeometryHighlightModel::dropObject(const App::DocumentObject* object)
     const auto matches = [object](const GeometryReference& reference) {
         return reference.object == object;
     };
-    std::erase_if(_reference, matches);
-    std::erase_if(_hovered, matches);
+    for (std::vector<GeometryReference>& references : _byRole) {
+        std::erase_if(references, matches);
+    }
 }
 
 void GeometryHighlightModel::dropDocument(const App::Document* document)
@@ -90,8 +106,9 @@ void GeometryHighlightModel::dropDocument(const App::Document* document)
     const auto matches = [document](const GeometryReference& reference) {
         return reference.object && reference.object->getDocument() == document;
     };
-    std::erase_if(_reference, matches);
-    std::erase_if(_hovered, matches);
+    for (std::vector<GeometryReference>& references : _byRole) {
+        std::erase_if(references, matches);
+    }
 }
 
 namespace

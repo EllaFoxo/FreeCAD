@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #pragma once
 
+#include <cstddef>
 #include <string>
 
 #include <FCGlobal.h>
@@ -32,6 +33,18 @@ enum class HighlightRole
     Reference,
     /// The single reference whose selector row is under the cursor.
     Hovered,
+    /// Not a role: how many there are, so per-role storage can be a fixed array
+    /// and a new role cannot be forgotten in one.
+    COUNT,
 };
+
+/// How many entries per-role storage needs.
+inline constexpr std::size_t highlightRoleCount = static_cast<std::size_t>(HighlightRole::COUNT);
+
+/// Where @p role lives in per-role storage.
+inline constexpr std::size_t highlightRoleIndex(HighlightRole role)
+{
+    return static_cast<std::size_t>(role);
+}
 
 }  // namespace Gui

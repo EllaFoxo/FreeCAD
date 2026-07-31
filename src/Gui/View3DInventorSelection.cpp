@@ -99,22 +99,22 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
     pcHighlightPickStyle->setName("GroupHighlightPickStyle");
     pcGroupHighlight->addChild(pcHighlightPickStyle);
 
-    const auto makeRoleGroup = [this](const char* name, SoGroup*& group, SoDrawStyle*& style) {
+    const auto makeRoleGroup = [this](const char* name, HighlightRoleNodes& role) {
         auto selRoot = new SoFCSelectionRoot;
         selRoot->selectionStyle = SoFCSelectionRoot::PassThrough;
-        group = selRoot;
-        group->setName(name);
-        group->ref();
+        role.group = selRoot;
+        role.group->setName(name);
+        role.group->ref();
 
-        style = new SoDrawStyle;
-        style->setOverride(true);
-        group->addChild(style);
+        role.style = new SoDrawStyle;
+        role.style->setOverride(true);
+        role.group->addChild(role.style);
 
-        pcGroupHighlight->addChild(group);
+        pcGroupHighlight->addChild(role.group);
     };
 
-    makeRoleGroup("HighlightReference", pcHighlightReference, pcHighlightReferenceStyle);
-    makeRoleGroup("HighlightHovered", pcHighlightHovered, pcHighlightHoveredStyle);
+    makeRoleGroup("HighlightReference", highlightRoles.at(highlightRoleIndex(HighlightRole::Reference)));
+    makeRoleGroup("HighlightHovered", highlightRoles.at(highlightRoleIndex(HighlightRole::Hovered)));
 }
 
 View3DInventorSelection::~View3DInventorSelection()
@@ -124,8 +124,9 @@ View3DInventorSelection::~View3DInventorSelection()
     pcGroupOnTopPreSel->unref();
     pcGroupOnTopSel->unref();
     pcGroupHighlight->unref();
-    pcHighlightReference->unref();
-    pcHighlightHovered->unref();
+    for (HighlightRoleNodes& role : highlightRoles) {
+        role.group->unref();
+    }
 }
 
 void View3DInventorSelection::checkGroupOnTop(const SelectionChanges& Reason)
@@ -348,16 +349,20 @@ bool View3DInventorSelection::appendGroupPath(ViewProviderDocumentObject* vp, So
     return true;
 }
 
-SoGroup* View3DInventorSelection::highlightGroup(HighlightRole role) const
+View3DInventorSelection::HighlightRoleNodes* View3DInventorSelection::highlightRole(HighlightRole role)
 {
-    return role == HighlightRole::Hovered ? pcHighlightHovered : pcHighlightReference;
+    const std::size_t index = highlightRoleIndex(role);
+    return index < highlightRoles.size() ? &highlightRoles.at(index) : nullptr;
 }
 
 void View3DInventorSelection::setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth)
 {
-    const bool hovered = role == HighlightRole::Hovered;
-    (hovered ? pcHighlightHoveredStyle : pcHighlightReferenceStyle)->lineWidth = lineWidth;
-    (hovered ? highlightHoveredColor : highlightReferenceColor) = color.asValue<SbColor>();
+    HighlightRoleNodes* nodes = highlightRole(role);
+    if (!nodes) {
+        return;
+    }
+    nodes->style->lineWidth = lineWidth;
+    nodes->color = color.asValue<SbColor>();
 }
 
 void View3DInventorSelection::addHighlight(
@@ -366,7 +371,8 @@ void View3DInventorSelection::addHighlight(
     const char* subName
 )
 {
-    if (!object || !object->isAttachedToDocument() || !Application::Instance) {
+    HighlightRoleNodes* nodes = highlightRole(role);
+    if (!nodes || !object || !object->isAttachedToDocument() || !Application::Instance) {
         return;
     }
     auto vp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(object));
@@ -387,7 +393,7 @@ void View3DInventorSelection::addHighlight(
     if (vp->getDetailPath(subName, &path, true, det) && path.getLength()) {
         auto node = new SoFCPathAnnotation;
         node->setPath(&path);
-        auto group = highlightGroup(role);
+        auto group = nodes->group;
         group->addChild(node);
 
         // The colour rides in the secondary selection context rather than an
@@ -397,9 +403,7 @@ void View3DInventorSelection::addHighlight(
             det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
             true
         );
-        action.setColor(
-            role == HighlightRole::Hovered ? highlightHoveredColor : highlightReferenceColor
-        );
+        action.setColor(nodes->color);
         action.setElement(det);
 
         SoTempPath tmpPath(path.getLength() + 2);
@@ -419,7 +423,11 @@ void View3DInventorSelection::addHighlight(
 
 void View3DInventorSelection::clearHighlight(HighlightRole role)
 {
-    auto group = highlightGroup(role);
+    HighlightRoleNodes* nodes = highlightRole(role);
+    if (!nodes) {
+        return;
+    }
+    auto group = nodes->group;
     if (group->getNumChildren() <= 1) {
         return;  // only the draw style remains
     }

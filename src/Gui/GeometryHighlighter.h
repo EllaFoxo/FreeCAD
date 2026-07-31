@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 #pragma once
 
+#include <array>
 #include <functional>
 #include <vector>
 
@@ -49,9 +50,11 @@ public:
     void dropDocument(const App::Document* document);
 
 private:
+    std::vector<GeometryReference>& slot(HighlightRole role);
+    const std::vector<GeometryReference>& slot(HighlightRole role) const;
+
     SelectionPredicate _isSelected;
-    std::vector<GeometryReference> _reference;
-    std::vector<GeometryReference> _hovered;
+    std::array<std::vector<GeometryReference>, highlightRoleCount> _byRole;
 };
 
 /**

@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <map>
 #include <string>
 #include <Inventor/SbColor.h>
@@ -80,18 +82,22 @@ private:
     /// means no on-top rendering is possible.
     bool appendGroupPath(ViewProviderDocumentObject* vp, SoTempPath& path) const;
 
-    SoGroup* highlightGroup(HighlightRole role) const;
+    /// One highlight role's scene-graph slot: the draw style shared by every
+    /// annotation of that role, plus the colour subsequent ones are given.
+    struct HighlightRoleNodes
+    {
+        SoGroup* group = nullptr;
+        SoDrawStyle* style = nullptr;
+        SbColor color {0.20F, 0.55F, 1.00F};
+    };
+
+    HighlightRoleNodes* highlightRole(HighlightRole role);
 
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;
     SoGroup* pcGroupOnTopPreSel;
     SoGroup* pcGroupHighlight;
-    SoGroup* pcHighlightReference;
-    SoGroup* pcHighlightHovered;
-    SoDrawStyle* pcHighlightReferenceStyle;
-    SoDrawStyle* pcHighlightHoveredStyle;
-    SbColor highlightReferenceColor;
-    SbColor highlightHoveredColor;
+    std::array<HighlightRoleNodes, highlightRoleCount> highlightRoles;
     SoFCUnifiedSelection* selectionRoot;
     std::map<std::string, SoNode*> objectsOnTop;
     std::map<std::string, SoNode*> objectsOnTopPreSel;
