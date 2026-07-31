@@ -56,7 +56,6 @@
 #include "FreeCADStyle.h"
 #include "GeometrySelectorPopup.h"
 #include "IconManager.h"
-#include "Selection/Selection.h"
 #include "ViewProvider.h"
 
 using namespace Gui;
@@ -1066,8 +1065,8 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
             /*showRemove=*/!isComboMode(),
             [this] { activatePrimary(); },
             [this, index] { m_selection->removeReference(index); },
-            [this, reference = references[index]] { previewReferenceInView(reference); },
-            [this] { clearReferencePreview(); },
+            [this, index] { m_selection->setHoveredReference(static_cast<int>(index)); },
+            [this] { m_selection->setHoveredReference(-1); },
             rowsContainer
         );
         // Pin every row to the resolved row height so the list matches other list-like
@@ -1158,42 +1157,6 @@ int GeometrySelectorWidget::referenceListHeight() const
     const int visibleGapCount = static_cast<int>(MaxVisibleRows);
     const int cappedHeight = qRound(MaxVisibleRows * rowHeight()) + (visibleGapCount * m_rowSpacing);
     return qMin(fullHeight, cappedHeight);
-}
-
-// ---------------------------------------------------------------------------
-// 3D-view preview — highlight a hovered reference through the shared
-// preselection mechanism, so it looks identical to a live cursor highlight.
-// ---------------------------------------------------------------------------
-
-void GeometrySelectorWidget::previewReferenceInView(const GeometryReference& reference)
-{
-    if (!Application::Instance || !reference.object) {
-        return;
-    }
-    App::Document* document = reference.object->getDocument();
-    const char* objectName = reference.object->getNameInDocument();
-    if (!document || !objectName) {
-        return;
-    }
-    // TreeView source: a highlight requested from a list, matching how the tree preselects a
-    // hovered item; the 3D view's unified selection node renders it like a cursor hover.
-    Selection().setPreselect(
-        document->getName(),
-        objectName,
-        reference.subName.c_str(),
-        0,
-        0,
-        0,
-        SelectionChanges::MsgSource::TreeView
-    );
-}
-
-void GeometrySelectorWidget::clearReferencePreview()
-{
-    if (!Application::Instance) {
-        return;
-    }
-    Selection().rmvPreselect();
 }
 
 // ---------------------------------------------------------------------------

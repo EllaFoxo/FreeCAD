@@ -166,12 +166,6 @@ private:
 
     void clearRows();
 
-    /// Highlights the given reference's geometry in the 3D view, reusing the view's
-    /// preselection mechanism so it matches a live cursor highlight.
-    void previewReferenceInView(const GeometryReference& reference);
-    /// Clears any 3D-view highlight this widget requested on hover.
-    void clearReferencePreview();
-
     /// Resolves layout margins, spacing and fixed height from style tokens.
     void applyStyleMetrics();
     /// One row's height: its icon/label content plus the resolved item vertical padding.
