@@ -2,7 +2,6 @@
 #pragma once
 
 #include <array>
-#include <functional>
 #include <set>
 #include <vector>
 
@@ -24,19 +23,13 @@ namespace Gui
 /**
  * Which references each highlight role should render.
  *
- * Holds one set of references per role and answers, for any role, the subset
- * that is not already being drawn by another mechanism. Contains no Coin or
- * view code, so it can be exercised without a 3D view.
+ * Holds one set of references per role and answers, for any role, the subset it
+ * still owns once the more specific roles have claimed theirs. Contains no Coin
+ * or view code, so it can be exercised without a 3D view.
  */
 class GuiExport GeometryHighlightModel
 {
 public:
-    /// Reports whether a reference is currently part of the 3D selection.
-    using SelectionPredicate = std::function<bool(const GeometryReference&)>;
-
-    /// Defaults to the live application selection when no predicate is given.
-    explicit GeometryHighlightModel(SelectionPredicate isSelected = {});
-
     /// Replaces everything held under @p role.
     void setHighlighted(HighlightRole role, std::vector<GeometryReference> references);
     void clear(HighlightRole role);
@@ -54,7 +47,6 @@ private:
     std::vector<GeometryReference>& slot(HighlightRole role);
     const std::vector<GeometryReference>& slot(HighlightRole role) const;
 
-    SelectionPredicate _isSelected;
     std::array<std::vector<GeometryReference>, highlightRoleCount> _byRole;
 };
 

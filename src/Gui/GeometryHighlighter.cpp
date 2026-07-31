@@ -12,7 +12,6 @@
 #include <Base/ServiceProvider.h>
 #include <Gui/Application.h>
 #include <Gui/Document.h>
-#include <Gui/Selection/Selection.h>
 #include <Gui/StyleParameters.h>
 #include <Gui/StyleParameters/ParameterManager.h>
 #include <Gui/View3DInventor.h>
@@ -23,24 +22,6 @@
 #include "GeometryHighlighter.h"
 
 using namespace Gui;
-
-namespace
-{
-/// Membership in the live 3D selection. The default ResolveMode resolves the
-/// group anchoring that GeometrySelection::seedViewportSelection() builds, so
-/// no path has to be reconstructed here.
-bool isInViewportSelection(const GeometryReference& reference)
-{
-    if (!reference.object) {
-        return false;
-    }
-    return Gui::Selection().isSelected(reference.object, reference.subName.c_str());
-}
-}  // namespace
-
-GeometryHighlightModel::GeometryHighlightModel(SelectionPredicate isSelected)
-    : _isSelected(isSelected ? std::move(isSelected) : SelectionPredicate(isInViewportSelection))
-{}
 
 std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role)
 {
@@ -71,21 +52,22 @@ void GeometryHighlightModel::clear()
 
 std::vector<GeometryReference> GeometryHighlightModel::effective(HighlightRole role) const
 {
-    // A hovered reference is drawn only in the hovered style, and is exempt from the
-    // selection rule: hovering must give feedback even for an already-selected reference.
+    // The hovered role is the most specific one, so it renders everything it holds.
     if (role == HighlightRole::Hovered) {
         return slot(role);
     }
 
+    // A hovered reference is drawn once, in the hovered style. Nothing else is
+    // subtracted: the application's own selection may well be painting a reference
+    // green at the same time, but GroupHighlight is traversed after GroupOnTop, so
+    // the reference highlight simply draws over it.
     const std::vector<GeometryReference>& hoveredReferences = slot(HighlightRole::Hovered);
     const std::vector<GeometryReference>& references = slot(role);
 
     std::vector<GeometryReference> result;
     result.reserve(references.size());
     for (const GeometryReference& reference : references) {
-        const bool hovered = std::ranges::find(hoveredReferences, reference)
-            != hoveredReferences.end();
-        if (hovered || _isSelected(reference)) {
+        if (std::ranges::find(hoveredReferences, reference) != hoveredReferences.end()) {
             continue;
         }
         result.push_back(reference);

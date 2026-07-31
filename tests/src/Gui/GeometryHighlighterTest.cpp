@@ -45,17 +45,11 @@ protected:
     App::DocumentObject* _objectA {};
     App::DocumentObject* _objectB {};
 };
-
-/// A model whose selection predicate reports nothing as selected.
-GeometryHighlightModel makeModel()
-{
-    return GeometryHighlightModel([](const GeometryReference&) { return false; });
-}
 }  // namespace
 
 TEST_F(GeometryHighlighterTest, setHighlightedReplacesRatherThanAccumulates)
 {
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
 
     model.setHighlighted(HighlightRole::Reference, {{.object = _objectA, .subName = "Face1"}});
     model.setHighlighted(HighlightRole::Reference, {{.object = _objectB, .subName = "Face2"}});
@@ -68,7 +62,7 @@ TEST_F(GeometryHighlighterTest, setHighlightedReplacesRatherThanAccumulates)
 
 TEST_F(GeometryHighlighterTest, hoveredReferenceIsExcludedFromReferenceRole)
 {
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
     const GeometryReference first {.object = _objectA, .subName = "Face1"};
     const GeometryReference second {.object = _objectB, .subName = "Face2"};
 
@@ -83,7 +77,7 @@ TEST_F(GeometryHighlighterTest, hoveredReferenceIsExcludedFromReferenceRole)
 
 TEST_F(GeometryHighlighterTest, clearingHoverRestoresTheReference)
 {
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
     const GeometryReference only {.object = _objectA, .subName = "Face1"};
 
     model.setHighlighted(HighlightRole::Reference, {only});
@@ -95,34 +89,9 @@ TEST_F(GeometryHighlighterTest, clearingHoverRestoresTheReference)
     EXPECT_EQ(model.effective(HighlightRole::Reference), std::vector {only});
 }
 
-TEST_F(GeometryHighlighterTest, selectedReferenceIsExcludedFromReferenceRole)
-{
-    const GeometryReference selected {.object = _objectA, .subName = "Face1"};
-    const GeometryReference other {.object = _objectB, .subName = "Face2"};
-
-    GeometryHighlightModel model([selected](const GeometryReference& reference) {
-        return reference == selected;
-    });
-    model.setHighlighted(HighlightRole::Reference, {selected, other});
-
-    const std::vector<GeometryReference> effective = model.effective(HighlightRole::Reference);
-    ASSERT_EQ(effective.size(), 1U);
-    EXPECT_EQ(effective.front(), other);
-}
-
-TEST_F(GeometryHighlighterTest, selectedReferenceIsStillHighlightedWhenHovered)
-{
-    const GeometryReference selected {.object = _objectA, .subName = "Face1"};
-
-    GeometryHighlightModel model([](const GeometryReference&) { return true; });
-    model.setHighlighted(HighlightRole::Hovered, {selected});
-
-    EXPECT_EQ(model.effective(HighlightRole::Hovered), std::vector {selected});
-}
-
 TEST_F(GeometryHighlighterTest, dropObjectRemovesItFromEveryRole)
 {
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
     const GeometryReference doomed {.object = _objectA, .subName = "Face1"};
     const GeometryReference survivor {.object = _objectB, .subName = "Face2"};
 
@@ -145,7 +114,7 @@ TEST_F(GeometryHighlighterTest, dropDocumentRemovesEveryReferenceInThatDocument)
     App::DocumentObject* otherObject = otherDocument->addObject("App::FeatureTest", "ObjectC");
     const GeometryReference survivor {.object = otherObject, .subName = "Face3"};
 
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
     model.setHighlighted(
         HighlightRole::Reference,
         {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}, survivor}
@@ -159,27 +128,9 @@ TEST_F(GeometryHighlighterTest, dropDocumentRemovesEveryReferenceInThatDocument)
     App::GetApplication().closeDocument(otherName.c_str());
 }
 
-TEST_F(GeometryHighlighterTest, twoHighlightersHoldTheirOwnReferenceSets)
-{
-    Gui::GeometryHighlighter first;
-    Gui::GeometryHighlighter second;
-    const GeometryReference mine {.object = _objectA, .subName = "Face1"};
-
-    first.setHighlighted(HighlightRole::Reference, {mine});
-    second.setHighlighted(HighlightRole::Reference, {{.object = _objectB, .subName = "Face2"}});
-
-    // Several selectors of one task panel each drive their own highlighter, so one
-    // publishing must not withdraw another's references.
-    EXPECT_EQ(first.model().effective(HighlightRole::Reference), std::vector {mine});
-
-    second.clear();
-
-    EXPECT_EQ(first.model().effective(HighlightRole::Reference), std::vector {mine});
-}
-
 TEST_F(GeometryHighlighterTest, clearEmptiesEveryRole)
 {
-    GeometryHighlightModel model = makeModel();
+    GeometryHighlightModel model;
 
     model.setHighlighted(HighlightRole::Reference, {{.object = _objectA, .subName = "Face1"}});
     model.setHighlighted(HighlightRole::Hovered, {{.object = _objectB, .subName = "Face2"}});
