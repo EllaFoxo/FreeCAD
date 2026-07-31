@@ -311,12 +311,19 @@ void GeometrySelection::onSelectionChanged(const Gui::SelectionChanges& msg)
     Q_EMIT pickSelectionChanged(msg);
     if (msg.Type == Gui::SelectionChanges::ClrSelection) {
         scheduleConfirmOnClear();
+        // The seeded references have just left the 3D selection, so nothing is painting
+        // them any more; the Reference role has to take them back over at once rather
+        // than wait for the deferred confirm.
+        refreshHighlight();
         return;
     }
     // Any other change belongs to an active pick, so cancel a pending empty-space confirm.
     _confirmOnClearPending = false;
     if (msg.Type == Gui::SelectionChanges::RmvSelection) {
         handleDeselect(msg);
+        // Whatever the deselect did to the references, one of them is no longer painted
+        // by the 3D selection, so what the Reference role owes has changed.
+        refreshHighlight();
         return;
     }
     if (msg.Type != Gui::SelectionChanges::AddSelection) {
