@@ -14,6 +14,7 @@
 
 #include <App/DocumentObserver.h>
 #include <FCGlobal.h>
+#include <Gui/GeometryReference.h>
 #include <Gui/GeometrySelectionGate.h>
 #include <Gui/Selection/Selection.h>
 
@@ -39,18 +40,6 @@ enum class GeometryQuantity
     Single,         // exactly one reference
     AllowMultiple,  // intent is one; Ctrl-pick forces more
     // Multiple is a separate future widget that reuses this core.
-};
-
-/// One picked reference: a whole object (empty subName) or one of its subelements.
-struct GuiExport GeometryReference
-{
-    App::DocumentObject* object = nullptr;
-    std::string subName;
-
-    bool operator==(const GeometryReference& other) const
-    {
-        return object == other.object && subName == other.subName;
-    }
 };
 
 /**

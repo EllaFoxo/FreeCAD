@@ -1221,6 +1221,7 @@ SET(Widget_HPP_SRCS
     ElideCheckBox.h
     FontScaledSVG.h
     SplitButton.h
+    GeometryReference.h
     GeometrySelection.h
     GeometrySelectionGate.h
     GeometrySelectorWidget.h
