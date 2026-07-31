@@ -166,12 +166,6 @@ public:
             msg(Gui::SelectionChanges::RmvSelection, docName.c_str(), objectName, subName);
         onSelectionChanged(msg);
     }
-
-    void simulateClear(const std::string& docName)
-    {
-        Gui::SelectionChanges msg(Gui::SelectionChanges::ClrSelection, docName.c_str());
-        onSelectionChanged(msg);
-    }
 };
 
 class AppendingSelection: public PickableSelection
@@ -449,70 +443,6 @@ TEST_F(GeometrySelectionTest, setHoveredReferenceIgnoresAnOutOfRangeIndex)
     selection.setHoveredReference(7);
 
     EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Hovered).empty());
-}
-
-// Seeding is what normally changes the effective Reference set at a session boundary,
-// but it needs a live Gui::Application. Emptying the role behind the selection's back
-// stands in for it: only a republish from the boundary itself can put it back.
-TEST_F(GeometrySelectionTest, enteringSelectionModeRefreshesTheHighlight)
-{
-    GeometrySelection selection(GeometryQuantity::AllowMultiple);
-    selection.setReferences({{.object = _objectA, .subName = ""}, {.object = _objectB, .subName = ""}});
-    selection.highlighter()->clear(Gui::HighlightRole::Reference);
-    ASSERT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).empty());
-
-    selection.startSelecting();
-
-    EXPECT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).size(), 2U);
-
-    selection.stopSelecting();
-}
-
-TEST_F(GeometrySelectionTest, leavingSelectionModeRefreshesTheHighlight)
-{
-    GeometrySelection selection(GeometryQuantity::AllowMultiple);
-    selection.setReferences({{.object = _objectA, .subName = ""}, {.object = _objectB, .subName = ""}});
-    selection.startSelecting();
-    selection.highlighter()->clear(Gui::HighlightRole::Reference);
-    ASSERT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).empty());
-
-    selection.stopSelecting();
-
-    EXPECT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).size(), 2U);
-}
-
-TEST_F(GeometrySelectionTest, clearingTheViewportSelectionRefreshesTheHighlight)
-{
-    PickableSelection selection(GeometryQuantity::AllowMultiple);
-    selection.setReferences({{.object = _objectA, .subName = ""}, {.object = _objectB, .subName = ""}});
-    selection.startSelecting();
-    // Stands in for the seeded selection having taken the references over.
-    selection.highlighter()->clear(Gui::HighlightRole::Reference);
-
-    // A click on empty space mid-session deselects them, so nothing paints them any
-    // more and the Reference role has to take them back at once — not when the
-    // deferred confirm eventually ends the session.
-    selection.simulateClear(_docName);
-
-    EXPECT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).size(), 2U);
-
-    selection.stopSelecting();
-}
-
-TEST_F(GeometrySelectionTest, viewportDeselectRefreshesTheHighlight)
-{
-    PickableSelection selection(GeometryQuantity::AllowMultiple);
-    selection.setReferences({{.object = _objectA, .subName = ""}});
-    selection.startSelecting();
-    selection.highlighter()->clear(Gui::HighlightRole::Reference);
-
-    // A deselect matching no reference leaves the model alone, but it still changes
-    // what the 3D selection paints, so the Reference role is republished anyway.
-    selection.simulateDeselect(_docName, _objectB->getNameInDocument());
-
-    EXPECT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).size(), 1U);
-
-    selection.stopSelecting();
 }
 
 TEST_F(GeometrySelectionTest, clearingReferencesClearsTheHighlight)

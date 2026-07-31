@@ -186,9 +186,8 @@ private:
 
     std::unique_ptr<GeometryHighlighter> _highlighter;
 
-    /// Republishes the current references to the highlighter. Called whenever the
-    /// model changes and whenever a session boundary changes what is selected,
-    /// since selected references are highlighted by the selection instead.
+    /// Republishes the current references to the highlighter, re-resolving the
+    /// hover against them. Called on every change to the reference model.
     void refreshHighlight();
     /// The hovered position, or -1. Held so a reference change can re-resolve it.
     int _hoveredIndex = -1;
