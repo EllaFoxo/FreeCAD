@@ -238,8 +238,8 @@ void GeometryHighlighter::refresh()
     const std::map<App::Document*, ReferencesByRole> byDocument = groupByDocument(_model);
 
     std::set<App::Document*> documents;
-    for (const auto& [document, references] : byDocument) {
-        documents.insert(document);
+    for (const auto& entry : byDocument) {
+        documents.insert(entry.first);
     }
     // Withdraw before anything below can bail out, so a clear() never strands an
     // annotation in a view.
