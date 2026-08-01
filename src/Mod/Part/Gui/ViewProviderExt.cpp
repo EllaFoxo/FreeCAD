@@ -109,6 +109,34 @@ void hldbg(const std::string& message)
     static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
     stream << message << std::endl;  // flush every line: the process may be killed
 }
+
+/// Names @p edge in the element namespace of @p rendered — the namespace
+/// ViewProvider::getDetailPath() resolves against, and so the only one whose
+/// edges are actually in the scene graph. Empty when the rendered shape has no
+/// counterpart for the edge.
+std::vector<std::string> renderedEdgeNames(
+    const Part::TopoShape& rendered,
+    const TopTools_IndexedMapOfShape& edgeMap,
+    const TopoDS_Shape& edge
+)
+{
+    const int index = edgeMap.FindIndex(edge);
+    if (index > 0) {
+        return {"Edge" + std::to_string(index)};
+    }
+
+    // The edge belongs to a shape derived from what is rendered rather than to
+    // the rendered shape itself — a sketch's internal faces are built from split
+    // copies of its edges — so fall back to the geometric search the derived
+    // shape's own element mapping uses.
+    std::vector<std::string> names;
+    rendered.findSubShapesWithSharedVertex(
+        edge,
+        &names,
+        Data::SearchOption::CheckGeometry | Data::SearchOption::SingleResult
+    );
+    return names;
+}
 }  // namespace
 
 PROPERTY_SOURCE(PartGui::ViewProviderPartExt, Gui::ViewProviderGeometryObject)
@@ -689,106 +717,90 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
     std::ostringstream msg;
     std::string msgStr;
 
-    msg.str("");
     msg << "[HLDBG] getBoundaryElements: subName=" << (subName ? subName : "<null>");
     msgStr = msg.str();
     Base::Console().message("%s\n", msgStr.c_str());
     hldbg(msgStr);
 
-    if (!subName) {
-        msgStr = "[HLDBG]   returning early: subName is null";
+    if (!subName || !subName[0]) {
+        msgStr = "[HLDBG]   returning early: subName is null or empty";
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
         return {};
     }
 
-    // NEW DIAGNOSTIC 1: Log raw subName bytes quoted with length
-    msg.str("");
-    msg << "[HLDBG] getBoundaryElements raw subName='" << subName << "' len=" << std::strlen(subName);
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
+    try {
+        // Resolved through the object's own sub-element handling rather than parsed
+        // here, so an element name this class does not itself model - a sketch's
+        // InternalFace, say - resolves exactly as a plain Face does.
+        const Part::TopoShape element = Part::Feature::getTopoShape(
+            getObject(),
+            Part::ShapeOption::ResolveLink | Part::ShapeOption::Transform
+                | Part::ShapeOption::NeedSubElement,
+            subName
+        );
+        if (element.isNull() || element.getShape().ShapeType() != TopAbs_FACE) {
+            msg.str("");
+            msg << "[HLDBG]   returning early: not a face (null=" << (element.isNull() ? 1 : 0)
+                << ")";
+            msgStr = msg.str();
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+            return {};
+        }
 
-    auto [elementType, elementIndex] = Part::TopoShape::getElementTypeAndIndex(subName);
-    msg.str("");
-    msg << "[HLDBG]   parsed: type=" << elementType << ", index=" << elementIndex;
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
+        const Part::TopoShape rendered = getRenderedShape();
+        if (rendered.isNull()) {
+            msgStr = "[HLDBG]   returning early: rendered shape is null";
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+            return {};
+        }
 
-    if (elementType != "Face" || elementIndex == 0) {
+        TopTools_IndexedMapOfShape edgeMap;
+        TopExp::MapShapes(rendered.getShape(), TopAbs_EDGE, edgeMap);
+
+        std::vector<std::string> boundaryElements;
+        for (TopExp_Explorer explorer(element.getShape(), TopAbs_EDGE); explorer.More();
+             explorer.Next()) {
+            for (std::string& name : renderedEdgeNames(rendered, edgeMap, explorer.Current())) {
+                if (std::ranges::find(boundaryElements, name) == boundaryElements.end()) {
+                    boundaryElements.push_back(std::move(name));
+                }
+            }
+        }
+
+        std::string edgeList;
+        for (const std::string& name : boundaryElements) {
+            if (!edgeList.empty()) {
+                edgeList += ",";
+            }
+            edgeList += name;
+        }
         msg.str("");
-        msg << "[HLDBG]   returning early: not a face or index==0 (type=" << elementType
-            << ", index=" << elementIndex << ")";
+        msg << "[HLDBG]   success: edgeMapExtent=" << edgeMap.Extent() << ", edges=[" << edgeList
+            << "], count=" << boundaryElements.size();
         msgStr = msg.str();
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
-        return {};
+
+        return boundaryElements;
     }
-
-    TopoDS_Shape shape = getRenderedShape().getShape();
-
-    // NEW DIAGNOSTIC 2: Log shape null check and ShapeType() as integer
-    msg.str("");
-    msg << "[HLDBG]   shape.IsNull()=" << (shape.IsNull() ? "true" : "false");
-    if (!shape.IsNull()) {
-        msg << ", ShapeType()=" << static_cast<int>(shape.ShapeType());
-    }
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
-    if (shape.IsNull()) {
-        msgStr = "[HLDBG]   returning early: shape is null";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-        return {};
-    }
-
-    TopTools_IndexedMapOfShape faceMap;
-    TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
-    if (static_cast<int>(elementIndex) > faceMap.Extent()) {
+    catch (const Base::Exception& exception) {
         msg.str("");
-        msg << "[HLDBG]   returning early: index out of range (index=" << elementIndex
-            << ", faceCount=" << faceMap.Extent() << ")";
+        msg << "[HLDBG]   returning early: " << exception.what();
         msgStr = msg.str();
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
-        return {};
     }
-
-    TopTools_IndexedMapOfShape edgeMap;
-    TopExp::MapShapes(shape, TopAbs_EDGE, edgeMap);
-
-    std::vector<std::string> boundaryElements;
-    const TopoDS_Shape& face = faceMap.FindKey(static_cast<int>(elementIndex));
-    for (TopExp_Explorer explorer(face, TopAbs_EDGE); explorer.More(); explorer.Next()) {
-        int edgeIndex = edgeMap.FindIndex(explorer.Current());
-        if (edgeIndex <= 0) {
-            continue;
-        }
-        std::string edgeName = "Edge" + std::to_string(edgeIndex);
-        if (std::ranges::find(boundaryElements, edgeName) == boundaryElements.end()) {
-            boundaryElements.push_back(std::move(edgeName));
-        }
+    catch (const Standard_Failure& failure) {
+        msg.str("");
+        msg << "[HLDBG]   returning early: " << failure.GetMessageString();
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
     }
-
-    std::string edgeList;
-    for (size_t i = 0; i < boundaryElements.size(); ++i) {
-        if (i > 0) {
-            edgeList += ",";
-        }
-        edgeList += boundaryElements[i];
-    }
-    msg.str("");
-    msg << "[HLDBG]   success: faceMapExtent=" << faceMap.Extent()
-        << ", edgeMapExtent=" << edgeMap.Extent() << ", edges=[" << edgeList
-        << "], count=" << boundaryElements.size();
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
-    return boundaryElements;
+    return {};
 }
 
 void ViewProviderPartExt::setHighlightedFaces(const std::vector<App::Material>& materials)
