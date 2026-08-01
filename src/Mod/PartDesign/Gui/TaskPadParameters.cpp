@@ -76,13 +76,9 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
 
     // While picking a profile, hide this Pad's transparent result preview and its
     // final solid so the profile is selected against the geometry that precedes it
-    // (the visibility swap DressUp/Fillet use). The profile preview and the geometry
-    // highlighter are complementary here, not duplicates: a sketch carries no face
-    // geometry in the scene graph, so the highlighter — which only re-renders nodes
-    // that already exist — can never draw a sketch profile as anything but bare wires.
-    // The filled face comes from the profile preview, which reconstructs it. The
-    // highlighter in turn marks whichever reference is committed, and covers the faces
-    // and edges of real solids that the profile preview cannot show at all. The prior
+    // (the visibility swap DressUp/Fillet use). The profile preview is left off too:
+    // during a pick session the geometry highlighter's overlay is what tells the user
+    // which reference is selected, so nothing else needs to draw the profile. The prior
     // visibility is snapshotted and restored on exit so the Preview box's own
     // checkboxes are respected.
     connect(core, &Gui::GeometrySelection::selectionModeEntered, this, [this] {
@@ -94,8 +90,6 @@ TaskPadParameters::TaskPadParameters(ViewProviderPad* PadView, QWidget* parent, 
         finalShownBeforeSelecting = viewObject->isVisible();
         viewObject->showPreview(false);
         viewObject->showPreviousFeature(true);
-        // After showPreview(), which drags the profile down with it.
-        viewObject->showProfile(true);
     });
     connect(core, &Gui::GeometrySelection::selectionModeExited, this, [this] {
         auto* viewObject = getViewObject<PartDesignGui::ViewProviderSketchBased>();
