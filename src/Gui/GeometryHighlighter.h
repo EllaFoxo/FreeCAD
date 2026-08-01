@@ -3,6 +3,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -10,6 +11,8 @@
 #include <fastsignals/signal.h>
 
 #include <App/DocumentObserver.h>
+#include <App/PropertyOverrides.h>
+#include <App/PropertyStandard.h>
 #include <FCGlobal.h>
 #include <Gui/GeometryReference.h>
 
@@ -53,13 +56,14 @@ private:
 };
 
 /**
- * Keeps a set of hidden objects revealed for exactly as long as someone needs them.
+ * Keeps a set of objects revealed for exactly as long as someone needs them.
  *
  * The whole revealed set is declared in one call rather than adjusted object by
  * object, so whatever drops out of it is restored in the same breath. Every reveal
- * is an RAII guard, so restoration happens on every path out — including
- * destruction — and cannot be forgotten. An object deleted while revealed is
- * skipped rather than restored.
+ * is an RAII property override, so restoration happens on every path out —
+ * including destruction — and cannot be forgotten. An object already visible is
+ * governed like any other: the override puts back whatever it found, so revealing
+ * it is a no-op rather than a state change nobody undoes.
  */
 class GuiExport HighlightVisibility
 {
@@ -68,8 +72,8 @@ public:
 
     FC_DISABLE_COPY_MOVE(HighlightVisibility)
 
-    /// Reveals every hidden object among @p objects and restores every one this
-    /// revealed earlier that @p objects no longer lists.
+    /// Reveals every object among @p objects and restores every one this revealed
+    /// earlier that @p objects no longer lists.
     void setRevealed(const std::vector<App::DocumentObject*>& objects);
 
 private:
@@ -84,10 +88,11 @@ private:
         FC_DISABLE_COPY_MOVE(Override)
 
     private:
-        /// Held weakly: an object deleted meanwhile resolves to null and is skipped
-        /// instead of dereferenced.
+        /// Held weakly: an object deleted meanwhile resolves to null, and the
+        /// override is then abandoned rather than written back through a property
+        /// that died with it.
         App::DocumentObjectWeakPtrT _object;
-        bool _previous = false;
+        std::optional<App::ScopedPropertyOverride<App::PropertyBool>> _visible;
     };
 
     /// One entry per object this revealed; erasing an entry restores it. The key is
@@ -103,8 +108,8 @@ private:
  * none of them touches the application selection. Highlighting a reference
  * never rebuilds geometry — it re-renders the nodes already in the scene.
  *
- * A hidden object is revealed for as long as it is highlighted, and returned to
- * hidden as soon as it is not.
+ * An object is held visible for as long as it is highlighted, and returned to
+ * whatever visibility it had as soon as it is not.
  */
 class GuiExport GeometryHighlighter: public QObject
 {

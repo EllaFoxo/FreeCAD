@@ -122,39 +122,32 @@ ViewProviderDocumentObject* viewProviderOf(const App::DocumentObject* object)
 HighlightVisibility::Override::Override(App::DocumentObject* object)
     : _object(object)
 {
-    auto* viewProvider = viewProviderOf(object);
-    if (!viewProvider) {
-        return;
+    if (auto* viewProvider = viewProviderOf(object)) {
+        _visible.emplace(viewProvider->Visibility, true);
     }
-    _previous = viewProvider->Visibility.getValue();
-    viewProvider->Visibility.setValue(true);
 }
 
 HighlightVisibility::Override::~Override()
 {
-    // Resolved through the weak pointer rather than cached across the guard's
-    // lifetime: a null resolve means the object was deleted meanwhile, so there is
-    // nothing left to restore and nothing safe to dereference.
-    if (auto* viewProvider = viewProviderOf(_object.get<App::DocumentObject>())) {
-        viewProvider->Visibility.setValue(_previous);
+    // The override restores through a raw pointer to the property, so it may only run
+    // while the object owning that property is alive. A null resolve means the object
+    // was deleted meanwhile: the override is abandoned, leaving nothing to write to.
+    if (_visible && _object.expired()) {
+        _visible->release();
     }
 }
 
 void HighlightVisibility::setRevealed(const std::vector<App::DocumentObject*>& objects)
 {
     // Settle the outgoing set before taking on the new one: erasing an entry destroys
-    // its guard, and that is what restores the object.
+    // its override, and that is what restores the object.
     std::erase_if(_revealed, [&objects](const auto& entry) {
         return std::ranges::find(objects, entry.first) == objects.end();
     });
 
+    // Every object is governed, whatever its visibility: the override puts back what
+    // it found, so one that was already visible stays visible afterwards.
     for (App::DocumentObject* object : objects) {
-        auto* viewProvider = viewProviderOf(object);
-        // An object that is already visible is left ungoverned, so that hiding it
-        // while it is highlighted sticks instead of being undone on restore.
-        if (!viewProvider || viewProvider->Visibility.getValue()) {
-            continue;
-        }
         _revealed.try_emplace(object, object);
     }
 }

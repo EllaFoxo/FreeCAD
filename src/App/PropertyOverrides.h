@@ -174,6 +174,19 @@ public:
         return _active;
     }
 
+    /**
+     * @brief Abandons the override.
+     *
+     * The property keeps the overridden value: it is not restored now, nor when the
+     * guard is destroyed. Use it when the property must not be written to any more,
+     * for instance because the object owning it is about to go away.
+     */
+    void release() noexcept
+    {
+        _prop = nullptr;
+        _active = false;
+    }
+
 private:
     void restore() noexcept
     {
