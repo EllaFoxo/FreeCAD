@@ -812,6 +812,7 @@ protected:
     //@{
     /// get called by the container whenever a property has been changed
     void onChanged(const App::Property* prop) override;
+    void onTemporaryVisibilityChanged(bool visible) override;
     //@}
 
     /// hook after property restoring to change some property statuses

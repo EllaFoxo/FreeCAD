@@ -3935,6 +3935,16 @@ void ViewProviderSketch::onChanged(const App::Property* prop)
     }
 }
 
+void SketcherGui::ViewProviderSketch::onTemporaryVisibilityChanged(bool visible)
+{
+    ViewProvider2DObject::onTemporaryVisibilityChanged(visible);
+
+    // The faces hang off the annotation node, outside the mode switch, so moving the
+    // switch never reaches them. Ending the reveal restores what onChanged() would have
+    // set, which is Visibility as it stands now.
+    pcSketchFacesToggle->on = visible || Visibility.getValue();
+}
+
 void SketcherGui::ViewProviderSketch::updateColorPropertiesVisibility()
 {
     auto usesAutomaticColors = AutoColor.getValue();
