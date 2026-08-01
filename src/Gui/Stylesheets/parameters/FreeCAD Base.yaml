@@ -302,8 +302,8 @@ DocumentTreeItemBorderRadius: "@BaseRadius.medium"
 DocumentTreeItemBorderThickness: 1px
 DocumentTreeItemBorderColor: "@BaseBorderColor"
 
-DocumentTreeItemPadding: "padding(horizontal: @Spacing.100, vertical: 3px)"
-DocumentTreeItemMargin: "padding(0, vertical: @Spacing.050)"
+DocumentTreeItemPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
+DocumentTreeItemSpacing: "@Spacing.100"
 
 DocumentTreeItemHoveredBackgroundEffect: "effect(lighten: 0.05)"
 

@@ -1034,7 +1034,10 @@ void FreeCADStyle::drawPrimitive(
         }
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
-        paintBox(painter, option->rect, context);
+        const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(context);
+        const QRect itemRect = option->rect.adjusted(0, 0, 0, -itemGeometry.spacing);
+
+        paintBox(painter, itemRect, context);
 
         return;
     }
