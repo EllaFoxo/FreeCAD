@@ -4112,6 +4112,19 @@ std::vector<std::pair<std::string, std::string>> ViewProviderSketch::getRelatedE
     return result;
 }
 
+/// The element @p subname names in the sketch's internal namespace, with the
+/// namespace prefix stripped. Null when @p subname names an ordinary element.
+static const char* internalElementName(const char* subname)
+{
+    if (!subname) {
+        return nullptr;
+    }
+
+    const char* lastPart = strrchr(subname, '.');
+
+    return SketchObject::convertInternalName(lastPart ? lastPart + 1 : subname);
+}
+
 bool ViewProviderSketch::getDetailPath(
     const char* subname,
     SoFullPath* pPath,
@@ -4119,16 +4132,8 @@ bool ViewProviderSketch::getDetailPath(
     SoDetail*& det
 ) const
 {
-    const auto getLastPartOfName = [](const char* subname) -> const char* {
-        const char* realName = strrchr(subname, '.');
-
-        return realName ? realName + 1 : subname;
-    };
-
-    if (!isInEditMode() && subname) {
-        const char* realName = getLastPartOfName(subname);
-
-        realName = SketchObject::convertInternalName(realName);
+    if (!isInEditMode()) {
+        const char* realName = internalElementName(subname);
         if (realName) {
             if (append) {
                 pPath->append(pcRoot);
@@ -4145,6 +4150,29 @@ bool ViewProviderSketch::getDetailPath(
     }
 
     return ViewProvider2DObject::getDetailPath(subname, pPath, append, det);
+}
+
+std::vector<std::string> ViewProviderSketch::getBoundaryElements(const char* subName) const
+{
+    const char* realName = internalElementName(subName);
+    if (!realName) {
+        return ViewProvider2DObject::getBoundaryElements(subName);
+    }
+
+    // An internal face is made from the sketch curves split at their intersections,
+    // so its boundary edges exist only in the internal shape. Naming them there is
+    // what getDetailPath() resolves against, and it is also what makes the outline
+    // follow the trimmed fragments rather than the whole curves.
+    const Part::TopoShape& internalShape = getSketchObject()->InternalShape.getShape();
+    if (internalShape.isNull()) {
+        return {};
+    }
+
+    return boundaryEdgeNames(
+        internalShape.getSubShape(realName, /*silent*/ true),
+        internalShape.getShape(),
+        SketchObject::internalPrefix()
+    );
 }
 // clang-format off
 

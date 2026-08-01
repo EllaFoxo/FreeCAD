@@ -825,6 +825,8 @@ protected:
         const SbVec3f& pickPoint
     ) const override;
     bool getDetailPath(const char* subname, SoFullPath* pPath, bool append, SoDetail*& det) const override;
+    /// For an internal face, its bounding internal edges; delegated for anything else.
+    std::vector<std::string> getBoundaryElements(const char* subName) const override;
 
     Base::BoundBox3d _getBoundingBox(
         const char* subname = nullptr,
