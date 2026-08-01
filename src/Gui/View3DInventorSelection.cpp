@@ -418,21 +418,59 @@ void View3DInventorSelection::addHighlight(
     const char* subName
 )
 {
+    const char* roleName = highlightRoleName(role);
+    const char* displaySubName = (subName && subName[0]) ? subName : "<whole-object>";
+    const char* objName = object ? object->getNameInDocument() : "<null>";
+    Base::Console().message(
+        "[HLDBG] addHighlight: role=%s, subName=%s, object=%s\n",
+        roleName,
+        displaySubName,
+        objName
+    );
+
     HighlightRoleNodes* nodes = highlightRole(role);
-    if (!nodes || !object || !object->isAttachedToDocument() || !Application::Instance) {
+    if (!nodes) {
+        Base::Console().message("[HLDBG]   returning early: highlightRole returned null\n");
         return;
     }
+    if (!object) {
+        Base::Console().message("[HLDBG]   returning early: object is null\n");
+        return;
+    }
+    if (!object->isAttachedToDocument()) {
+        Base::Console().message("[HLDBG]   returning early: object not attached to document\n");
+        return;
+    }
+    if (!Application::Instance) {
+        Base::Console().message("[HLDBG]   returning early: Application::Instance is null\n");
+        return;
+    }
+
     auto vp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(object));
+    if (!vp) {
+        Base::Console().message("[HLDBG]   returning early: no view provider\n");
+        return;
+    }
     // A hidden object contributes nothing: the stored path runs through its mode
     // switch, and Coin's in-path traversal honours whichChild.
-    if (!vp || !vp->isSelectable() || !vp->isShow()) {
+    if (!vp->isSelectable()) {
+        Base::Console().message("[HLDBG]   returning early: view provider not selectable\n");
+        return;
+    }
+    if (!vp->isShow()) {
+        Base::Console().message("[HLDBG]   returning early: view provider not shown\n");
         return;
     }
     // Public API, so the document is checked rather than assumed. An annotation holds
     // a path into its own document's scene graph; hung under another document's viewer
     // it would render that document's geometry here and expose its nodes to this
     // viewer's traversals.
-    if (!guiDocument || vp->getDocument() != guiDocument) {
+    if (!guiDocument) {
+        Base::Console().message("[HLDBG]   returning early: guiDocument is null\n");
+        return;
+    }
+    if (vp->getDocument() != guiDocument) {
+        Base::Console().message("[HLDBG]   returning early: document mismatch\n");
         return;
     }
 
@@ -441,7 +479,15 @@ void View3DInventorSelection::addHighlight(
     // same owner and role, so a highlighted face still reads as a face rather than a
     // bare patch.
     addHighlightElement(*nodes, owner, *vp, subName);
-    for (const std::string& boundaryElement : vp->getBoundaryElements(subName)) {
+    auto boundaryElements = vp->getBoundaryElements(subName);
+    Base::Console().message(
+        "[HLDBG]   getBoundaryElements returned %zu elements\n",
+        boundaryElements.size()
+    );
+    for (size_t i = 0; i < boundaryElements.size(); ++i) {
+        Base::Console().message("[HLDBG]     [%zu]: %s\n", i, boundaryElements[i].c_str());
+    }
+    for (const std::string& boundaryElement : boundaryElements) {
         addHighlightElement(*nodes, owner, *vp, boundaryElement.c_str());
     }
 }
@@ -453,31 +499,50 @@ void View3DInventorSelection::addHighlightElement(
     const char* subName
 )
 {
+    Base::Console().message("[HLDBG] addHighlightElement: subName=%s\n", subName ? subName : "<null>");
+
     SoTempPath path(10);
     path.ref();
     if (!appendGroupPath(&vp, path)) {
+        Base::Console().message("[HLDBG]   appendGroupPath failed\n");
         path.unrefNoDelete();
         return;
     }
+    Base::Console().message("[HLDBG]   appendGroupPath succeeded\n");
 
     SoDetail* det = nullptr;
     // The annotation holds a plain SoPath into the view provider's live nodes. A
     // recompute that rebuilds that scene graph makes Coin's path auditing truncate the
     // path rather than leave it dangling, so the highlight silently stops rendering
     // until the next refresh. checkGroupOnTop() has exactly the same exposure.
-    if (vp.getDetailPath(subName, &path, true, det) && path.getLength()) {
+    bool detailPathResult = vp.getDetailPath(subName, &path, true, det);
+    int pathLength = path.getLength();
+    Base::Console().message(
+        "[HLDBG]   getDetailPath returned %s, path.getLength()=%d, det=%s\n",
+        detailPathResult ? "true" : "false",
+        pathLength,
+        det ? "non-null" : "null"
+    );
+    if (det) {
+        Base::Console().message("[HLDBG]   det type: %s\n", det->getTypeId().getName().getString());
+    }
+
+    if (detailPathResult && pathLength) {
         auto grp = highlightOwnerGroup(nodes, owner);
         auto node = new SoFCPathAnnotation;
         node->setPath(&path);
         grp->addChild(node);
+        Base::Console().message("[HLDBG]   created SoFCPathAnnotation and added to group\n");
 
         // The colour rides in the secondary selection context rather than an
         // overriding material, because that is what narrows the render to the
         // detail; an override material would repaint the whole object.
+        const char* actionType = det ? "Append" : "All";
         SoSelectionElementAction action(
             det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
             true
         );
+        Base::Console().message("[HLDBG]   applying SoSelectionElementAction: %s\n", actionType);
         action.setColor(nodes.color);
         action.setElement(det);
 

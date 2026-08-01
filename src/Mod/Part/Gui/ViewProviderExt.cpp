@@ -675,23 +675,39 @@ std::vector<Base::Vector3d> ViewProviderPartExt::getSelectionShape(const char* /
 
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
+    Base::Console().message("[HLDBG] getBoundaryElements: subName=%s\n", subName ? subName : "<null>");
+
     if (!subName) {
+        Base::Console().message("[HLDBG]   returning early: subName is null\n");
         return {};
     }
 
     auto [elementType, elementIndex] = Part::TopoShape::getElementTypeAndIndex(subName);
+    Base::Console().message("[HLDBG]   parsed: type=%s, index=%d\n", elementType.c_str(), elementIndex);
+
     if (elementType != "Face" || elementIndex == 0) {
+        Base::Console().message(
+            "[HLDBG]   returning early: not a face or index==0 (type=%s, index=%d)\n",
+            elementType.c_str(),
+            elementIndex
+        );
         return {};
     }
 
     TopoDS_Shape shape = getRenderedShape().getShape();
     if (shape.IsNull()) {
+        Base::Console().message("[HLDBG]   returning early: shape is null\n");
         return {};
     }
 
     TopTools_IndexedMapOfShape faceMap;
     TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
     if (static_cast<int>(elementIndex) > faceMap.Extent()) {
+        Base::Console().message(
+            "[HLDBG]   returning early: index out of range (index=%d, faceCount=%d)\n",
+            elementIndex,
+            faceMap.Extent()
+        );
         return {};
     }
 
@@ -710,6 +726,22 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
             boundaryElements.push_back(std::move(edgeName));
         }
     }
+
+    std::string edgeList;
+    for (size_t i = 0; i < boundaryElements.size(); ++i) {
+        if (i > 0) {
+            edgeList += ",";
+        }
+        edgeList += boundaryElements[i];
+    }
+    Base::Console().message(
+        "[HLDBG]   success: faceMapExtent=%d, edgeMapExtent=%d, edges=[%s], count=%zu\n",
+        faceMap.Extent(),
+        edgeMap.Extent(),
+        edgeList.c_str(),
+        boundaryElements.size()
+    );
+
     return boundaryElements;
 }
 
