@@ -496,6 +496,18 @@ void ViewProviderPartExt::onChanged(const App::Property* prop)
     ViewProviderGeometryObject::onChanged(prop);
 }
 
+void ViewProviderPartExt::onTemporaryVisibilityChanged(bool visible)
+{
+    // A shape recomputed while hidden has no visual yet - updateData() defers building one
+    // until the object is shown - so a reveal that only moved the mode switch would put an
+    // empty node in front of the user.
+    if (visible && VisualTouched) {
+        updateVisual();
+    }
+
+    ViewProviderGeometryObject::onTemporaryVisibilityChanged(visible);
+}
+
 bool ViewProviderPartExt::allowOverride(const App::DocumentObject&) const
 {
     // Many derived view providers still uses static_cast to get object

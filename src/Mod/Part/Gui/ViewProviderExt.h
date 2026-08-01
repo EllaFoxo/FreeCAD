@@ -210,6 +210,7 @@ protected:
 protected:
     /// get called by the container whenever a property has been changed
     void onChanged(const App::Property* prop) override;
+    void onTemporaryVisibilityChanged(bool visible) override;
     bool loadParameter();
     void updateVisual();
     void handleChangedPropertyName(
