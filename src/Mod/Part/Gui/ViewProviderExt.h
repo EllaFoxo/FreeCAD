@@ -28,6 +28,7 @@
 
 
 #include <map>
+#include <string_view>
 
 #include <App/PropertyUnits.h>
 #include <Gui/ViewProviderGeometryObject.h>
@@ -200,6 +201,16 @@ public:
         double deviation,
         double angularDeflection,
         bool normalsFromUV = false
+    );
+
+protected:
+    /// Names the edges bounding @p face in @p owner's edge index namespace, each
+    /// name carrying @p prefix. @p owner must be the shape whose namespace this
+    /// provider's getDetailPath() resolves against, so that the names round-trip.
+    static std::vector<std::string> boundaryEdgeNames(
+        const TopoDS_Shape& face,
+        const TopoDS_Shape& owner,
+        std::string_view prefix
     );
 
 protected:

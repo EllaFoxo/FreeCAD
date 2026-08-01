@@ -110,33 +110,6 @@ void hldbg(const std::string& message)
     stream << message << std::endl;  // flush every line: the process may be killed
 }
 
-/// Names @p edge in the element namespace of @p rendered — the namespace
-/// ViewProvider::getDetailPath() resolves against, and so the only one whose
-/// edges are actually in the scene graph. Empty when the rendered shape has no
-/// counterpart for the edge.
-std::vector<std::string> renderedEdgeNames(
-    const Part::TopoShape& rendered,
-    const TopTools_IndexedMapOfShape& edgeMap,
-    const TopoDS_Shape& edge
-)
-{
-    const int index = edgeMap.FindIndex(edge);
-    if (index > 0) {
-        return {"Edge" + std::to_string(index)};
-    }
-
-    // The edge belongs to a shape derived from what is rendered rather than to
-    // the rendered shape itself — a sketch's internal faces are built from split
-    // copies of its edges — so fall back to the geometric search the derived
-    // shape's own element mapping uses.
-    std::vector<std::string> names;
-    rendered.findSubShapesWithSharedVertex(
-        edge,
-        &names,
-        Data::SearchOption::CheckGeometry | Data::SearchOption::SingleResult
-    );
-    return names;
-}
 }  // namespace
 
 PROPERTY_SOURCE(PartGui::ViewProviderPartExt, Gui::ViewProviderGeometryObject)
@@ -724,6 +697,35 @@ std::vector<Base::Vector3d> ViewProviderPartExt::getSelectionShape(const char* /
     return {};
 }
 
+std::vector<std::string> ViewProviderPartExt::boundaryEdgeNames(
+    const TopoDS_Shape& face,
+    const TopoDS_Shape& owner,
+    std::string_view prefix
+)
+{
+    if (face.IsNull() || owner.IsNull() || face.ShapeType() != TopAbs_FACE) {
+        return {};
+    }
+
+    TopTools_IndexedMapOfShape edgeMap;
+    TopExp::MapShapes(owner, TopAbs_EDGE, edgeMap);
+
+    std::vector<std::string> names;
+    for (TopExp_Explorer explorer(face, TopAbs_EDGE); explorer.More(); explorer.Next()) {
+        const int index = edgeMap.FindIndex(explorer.Current());
+        if (index <= 0) {
+            continue;
+        }
+
+        std::string name = std::string(prefix) + "Edge" + std::to_string(index);
+        if (std::ranges::find(names, name) == names.end()) {
+            names.push_back(std::move(name));
+        }
+    }
+
+    return names;
+}
+
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
     std::ostringstream msg;
@@ -769,18 +771,10 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
             return {};
         }
 
-        TopTools_IndexedMapOfShape edgeMap;
-        TopExp::MapShapes(rendered.getShape(), TopAbs_EDGE, edgeMap);
-
-        std::vector<std::string> boundaryElements;
-        for (TopExp_Explorer explorer(element.getShape(), TopAbs_EDGE); explorer.More();
-             explorer.Next()) {
-            for (std::string& name : renderedEdgeNames(rendered, edgeMap, explorer.Current())) {
-                if (std::ranges::find(boundaryElements, name) == boundaryElements.end()) {
-                    boundaryElements.push_back(std::move(name));
-                }
-            }
-        }
+        // The rendered shape is the namespace getDetailPath() resolves against, and
+        // the face is one of its own faces, so every boundary edge is in its map.
+        const std::vector<std::string> boundaryElements
+            = boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
 
         std::string edgeList;
         for (const std::string& name : boundaryElements) {
@@ -790,8 +784,7 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
             edgeList += name;
         }
         msg.str("");
-        msg << "[HLDBG]   success: edgeMapExtent=" << edgeMap.Extent() << ", edges=[" << edgeList
-            << "], count=" << boundaryElements.size();
+        msg << "[HLDBG]   success: edges=[" << edgeList << "], count=" << boundaryElements.size();
         msgStr = msg.str();
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
