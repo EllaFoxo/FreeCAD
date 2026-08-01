@@ -18,6 +18,7 @@ add_executable(Gui_tests_run
         SelectionTest.cpp
         GeometrySelectionTest.cpp
         GeometryHighlighterTest.cpp
+        TemporaryVisibilityTest.cpp
 )
 
 # Qt tests
