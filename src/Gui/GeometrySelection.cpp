@@ -145,6 +145,8 @@ void GeometrySelection::startSelecting()
     // Attach last, so the seeding picks above are not fed back into our own
     // onSelectionChanged().
     attachSelection();
+    // Observers just rebuilt the scene graph; invalidate highlight paths and rebuild annotations.
+    refreshHighlight();
 }
 
 void GeometrySelection::stopSelecting()
@@ -158,6 +160,9 @@ void GeometrySelection::stopSelecting()
         Gui::Selection().rmvSelectionGate();
     }
     Q_EMIT selectionModeExited();
+    // Observers just rebuilt the scene graph in reverse; invalidate highlight paths and rebuild
+    // annotations.
+    refreshHighlight();
 }
 
 void GeometrySelection::seedViewportSelection()
