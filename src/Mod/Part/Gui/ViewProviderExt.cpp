@@ -618,7 +618,7 @@ std::string ViewProviderPartExt::getElement(const SoDetail* detail) const
     return str.str();
 }
 
-SoDetail* ViewProviderPartExt::getDetail(const char* subelement) const
+SoDetail* ViewProviderPartExt::makeShapeDetail(const char* subelement, int pointStartIndex)
 {
     // 1. Try standard string parsing (FaceN, EdgeN...)
     auto type = Part::TopoShape::getElementTypeAndIndex(subelement);
@@ -638,13 +638,16 @@ SoDetail* ViewProviderPartExt::getDetail(const char* subelement) const
     }
     else if (element == "Vertex") {
         SoPointDetail* detail = new SoPointDetail();
-        static_cast<SoPointDetail*>(detail)->setCoordinateIndex(
-            index + nodeset->startIndex.getValue() - 1
-        );
+        detail->setCoordinateIndex(index + pointStartIndex - 1);
         return detail;
     }
 
     return nullptr;
+}
+
+SoDetail* ViewProviderPartExt::getDetail(const char* subelement) const
+{
+    return makeShapeDetail(subelement, nodeset->startIndex.getValue());
 }
 
 std::vector<Base::Vector3d> ViewProviderPartExt::getModelPoints(const SoPickedPoint* pp) const

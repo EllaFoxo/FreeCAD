@@ -34,6 +34,8 @@
 #include <Inventor/events/SoKeyboardEvent.h>
 #include <Inventor/lists/SoPickedPointList.h>
 #include <Inventor/nodes/SoCamera.h>
+#include <Inventor/nodes/SoDrawStyle.h>
+#include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/nodes/SoShapeHints.h>
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/nodes/SoTransform.h>
@@ -558,6 +560,30 @@ SoSketchFaces::SoSketchFaces(){
     SoSeparator::addChild(coords);
     SoSeparator::addChild(norm);
     SoSeparator::addChild(faceset);
+
+    // The internal edges and vertices are already tessellated on every recompute,
+    // and InternalEdge<n>/InternalVertex<n> resolve onto them. They must exist in
+    // the graph so a selection or highlight overlay can draw them, but they must
+    // not be drawn or picked on their own: they are a partition of the sketch's
+    // own curves, which are already rendered by the edit-mode nodes.
+    auto* overlayOnly = new SoSeparator;
+
+    auto* pickStyle = new SoPickStyle;
+    pickStyle->style = SoPickStyle::UNPICKABLE;
+    overlayOnly->addChild(pickStyle);
+
+    // Only the draw style is ours to force; leaving the remaining fields to the
+    // enclosing state keeps the overlay's line width, point size and pattern.
+    auto* drawStyle = new SoDrawStyle;
+    drawStyle->style = SoDrawStyle::INVISIBLE;
+    drawStyle->lineWidth.setIgnored(true);
+    drawStyle->pointSize.setIgnored(true);
+    drawStyle->linePattern.setIgnored(true);
+    overlayOnly->addChild(drawStyle);
+
+    overlayOnly->addChild(lineset);
+    overlayOnly->addChild(nodeset);
+    SoSeparator::addChild(overlayOnly);
 }
 
 void SoSketchFaces::initClass()
@@ -4104,17 +4130,16 @@ bool ViewProviderSketch::getDetailPath(
 
         realName = SketchObject::convertInternalName(realName);
         if (realName) {
-            auto len = pPath->getLength();
             if (append) {
                 pPath->append(pcRoot);
                 pPath->append(pcAnnotation);
                 pPath->append(pcSketchFacesToggle);
             }
 
-            if (!ViewProvider2DObject::getDetailPath(realName, pPath, false, det)) {
-                pPath->truncate(len);
-                return false;
-            }
+            // The internal shape is tessellated into its own node set, whose vertex
+            // coordinates start after its faces rather than after the rendered
+            // shape's, so the detail cannot come from the rendered shape's nodes.
+            det = makeShapeDetail(realName, pcSketchFaces->nodeset->startIndex.getValue());
             return true;
         }
     }

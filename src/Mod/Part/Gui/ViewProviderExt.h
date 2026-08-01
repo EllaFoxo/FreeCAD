@@ -204,6 +204,10 @@ public:
     );
 
 protected:
+    /// The Coin detail naming @p subelement of a shape whose vertex coordinates
+    /// begin at @p pointStartIndex. Null when @p subelement names no sub-element.
+    static SoDetail* makeShapeDetail(const char* subelement, int pointStartIndex);
+
     /// Names the edges bounding @p face in @p owner's edge index namespace, each
     /// name carrying @p prefix. @p owner must be the shape whose namespace this
     /// provider's getDetailPath() resolves against, so that the names round-trip.
