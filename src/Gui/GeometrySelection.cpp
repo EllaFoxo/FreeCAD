@@ -24,7 +24,22 @@
 #include "GeometrySelection.h"
 #include "GeometrySelectionGate.h"
 
+#include <fstream>
+#include <sstream>
+#include <Base/Console.h>
+
 using namespace Gui;
+
+namespace
+{
+// TEMPORARY diagnostics, reverted with the rest of the [HLDBG] instrumentation.
+void hldbg(const std::string& message)
+{
+    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
+    stream << message << std::endl;
+    Base::Console().message("%s\n", message.c_str());
+}
+}  // namespace
 
 GeometrySelection::GeometrySelection(GeometryQuantity mode, QObject* parent)
     : QObject(parent)
@@ -78,19 +93,38 @@ void GeometrySelection::clear()
 void GeometrySelection::setHoveredReference(int index)
 {
     const bool valid = index >= 0 && index < static_cast<int>(_references.size());
+    {
+        std::ostringstream message;
+        message << "[HLDBG] setHoveredReference index=" << index
+                << " references=" << _references.size() << " valid=" << (valid ? "yes" : "no");
+        hldbg(message.str());
+    }
     _hoveredIndex = valid ? index : -1;
     if (_hoveredIndex < 0) {
+        hldbg("[HLDBG]   hover cleared");
         _highlighter->clear(HighlightRole::Hovered);
         return;
     }
-    _highlighter->setHighlighted(
-        HighlightRole::Hovered,
-        {_references[static_cast<std::size_t>(_hoveredIndex)]}
-    );
+    const GeometryReference& hovered = _references[static_cast<std::size_t>(_hoveredIndex)];
+    {
+        std::ostringstream message;
+        message << "[HLDBG]   hover -> object="
+                << (hovered.object && hovered.object->getNameInDocument()
+                        ? hovered.object->getNameInDocument()
+                        : "<null>")
+                << " subName='" << hovered.subName << "'";
+        hldbg(message.str());
+    }
+    _highlighter->setHighlighted(HighlightRole::Hovered, {hovered});
 }
 
 void GeometrySelection::refreshHighlight()
 {
+    std::ostringstream message;
+    message << "[HLDBG] refreshHighlight references=" << _references.size()
+            << " hoveredIndex=" << _hoveredIndex << " selecting=" << (_selecting ? "yes" : "no");
+    hldbg(message.str());
+
     _highlighter->setHighlighted(HighlightRole::Reference, _references);
     // Re-resolve the hover against the new model; a removal can invalidate it.
     setHoveredReference(_hoveredIndex);
@@ -98,6 +132,12 @@ void GeometrySelection::refreshHighlight()
 
 void GeometrySelection::updateReferences(std::vector<GeometryReference> references)
 {
+    {
+        std::ostringstream message;
+        message << "[HLDBG] updateReferences from=" << _references.size()
+                << " to=" << references.size();
+        hldbg(message.str());
+    }
     _references = std::move(references);
     if (_autoApply && isBound()) {
         writeToProperty();
