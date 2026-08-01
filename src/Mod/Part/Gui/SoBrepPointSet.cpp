@@ -34,6 +34,7 @@
 #include <Inventor/details/SoPointDetail.h>
 #include <Inventor/elements/SoCoordinateElement.h>
 #include <Inventor/elements/SoDepthBufferElement.h>
+#include <Inventor/elements/SoDrawStyleElement.h>
 #include <Inventor/elements/SoLazyElement.h>
 #include <Inventor/elements/SoMaterialBindingElement.h>
 #include <Inventor/elements/SoOverrideElement.h>
@@ -95,6 +96,14 @@ static void applyOverlayPrimitiveState(SoState* state, SoNode* node)
 {
     if (!state || !node) {
         return;
+    }
+
+    // A highlight has to survive geometry that has been suppressed with an
+    // INVISIBLE draw style, because the overlay is the whole reason such a node
+    // is in the graph at all. Any other draw style is left alone, so nothing
+    // that renders its base geometry normally sees a change here.
+    if (SoDrawStyleElement::get(state) == SoDrawStyleElement::INVISIBLE) {
+        SoDrawStyleElement::set(state, node, SoDrawStyleElement::POINTS);
     }
 
     SoLazyElement::setLightModel(state, SoLazyElement::BASE_COLOR);
