@@ -4154,7 +4154,9 @@ bool ViewProviderSketch::getDetailPath(
 
 std::vector<std::string> ViewProviderSketch::getBoundaryElements(const char* subName) const
 {
-    const char* realName = internalElementName(subName);
+    // getDetailPath() resolves the internal namespace only outside edit mode, and a
+    // boundary element nobody can resolve is worse than none at all.
+    const char* realName = isInEditMode() ? nullptr : internalElementName(subName);
     if (!realName) {
         return ViewProvider2DObject::getBoundaryElements(subName);
     }
