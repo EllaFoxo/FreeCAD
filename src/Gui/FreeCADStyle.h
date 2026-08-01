@@ -431,6 +431,33 @@ protected:
      */
     void drawItemViewRow(QPainter* painter, const QStyleOptionViewItem* vopt, const QWidget* widget) const;
 
+    /**
+     * @brief Placement of the three parts of an item-view cell: check indicator, icon and text.
+     *
+     * Parts that the item does not have are left as null rects.
+     */
+    struct ItemViewLayout
+    {
+        QRect checkIndicator;
+        QRect decoration;
+        QRect text;
+    };
+
+    /**
+     * @brief Lays out the parts of an item-view cell from the Item token geometry.
+     *
+     * The outer inset comes from Padding and every gap between parts from IconSpacing, so
+     * item views space their icons on the same scale as the rest of the design system.
+     *
+     * Returns nullopt for cells this style does not describe — anything but a recognised
+     * item view, and the stacked (icon-mode) or word-wrapped arrangements, which keep
+     * Qt's own layout.
+     */
+    std::optional<ItemViewLayout> itemViewLayout(
+        const QStyleOptionViewItem* option,
+        const QWidget* widget
+    ) const;
+
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
@@ -693,6 +720,25 @@ private:
     QSize itemViewItemSizeFromContents(
         const QStyleOption* option,
         const QSize& size,
+        const QWidget* widget
+    ) const;
+
+    /** @brief Whether @p option describes a cell laid out by itemViewLayout(). */
+    bool ownsItemViewLayout(const QStyleOptionViewItem* option, const QWidget* widget) const;
+
+    /**
+     * @brief The gutter QCommonStyle puts around each part of an item-view cell.
+     *
+     * It insets the text rect by this before drawing and charges it per part in the cell's
+     * size hint, so both must be accounted for rather than suppressed — other styles in the
+     * chain may own a cell's layout and still rely on the metric.
+     */
+    int itemViewTextGutter(const QStyleOption* option, const QWidget* widget) const;
+
+    /** @brief Serves the SE_ItemViewItem* sub-elements from itemViewLayout(). */
+    QRect itemViewSubElementRect(
+        SubElement element,
+        const QStyleOption* option,
         const QWidget* widget
     ) const;
 

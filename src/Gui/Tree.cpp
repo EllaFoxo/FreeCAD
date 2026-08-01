@@ -367,25 +367,12 @@ TreeWidgetItemDelegate::TreeWidgetItemDelegate(QObject* parent)
 QRect TreeWidgetItemDelegate::calculateItemRect(const QStyleOptionViewItem& option) const
 {
     auto* tree = static_cast<TreeWidget*>(parent());
-    auto* fcStyle = Application::Instance->freeCADStyle();
+    auto* fcStyle = static_cast<QStyle*>(Application::Instance->freeCADStyle());
 
-    using namespace StyleParameters;
-    const StyleContext context = FreeCADStyle::contextOf(tree, &option, StyleComponentElement::Item);
-    const FreeCADStyle::BoxGeometryDefinition geometry = fcStyle->resolveBoxGeometry(context);
-
-    // QCommonStyle applies PM_FocusFrameHMargin inside the token-padding-shrunk content rect
-    // on both sides of the decoration+text block when computing SE_ItemViewItemText.
-    const int focusMargin = fcStyle->pixelMetric(QStyle::PM_FocusFrameHMargin, &option, tree);
-
-    int contentWidth = 4 * focusMargin + option.decorationSize.width() + geometry.iconSpacing
-        + option.fontMetrics.horizontalAdvance(option.text);
-
-    if (option.features & QStyleOptionViewItem::HasCheckIndicator) {
-        contentWidth += fcStyle->pixelMetric(QStyle::PM_IndicatorWidth, &option, tree)
-            + fcStyle->pixelMetric(QStyle::PM_LayoutHorizontalSpacing, &option, tree);
-    }
-
-    const int tightWidth = geometry.sizeFromContents(QSize(contentWidth, 0)).width();
+    // The style lays the cell out from the Item tokens, so ask it for the width that layout
+    // needs rather than re-deriving it here — the background box then hugs the content exactly.
+    const int tightWidth
+        = fcStyle->sizeFromContents(QStyle::CT_ItemViewItem, &option, QSize(), tree).width();
 
     QRect rect = option.rect;
     if (tightWidth < rect.width()) {
@@ -447,13 +434,12 @@ void TreeWidgetItemDelegate::initStyleOption(QStyleOptionViewItem* option, const
         option->state &= ~QStyle::State_MouseOver;
     }
 
-    QSize size = option->icon.actualSize(QSize(0xffff, 0xffff));
-
-    if (size.height() > 0) {
-        option->decorationSize = QSize(
-            size.width() * TreeWidget::getIconSize() / size.height(),
-            TreeWidget::getIconSize()
-        );
+    // Reserve exactly what the icon will paint at the tree's icon height. QIcon never upscales
+    // a pixmap icon, so deriving the width from a larger variant's aspect ratio would leave
+    // dead space on both sides of it.
+    const QSize iconSize = option->icon.actualSize(QSize(0xffff, TreeWidget::getIconSize()));
+    if (!iconSize.isEmpty()) {
+        option->decorationSize = iconSize;
     }
 }
 

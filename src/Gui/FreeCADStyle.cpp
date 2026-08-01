@@ -375,6 +375,19 @@ QIcon::State iconStateOf(const QStyleOption* option)
     return (option->state & QStyle::State_On) ? QIcon::On : QIcon::Off;
 }
 
+// The view an item-view style option belongs to; widget can be the viewport.
+const QWidget* itemViewOf(const QStyleOptionViewItem* option, const QWidget* widget)
+{
+    return option && option->widget ? option->widget : widget;
+}
+
+// How many of the three cell parts — check indicator, icon, text — this cell actually has.
+int itemViewPartCount(const QStyleOptionViewItem& option)
+{
+    return ((option.features & QStyleOptionViewItem::HasCheckIndicator) ? 1 : 0)
+        + ((option.features & QStyleOptionViewItem::HasDecoration) ? 1 : 0)
+        + ((option.features & QStyleOptionViewItem::HasDisplay) ? 1 : 0);
+}
 
 }  // namespace
 
@@ -962,6 +975,111 @@ void FreeCADStyle::drawItemViewRow(
     painter->restore();
 }
 
+bool FreeCADStyle::ownsItemViewLayout(const QStyleOptionViewItem* option, const QWidget* widget) const
+{
+    if (!option || !qobject_cast<const QAbstractItemView*>(widget)) {
+        return false;
+    }
+
+    // Icon-mode views stack the icon above the text and word-wrapped cells need Qt's line
+    // breaking — neither arrangement maps onto the token geometry, so both keep Qt's layout.
+    const bool isSideBySide = option->decorationPosition == QStyleOptionViewItem::Left
+        || option->decorationPosition == QStyleOptionViewItem::Right;
+    if (!isSideBySide || (option->features & QStyleOptionViewItem::WrapText)) {
+        return false;
+    }
+
+    return contextOf(widget, option, StyleComponentElement::Item).element
+        == StyleComponentElement::Item;
+}
+
+int FreeCADStyle::itemViewTextGutter(const QStyleOption* option, const QWidget* widget) const
+{
+    return pixelMetric(PM_FocusFrameHMargin, option, widget) + 1;
+}
+
+std::optional<FreeCADStyle::ItemViewLayout> FreeCADStyle::itemViewLayout(
+    const QStyleOptionViewItem* option,
+    const QWidget* widget
+) const
+{
+    if (!ownsItemViewLayout(option, widget)) {
+        return {};
+    }
+
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+
+    // The reserved inter-row gap belongs to the list background, not to the cell content.
+    const QRect content = geometry.contentRect(option->rect).adjusted(0, 0, 0, -geometry.spacing);
+
+    const auto centredAt = [&content](int left, const QSize& size) {
+        const int top = content.top() + ((content.height() - size.height()) / 2);
+        return QRect(QPoint(left, top), size);
+    };
+
+    ItemViewLayout layout;
+    int left = content.left();
+    int right = content.right();
+
+    if (option->features & QStyleOptionViewItem::HasCheckIndicator) {
+        const QSize indicatorSize(
+            pixelMetric(PM_IndicatorWidth, option, widget),
+            pixelMetric(PM_IndicatorHeight, option, widget)
+        );
+        layout.checkIndicator = centredAt(left, indicatorSize);
+        left = layout.checkIndicator.right() + 1 + geometry.iconSpacing;
+    }
+
+    if (option->features & QStyleOptionViewItem::HasDecoration) {
+        const QSize decorationSize = option->decorationSize;
+        if (option->decorationPosition == QStyleOptionViewItem::Left) {
+            layout.decoration = centredAt(left, decorationSize);
+            left = layout.decoration.right() + 1 + geometry.iconSpacing;
+        }
+        else {
+            layout.decoration = centredAt(right + 1 - decorationSize.width(), decorationSize);
+            right = layout.decoration.left() - 1 - geometry.iconSpacing;
+        }
+    }
+
+    // The text takes whatever is left; QCommonStyle elides it to fit. It insets the rect it is
+    // handed by one gutter on each side before drawing, so hand it a rect widened by exactly
+    // that much — the label then lands where IconSpacing put it, with its full width intact.
+    const int gutter = itemViewTextGutter(option, widget);
+    layout.text = QRect(QPoint(left - gutter, content.top()), QPoint(right + gutter, content.bottom()));
+
+    if (option->direction == Qt::RightToLeft) {
+        layout.checkIndicator = visualRect(option->direction, content, layout.checkIndicator);
+        layout.decoration = visualRect(option->direction, content, layout.decoration);
+        layout.text = visualRect(option->direction, content, layout.text);
+    }
+
+    return layout;
+}
+
+QRect FreeCADStyle::itemViewSubElementRect(
+    SubElement element,
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+    const auto layout = itemViewLayout(vopt, itemViewOf(vopt, widget));
+    if (!layout) {
+        return QProxyStyle::subElementRect(element, option, widget);
+    }
+
+    switch (element) {
+        case SE_ItemViewItemCheckIndicator:
+            return layout->checkIndicator;
+        case SE_ItemViewItemDecoration:
+            return layout->decoration;
+        default:
+            return layout->text;
+    }
+}
+
 void FreeCADStyle::drawPrimitive(
     PrimitiveElement element,
     const QStyleOption* option,
@@ -1243,6 +1361,15 @@ QSize FreeCADStyle::itemViewItemSizeFromContents(
     }
     if (!baseSize.isValid()) {
         baseSize = QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
+        // Qt sizes a cell by surrounding each of its parts with one gutter. itemViewLayout()
+        // separates them with IconSpacing instead, so trade the gutters Qt charged for the
+        // gaps actually inserted.
+        if (vopt && ownsItemViewLayout(vopt, itemViewOf(vopt, widget))) {
+            const int parts = itemViewPartCount(*vopt);
+            const int gaps = std::max(0, parts - 1) * geometry.iconSpacing;
+            const int gutters = 2 * parts * itemViewTextGutter(option, widget);
+            baseSize.setWidth(std::max(0, baseSize.width() - gutters + gaps));
+        }
     }
 
     QSize itemSize = geometry.sizeFromContents(baseSize);
@@ -1325,37 +1452,12 @@ QSize FreeCADStyle::sizeFromContents(
 QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* option, const QWidget* widget) const
 {
     // QProxyStyle sets baseStyle->proxy = this, so the base style's drawControl(CE_ItemViewItem)
-    // calls proxy()->subElementRect() which reaches OUR overrides below.  We therefore only need
-    // to override SE_ItemViewItemDecoration and SE_ItemViewItemText — the inset propagates into
-    // both drawing (via the base-style drawControl callback) and editor/widget placement (via
-    // updateEditorGeometry).  We delegate to QProxyStyle with the already-inset rect so
-    // viewItemLayout positions the icon within the inset area and the text rect after it.
-    const auto itemViewInsetRect = [&](SubElement el) -> QRect {
-        const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
-        // option->widget is the view; widget may be the viewport during some repaints.
-        const QWidget* effectiveWidget = widget;
-        if (!effectiveWidget && vopt) {
-            effectiveWidget = vopt->widget;
-        }
-        const StyleContext context = contextOf(effectiveWidget, option, StyleComponentElement::Item);
-        const bool isItemComponent = context.element == StyleComponentElement::Item;
-        if (!isItemComponent || !vopt) {
-            return QProxyStyle::subElementRect(el, option, widget);
-        }
-        const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-        QStyleOptionViewItem adjustedOption = *vopt;
-        // Exclude the reserved inter-row gap (ListItemSpacing) from the bottom so the content
-        // centres within the row area above the gap, not within the taller item rect.
-        adjustedOption.rect = geometry.contentRect(vopt->rect).adjusted(0, 0, 0, -geometry.spacing);
-        return QProxyStyle::subElementRect(el, &adjustedOption, widget);
-    };
-
-    if (element == SE_ItemViewItemDecoration) {
-        return itemViewInsetRect(SE_ItemViewItemDecoration);
-    }
-
-    if (element == SE_ItemViewItemText) {
-        return itemViewInsetRect(SE_ItemViewItemText);
+    // calls proxy()->subElementRect() which reaches OUR overrides below.  Serving the three cell
+    // sub-elements from itemViewLayout() therefore drives both drawing (via the base-style
+    // drawControl callback) and editor placement (via updateEditorGeometry).
+    if (element == SE_ItemViewItemCheckIndicator || element == SE_ItemViewItemDecoration
+        || element == SE_ItemViewItemText) {
+        return itemViewSubElementRect(element, option, widget);
     }
 
     if (element == SE_HeaderLabel) {
