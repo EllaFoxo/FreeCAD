@@ -62,8 +62,9 @@ private:
  * object, so whatever drops out of it is restored in the same breath. Every reveal
  * is an RAII property override, so restoration happens on every path out —
  * including destruction — and cannot be forgotten. An object already visible is
- * governed like any other: the override puts back whatever it found, so revealing
- * it is a no-op rather than a state change nobody undoes.
+ * tracked like any other but never written to: it needs nothing revealed and
+ * nothing put back, and leaving it alone spares the document a change it would
+ * otherwise have to react to.
  */
 class GuiExport HighlightVisibility
 {
@@ -92,6 +93,8 @@ private:
         /// override is then abandoned rather than written back through a property
         /// that died with it.
         App::DocumentObjectWeakPtrT _object;
+        /// Empty for an object that was already visible, which owns no override and
+        /// restores nothing.
         std::optional<App::ScopedPropertyOverride<App::PropertyBool>> _visible;
     };
 
@@ -108,8 +111,10 @@ private:
  * none of them touches the application selection. Highlighting a reference
  * never rebuilds geometry — it re-renders the nodes already in the scene.
  *
- * An object is held visible for as long as it is highlighted, and returned to
- * whatever visibility it had as soon as it is not.
+ * A hidden object is revealed only while the highlight on it is transient — a
+ * hover, or a reference drawn during a pick session — and is returned to
+ * whatever visibility it had the moment that ends. Highlighting alone, with
+ * neither of those in force, changes nobody's visibility.
  */
 class GuiExport GeometryHighlighter: public QObject
 {
@@ -123,6 +128,14 @@ public:
     void setHighlighted(HighlightRole role, std::vector<GeometryReference> references);
     void clear(HighlightRole role);
     void clear();
+
+    /// Declares whether a pick session is running, which is what makes the reference
+    /// highlights transient enough to reveal a hidden object for.
+    void setSelecting(bool selecting);
+    bool isSelecting() const
+    {
+        return _selecting;
+    }
 
     const GeometryHighlightModel& model() const
     {
@@ -140,7 +153,10 @@ private:
     GeometryHighlightModel _model;
     /// The documents whose views currently hold this highlighter's annotations.
     std::set<App::Document*> _touchedDocuments;
-    /// Declared afresh on every refresh(), so it always mirrors what is drawn.
+    /// Whether a pick session is running; see setSelecting().
+    bool _selecting = false;
+    /// Declared afresh on every refresh(), so it always mirrors what is drawn in a
+    /// transient role.
     HighlightVisibility _visibility;
     fastsignals::scoped_connection _objectDeletedConnection;
     fastsignals::scoped_connection _documentDeletedConnection;

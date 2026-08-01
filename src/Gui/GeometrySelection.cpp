@@ -141,6 +141,10 @@ void GeometrySelection::startSelecting()
     // previous feature). Only then seed the selection, so their scene rebuild
     // cannot clear it again.
     Q_EMIT selectionModeEntered();
+    // Only now are the reference highlights transient, so only now may they reveal a
+    // hidden object. Before the seeding, matching where the reveal used to sit, so the
+    // visibility writes cannot be fed back into our own onSelectionChanged().
+    _highlighter->setSelecting(true);
     seedViewportSelection();
     // Attach last, so the seeding picks above are not fed back into our own
     // onSelectionChanged().
@@ -156,6 +160,9 @@ void GeometrySelection::stopSelecting()
     }
     _selecting = false;
     detachSelection();
+    // Paired with startSelecting(): the session is over, so whatever it revealed goes
+    // back to the visibility it had. Detached first, so those writes reach nobody.
+    _highlighter->setSelecting(false);
     if (_gateFactory) {
         Gui::Selection().rmvSelectionGate();
     }

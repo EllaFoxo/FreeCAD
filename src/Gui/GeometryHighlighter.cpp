@@ -195,16 +195,38 @@ std::map<App::Document*, ReferencesByRole> groupByDocument(const GeometryHighlig
     return byDocument;
 }
 
-/// Every object something is about to be drawn on, once each — visibility is a
-/// per-document view-provider concern, so it is decided per object and not per viewer.
-std::vector<App::DocumentObject*> objectsToDraw(
-    const std::map<App::Document*, ReferencesByRole>& byDocument
+/// Whether being drawn under @p role is transient enough to justify revealing a
+/// hidden object for it. Hovering always is: it lasts as long as the cursor stays put.
+/// A reference only is while a pick session runs — outside one it is drawn for as long
+/// as the selector exists, which is nobody's idea of a temporary reveal.
+bool revealsWhileDrawn(HighlightRole role, bool selecting)
+{
+    switch (role) {
+        case HighlightRole::Hovered:
+            return true;
+        case HighlightRole::Reference:
+            return selecting;
+        case HighlightRole::COUNT:
+            break;
+    }
+    return false;
+}
+
+/// Every object a transient highlight is about to be drawn on, once each — visibility
+/// is a per-document view-provider concern, so it is decided per object and not per
+/// viewer.
+std::vector<App::DocumentObject*> objectsToReveal(
+    const std::map<App::Document*, ReferencesByRole>& byDocument,
+    bool selecting
 )
 {
     std::vector<App::DocumentObject*> objects;
     for (const auto& entry : byDocument) {
-        for (const std::vector<GeometryReference>& references : entry.second) {
-            for (const GeometryReference& reference : references) {
+        for (std::size_t index = 0; index < highlightRoleCount; ++index) {
+            if (!revealsWhileDrawn(static_cast<HighlightRole>(index), selecting)) {
+                continue;
+            }
+            for (const GeometryReference& reference : entry.second.at(index)) {
                 if (std::ranges::find(objects, reference.object) == objects.end()) {
                     objects.push_back(reference.object);
                 }
@@ -262,6 +284,17 @@ void GeometryHighlighter::clear()
     refresh();
 }
 
+void GeometryHighlighter::setSelecting(bool selecting)
+{
+    if (_selecting == selecting) {
+        return;
+    }
+    _selecting = selecting;
+    // What is drawn does not change, only what is revealed for it — but the reveal is
+    // decided in refresh() alongside everything else, so it is the one entry point.
+    refresh();
+}
+
 void GeometryHighlighter::withdrawAndAdopt(std::set<App::Document*> documents)
 {
     // The documents drawn in last time as well: a role emptied since then must stop
@@ -305,7 +338,7 @@ void GeometryHighlighter::refresh()
     // After the withdrawal, so an object that stopped being drawn goes back to hidden
     // in the same breath, and before any addHighlight() below, which ignores a hidden
     // object. Ahead of every early return, so clear() always restores.
-    _visibility.setRevealed(objectsToDraw(byDocument));
+    _visibility.setRevealed(objectsToReveal(byDocument, _selecting));
 
     if (byDocument.empty()) {
         return;
