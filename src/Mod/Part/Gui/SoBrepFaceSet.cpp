@@ -22,8 +22,12 @@
  ******************************************************************************/
 
 #include <algorithm>
+#include <fstream>
 #include <limits>
+#include <map>
 #include <set>
+#include <sstream>
+#include <string>
 #include <vector>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/SoPrimitiveVertex.h>
@@ -61,6 +65,44 @@ SO_NODE_SOURCE(SoBrepFaceSet)
 
 namespace
 {
+
+// [HLDBG] Temporary highlight diagnostics, matching the ones in
+// Gui/View3DInventorSelection.cpp. Reverted together with them.
+void hldbg(const std::string& message)
+{
+    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
+    stream << message << std::endl;  // flush every line: the process may be killed
+}
+
+/// Reports the render-time state of one face set the first time it is seen and on
+/// every change afterwards, so a highlighted node can be compared frame over frame
+/// without flooding the log.
+void hldbgRender(
+    const void* node,
+    bool hasContext,
+    std::size_t secondaryCount,
+    bool hasSecondary,
+    int partCount,
+    int materialBinding,
+    bool pushed
+)
+{
+    static std::map<const void*, std::string> reported;
+
+    std::ostringstream msg;
+    msg << "[HLDBG] SoBrepFaceSet::GLRender node=" << node << " parts=" << partCount
+        << " ctx=" << (hasContext ? "yes" : "no") << " ctx2=" << (hasSecondary ? "yes" : "no")
+        << " ctx2Selected=" << secondaryCount << " materialBinding=" << materialBinding
+        << " narrowed=" << (pushed ? "yes" : "no");
+    std::string message = msg.str();
+
+    std::string& last = reported[node];
+    if (last == message) {
+        return;
+    }
+    last = message;
+    hldbg(message);
+}
 
 static void buildOverlayCoordIndex(
     std::vector<int32_t>& out,
@@ -710,7 +752,17 @@ void SoBrepFaceSet::GLRender(SoGLRenderAction* action)
 
     SoMaterialBundle mb(action);
     mb.sendFirst();
+    const auto materialBinding = SoMaterialBindingElement::get(state);
     const bool pushed = overrideMaterialBinding(action, ctx, ctx2);
+    hldbgRender(
+        this,
+        static_cast<bool>(ctx),
+        ctx2 ? ctx2->selectionIndex.size() : 0U,
+        static_cast<bool>(ctx2),
+        partIndex.getNum(),
+        static_cast<int>(materialBinding),
+        pushed
+    );
     if (!this->shouldGLRender(action)) {
         if (pushed) {
             state->pop();
