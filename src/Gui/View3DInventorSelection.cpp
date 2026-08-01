@@ -27,6 +27,9 @@
 #include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/nodes/SoSeparator.h>
 
+#include <fstream>
+#include <sstream>
+#include <string>
 
 #include "Application.h"
 #include "Document.h"
@@ -58,6 +61,12 @@ const char* highlightRoleName(HighlightRole role)
             break;
     }
     return "Highlight";
+}
+
+void hldbg(const std::string& message)
+{
+    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
+    stream << message << std::endl;  // flush every line: the process may be killed
 }
 }  // namespace
 
@@ -421,44 +430,58 @@ void View3DInventorSelection::addHighlight(
     const char* roleName = highlightRoleName(role);
     const char* displaySubName = (subName && subName[0]) ? subName : "<whole-object>";
     const char* objName = object ? object->getNameInDocument() : "<null>";
-    Base::Console().message(
-        "[HLDBG] addHighlight: role=%s, subName=%s, object=%s\n",
-        roleName,
-        displaySubName,
-        objName
-    );
+    std::ostringstream msg;
+    msg << "[HLDBG] addHighlight: role=" << roleName << ", subName=" << displaySubName
+        << ", object=" << objName;
+    std::string msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     HighlightRoleNodes* nodes = highlightRole(role);
     if (!nodes) {
-        Base::Console().message("[HLDBG]   returning early: highlightRole returned null\n");
+        msgStr = "[HLDBG]   returning early: highlightRole returned null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     if (!object) {
-        Base::Console().message("[HLDBG]   returning early: object is null\n");
+        msgStr = "[HLDBG]   returning early: object is null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     if (!object->isAttachedToDocument()) {
-        Base::Console().message("[HLDBG]   returning early: object not attached to document\n");
+        msgStr = "[HLDBG]   returning early: object not attached to document";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     if (!Application::Instance) {
-        Base::Console().message("[HLDBG]   returning early: Application::Instance is null\n");
+        msgStr = "[HLDBG]   returning early: Application::Instance is null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
 
     auto vp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(object));
     if (!vp) {
-        Base::Console().message("[HLDBG]   returning early: no view provider\n");
+        msgStr = "[HLDBG]   returning early: no view provider";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     // A hidden object contributes nothing: the stored path runs through its mode
     // switch, and Coin's in-path traversal honours whichChild.
     if (!vp->isSelectable()) {
-        Base::Console().message("[HLDBG]   returning early: view provider not selectable\n");
+        msgStr = "[HLDBG]   returning early: view provider not selectable";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     if (!vp->isShow()) {
-        Base::Console().message("[HLDBG]   returning early: view provider not shown\n");
+        msgStr = "[HLDBG]   returning early: view provider not shown";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     // Public API, so the document is checked rather than assumed. An annotation holds
@@ -466,11 +489,15 @@ void View3DInventorSelection::addHighlight(
     // it would render that document's geometry here and expose its nodes to this
     // viewer's traversals.
     if (!guiDocument) {
-        Base::Console().message("[HLDBG]   returning early: guiDocument is null\n");
+        msgStr = "[HLDBG]   returning early: guiDocument is null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
     if (vp->getDocument() != guiDocument) {
-        Base::Console().message("[HLDBG]   returning early: document mismatch\n");
+        msgStr = "[HLDBG]   returning early: document mismatch";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return;
     }
 
@@ -479,13 +506,28 @@ void View3DInventorSelection::addHighlight(
     // same owner and role, so a highlighted face still reads as a face rather than a
     // bare patch.
     addHighlightElement(*nodes, owner, *vp, subName);
+
+    // Log the quoted subName and view provider type name before boundary loop (NEW DIAGNOSTIC 3)
+    std::ostringstream quotedMsg;
+    quotedMsg << "[HLDBG] addHighlight boundary loop: subName='" << (subName ? subName : "") << "'"
+              << " vp type=" << vp->getTypeId().getName();
+    msgStr = quotedMsg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
+
     auto boundaryElements = vp->getBoundaryElements(subName);
-    Base::Console().message(
-        "[HLDBG]   getBoundaryElements returned %zu elements\n",
-        boundaryElements.size()
-    );
+    std::ostringstream elemMsg;
+    elemMsg << "[HLDBG]   getBoundaryElements returned " << boundaryElements.size() << " elements";
+    msgStr = elemMsg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
+
     for (size_t i = 0; i < boundaryElements.size(); ++i) {
-        Base::Console().message("[HLDBG]     [%zu]: %s\n", i, boundaryElements[i].c_str());
+        std::ostringstream elemItem;
+        elemItem << "[HLDBG]     [" << i << "]: " << boundaryElements[i];
+        msgStr = elemItem.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
     }
     for (const std::string& boundaryElement : boundaryElements) {
         addHighlightElement(*nodes, owner, *vp, boundaryElement.c_str());
@@ -499,16 +541,27 @@ void View3DInventorSelection::addHighlightElement(
     const char* subName
 )
 {
-    Base::Console().message("[HLDBG] addHighlightElement: subName=%s\n", subName ? subName : "<null>");
+    std::ostringstream msg;
+    std::string msgStr;
+
+    msg.str("");
+    msg << "[HLDBG] addHighlightElement: subName=" << (subName ? subName : "<null>");
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     SoTempPath path(10);
     path.ref();
     if (!appendGroupPath(&vp, path)) {
-        Base::Console().message("[HLDBG]   appendGroupPath failed\n");
+        msgStr = "[HLDBG]   appendGroupPath failed";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         path.unrefNoDelete();
         return;
     }
-    Base::Console().message("[HLDBG]   appendGroupPath succeeded\n");
+    msgStr = "[HLDBG]   appendGroupPath succeeded";
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     SoDetail* det = nullptr;
     // The annotation holds a plain SoPath into the view provider's live nodes. A
@@ -517,14 +570,20 @@ void View3DInventorSelection::addHighlightElement(
     // until the next refresh. checkGroupOnTop() has exactly the same exposure.
     bool detailPathResult = vp.getDetailPath(subName, &path, true, det);
     int pathLength = path.getLength();
-    Base::Console().message(
-        "[HLDBG]   getDetailPath returned %s, path.getLength()=%d, det=%s\n",
-        detailPathResult ? "true" : "false",
-        pathLength,
-        det ? "non-null" : "null"
-    );
+
+    msg.str("");
+    msg << "[HLDBG]   getDetailPath returned " << (detailPathResult ? "true" : "false")
+        << ", path.getLength()=" << pathLength << ", det=" << (det ? "non-null" : "null");
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
+
     if (det) {
-        Base::Console().message("[HLDBG]   det type: %s\n", det->getTypeId().getName().getString());
+        msg.str("");
+        msg << "[HLDBG]   det type: " << det->getTypeId().getName().getString();
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
     }
 
     if (detailPathResult && pathLength) {
@@ -532,7 +591,9 @@ void View3DInventorSelection::addHighlightElement(
         auto node = new SoFCPathAnnotation;
         node->setPath(&path);
         grp->addChild(node);
-        Base::Console().message("[HLDBG]   created SoFCPathAnnotation and added to group\n");
+        msgStr = "[HLDBG]   created SoFCPathAnnotation and added to group";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
 
         // The colour rides in the secondary selection context rather than an
         // overriding material, because that is what narrows the render to the
@@ -542,7 +603,13 @@ void View3DInventorSelection::addHighlightElement(
             det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
             true
         );
-        Base::Console().message("[HLDBG]   applying SoSelectionElementAction: %s\n", actionType);
+
+        msg.str("");
+        msg << "[HLDBG]   applying SoSelectionElementAction: " << actionType;
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
+
         action.setColor(nodes.color);
         action.setElement(det);
 

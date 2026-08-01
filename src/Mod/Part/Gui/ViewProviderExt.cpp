@@ -23,6 +23,8 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <fstream>
+#include <string>
 
 #include <Bnd_Box.hxx>
 #include <BRep_Tool.hxx>
@@ -99,6 +101,15 @@
 FC_LOG_LEVEL_INIT("Part", true, true)
 
 using namespace PartGui;
+
+namespace
+{
+void hldbg(const std::string& message)
+{
+    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
+    stream << message << std::endl;  // flush every line: the process may be killed
+}
+}  // namespace
 
 PROPERTY_SOURCE(PartGui::ViewProviderPartExt, Gui::ViewProviderGeometryObject)
 
@@ -675,39 +686,74 @@ std::vector<Base::Vector3d> ViewProviderPartExt::getSelectionShape(const char* /
 
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
-    Base::Console().message("[HLDBG] getBoundaryElements: subName=%s\n", subName ? subName : "<null>");
+    std::ostringstream msg;
+    std::string msgStr;
+
+    msg.str("");
+    msg << "[HLDBG] getBoundaryElements: subName=" << (subName ? subName : "<null>");
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     if (!subName) {
-        Base::Console().message("[HLDBG]   returning early: subName is null\n");
+        msgStr = "[HLDBG]   returning early: subName is null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return {};
     }
 
+    // NEW DIAGNOSTIC 1: Log raw subName bytes quoted with length
+    msg.str("");
+    msg << "[HLDBG] getBoundaryElements raw subName='" << subName << "' len=" << std::strlen(subName);
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
+
     auto [elementType, elementIndex] = Part::TopoShape::getElementTypeAndIndex(subName);
-    Base::Console().message("[HLDBG]   parsed: type=%s, index=%d\n", elementType.c_str(), elementIndex);
+    msg.str("");
+    msg << "[HLDBG]   parsed: type=" << elementType << ", index=" << elementIndex;
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     if (elementType != "Face" || elementIndex == 0) {
-        Base::Console().message(
-            "[HLDBG]   returning early: not a face or index==0 (type=%s, index=%d)\n",
-            elementType.c_str(),
-            elementIndex
-        );
+        msg.str("");
+        msg << "[HLDBG]   returning early: not a face or index==0 (type=" << elementType
+            << ", index=" << elementIndex << ")";
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return {};
     }
 
     TopoDS_Shape shape = getRenderedShape().getShape();
+
+    // NEW DIAGNOSTIC 2: Log shape null check and ShapeType() as integer
+    msg.str("");
+    msg << "[HLDBG]   shape.IsNull()=" << (shape.IsNull() ? "true" : "false");
+    if (!shape.IsNull()) {
+        msg << ", ShapeType()=" << static_cast<int>(shape.ShapeType());
+    }
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
+
     if (shape.IsNull()) {
-        Base::Console().message("[HLDBG]   returning early: shape is null\n");
+        msgStr = "[HLDBG]   returning early: shape is null";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return {};
     }
 
     TopTools_IndexedMapOfShape faceMap;
     TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
     if (static_cast<int>(elementIndex) > faceMap.Extent()) {
-        Base::Console().message(
-            "[HLDBG]   returning early: index out of range (index=%d, faceCount=%d)\n",
-            elementIndex,
-            faceMap.Extent()
-        );
+        msg.str("");
+        msg << "[HLDBG]   returning early: index out of range (index=" << elementIndex
+            << ", faceCount=" << faceMap.Extent() << ")";
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
         return {};
     }
 
@@ -734,13 +780,13 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
         }
         edgeList += boundaryElements[i];
     }
-    Base::Console().message(
-        "[HLDBG]   success: faceMapExtent=%d, edgeMapExtent=%d, edges=[%s], count=%zu\n",
-        faceMap.Extent(),
-        edgeMap.Extent(),
-        edgeList.c_str(),
-        boundaryElements.size()
-    );
+    msg.str("");
+    msg << "[HLDBG]   success: faceMapExtent=" << faceMap.Extent()
+        << ", edgeMapExtent=" << edgeMap.Extent() << ", edges=[" << edgeList
+        << "], count=" << boundaryElements.size();
+    msgStr = msg.str();
+    Base::Console().message("%s\n", msgStr.c_str());
+    hldbg(msgStr);
 
     return boundaryElements;
 }
