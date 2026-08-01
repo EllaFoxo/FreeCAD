@@ -111,6 +111,33 @@ void hldbgRender(
     hldbg(message);
 }
 
+/// Tells whether a selection overlay has to ignore the depth buffer for the pass it
+/// is drawn in.
+///
+/// An on-top annotation replays its path with depth testing turned off in GL only,
+/// so a node that re-establishes a depth-respecting state during that replay would
+/// let the scene geometry occlude the overlay again.
+bool selectionRendersOnTop(const SoGLRenderAction* action)
+{
+    return action && action->isRenderingDelayedPaths();
+}
+
+// [HLDBG] Temporary highlight diagnostics, matching the ones in
+// Gui/View3DInventorSelection.cpp. Reverted together with them.
+void hldbgDepthMode(const char* site, const void* node, bool onTop, bool delayedPaths)
+{
+    static std::set<std::string> reported;
+
+    std::ostringstream msg;
+    msg << "[HLDBG] " << site << " node=" << node
+        << " delayedPaths=" << (delayedPaths ? "yes" : "no")
+        << " depthMode=" << (onTop ? "DrawOnTop" : "RespectDepth");
+
+    if (reported.insert(msg.str()).second) {
+        hldbg(msg.str());
+    }
+}
+
 static void buildOverlayCoordIndex(
     std::vector<int32_t>& out,
     const int32_t* coordIndex,
@@ -460,8 +487,11 @@ void SoBrepFaceSet::renderHighlight(SoGLRenderAction* action, SelContextPtr ctx)
     }
     buildOverlayCoordIndex(overlayCoordIndex, ci, ciCount, partCounts, partCount, parts, selectAll);
 
+    // Preselection is routed on top by SoHighlightElementAction rather than by this
+    // design's selection contexts, so it keeps deciding on the clarify state alone.
     const bool onTop = Gui::Selection().isClarifySelectionActive()
         && Gui::SoDelayedAnnotationsElement::isProcessingDelayedPaths;
+    hldbgDepthMode("SoBrepFaceSet::renderHighlight", this, onTop, action->isRenderingDelayedPaths());
 
     renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->highlightColor, onTop);
 }
@@ -477,10 +507,13 @@ void SoBrepFaceSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
     const int32_t* ci = this->coordIndex.getValues(0);
     const int ciCount = this->coordIndex.getNum();
 
+    const bool onTop = selectionRendersOnTop(action);
+    hldbgDepthMode("SoBrepFaceSet::renderSelection", this, onTop, action->isRenderingDelayedPaths());
+
     if (ctx->isSelectAll()) {
         std::set<int> dummy;
         buildOverlayCoordIndex(overlayCoordIndex, ci, ciCount, partCounts, partCount, dummy, true);
-        renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->selectionColor, false);
+        renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->selectionColor, onTop);
         return;
     }
 
@@ -496,7 +529,7 @@ void SoBrepFaceSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
     }
 
     buildOverlayCoordIndex(overlayCoordIndex, ci, ciCount, partCounts, partCount, parts, false);
-    renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->selectionColor, false);
+    renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->selectionColor, onTop);
 }
 
 bool SoBrepFaceSet::overrideMaterialBinding(SoGLRenderAction* action, SelContextPtr ctx, SelContextPtr ctx2)

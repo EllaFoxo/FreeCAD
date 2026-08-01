@@ -24,7 +24,11 @@
 #include <FCConfig.h>
 
 #include <algorithm>
+#include <fstream>
 #include <limits>
+#include <set>
+#include <sstream>
+#include <string>
 #include <Inventor/SoPickedPoint.h>
 #include <Inventor/SoPrimitiveVertex.h>
 #include <Inventor/actions/SoGetBoundingBoxAction.h>
@@ -68,6 +72,34 @@ enum class OverlayDepthMode
     /// Render above model geometry for hover and preselection feedback.
     DrawOnTop,
 };
+
+/// Picks the depth mode a selection overlay has to use for the pass it is drawn in.
+///
+/// An on-top annotation replays its path with depth testing turned off in GL only,
+/// so a node that re-establishes a depth-respecting state during that replay would
+/// let the scene geometry occlude the overlay again.
+static OverlayDepthMode selectionDepthMode(const SoGLRenderAction* action)
+{
+    return (action && action->isRenderingDelayedPaths()) ? OverlayDepthMode::DrawOnTop
+                                                         : OverlayDepthMode::RespectDepth;
+}
+
+// [HLDBG] Temporary highlight diagnostics, matching the ones in
+// Gui/View3DInventorSelection.cpp. Reverted together with them.
+static void hldbgDepthMode(const char* site, const void* node, OverlayDepthMode depthMode, bool delayedPaths)
+{
+    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
+    static std::set<std::string> reported;
+
+    std::ostringstream msg;
+    msg << "[HLDBG] " << site << " node=" << node
+        << " delayedPaths=" << (delayedPaths ? "yes" : "no") << " depthMode="
+        << (depthMode == OverlayDepthMode::DrawOnTop ? "DrawOnTop" : "RespectDepth");
+
+    if (reported.insert(msg.str()).second) {
+        stream << msg.str() << std::endl;  // flush every line: the process may be killed
+    }
+}
 
 static void applyOverlayPrimitiveState(SoState* state, SoNode* node)
 {
@@ -550,6 +582,14 @@ void SoBrepEdgeSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
 
     int num = (int)ctx->sl.size();
     if (num > 0) {
+        const OverlayDepthMode depthMode = selectionDepthMode(action);
+        hldbgDepthMode(
+            "SoBrepEdgeSet::renderSelection",
+            this,
+            depthMode,
+            action->isRenderingDelayedPaths()
+        );
+
         if (ctx->sl[0] < 0) {
             renderOverlayLines(
                 action,
@@ -557,7 +597,7 @@ void SoBrepEdgeSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
                 this->coordIndex.getValues(0),
                 this->coordIndex.getNum(),
                 ctx->selectionColor,
-                OverlayDepthMode::RespectDepth
+                depthMode
             );
         }
         else {
@@ -574,7 +614,7 @@ void SoBrepEdgeSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
                     ctx->sl.data(),
                     num,
                     ctx->selectionColor,
-                    OverlayDepthMode::RespectDepth
+                    depthMode
                 );
             }
         }
