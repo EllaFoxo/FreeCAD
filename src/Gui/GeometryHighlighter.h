@@ -86,10 +86,11 @@ private:
  * none of them touches the application selection. Highlighting a reference
  * never rebuilds geometry — it re-renders the nodes already in the scene.
  *
- * A hidden object is revealed only while the highlight on it is transient — a
- * hover, or a reference drawn during a pick session — and is returned to
- * whatever visibility it had the moment that ends. Highlighting alone, with
- * neither of those in force, changes nobody's visibility.
+ * The Reference role only renders while a pick session is active; the Hovered
+ * role renders whenever something is hovered, session or not. A hidden object is
+ * revealed only while a highlight is actually drawn on it, and is returned to
+ * whatever visibility it had the moment that stops. Highlighting alone, with
+ * nothing drawn, changes nobody's visibility.
  */
 class GuiExport GeometryHighlighter: public QObject
 {
@@ -104,8 +105,9 @@ public:
     void clear(HighlightRole role);
     void clear();
 
-    /// Declares whether a pick session is running, which is what makes the reference
-    /// highlights transient enough to reveal a hidden object for.
+    /// Declares whether a pick session is running. The Reference role renders only
+    /// while this is true — outside a session the hovered reference is the only
+    /// highlight on screen, rather than a shift between two similar blues.
     void setSelecting(bool selecting);
     bool isSelecting() const
     {
