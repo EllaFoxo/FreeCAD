@@ -101,52 +101,16 @@ void GeometryHighlightModel::dropDocument(const App::Document* document)
     }
 }
 
-namespace
-{
-ViewProviderDocumentObject* viewProviderOf(const App::DocumentObject* object)
-{
-    if (!object || !Application::Instance) {
-        return nullptr;
-    }
-    return Application::Instance->getViewProvider<ViewProviderDocumentObject>(object);
-}
-}  // namespace
-
-// The Visibility property is what is written, not the mode switch alone: moving the
-// switch by itself does not survive contact with the rest of the application, and a
-// property write is what the mechanism this replaced did, back when revealing worked.
-// The price is that a write is a document change, so PartDesign reacts to it by hiding
-// every other feature of the body; that reaction came with the old mechanism too and is
-// accepted here. A later recompute or an explicit property sync can also flip a revealed
-// object back off; that is not defended against either.
-HighlightVisibility::Override::Override(App::DocumentObject* object)
-    : _object(object)
-{
-    if (auto* viewProvider = viewProviderOf(object)) {
-        _visible.emplace(viewProvider->Visibility, true);
-    }
-}
-
-HighlightVisibility::Override::~Override()
-{
-    // The override restores through a raw pointer to the property, so it may only run
-    // while the object owning that property is alive. A null resolve means the object
-    // was deleted meanwhile: the override is abandoned, leaving nothing to write to.
-    if (_visible && _object.expired()) {
-        _visible->release();
-    }
-}
-
 void HighlightVisibility::setRevealed(const std::vector<App::DocumentObject*>& objects)
 {
     // Settle the outgoing set before taking on the new one: erasing an entry destroys
-    // its override, and that is what restores the object.
+    // its holder, and that is what restores the object.
     std::erase_if(_revealed, [&objects](const auto& entry) {
         return std::ranges::find(objects, entry.first) == objects.end();
     });
 
-    // Every object is governed, whatever its visibility: the override puts back what
-    // it found, so one that was already visible stays visible afterwards.
+    // Every object is governed, whatever its visibility: the reveal writes nothing, so
+    // one that was already visible is unaffected both now and when the reveal ends.
     for (App::DocumentObject* object : objects) {
         _revealed.try_emplace(object, object);
     }

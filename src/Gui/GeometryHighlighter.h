@@ -3,18 +3,15 @@
 
 #include <array>
 #include <map>
-#include <optional>
 #include <set>
 #include <vector>
 
 #include <QObject>
 #include <fastsignals/signal.h>
 
-#include <App/DocumentObserver.h>
-#include <App/PropertyOverrides.h>
-#include <App/PropertyStandard.h>
 #include <FCGlobal.h>
 #include <Gui/GeometryReference.h>
+#include <Gui/ViewProviderDocumentObject.h>
 
 namespace App
 {
@@ -60,11 +57,9 @@ private:
  *
  * The whole revealed set is declared in one call rather than adjusted object by
  * object, so whatever drops out of it is restored in the same breath. Every reveal
- * is an RAII property override, so restoration happens on every path out —
- * including destruction — and cannot be forgotten. An object already visible is
- * tracked like any other but never written to: it needs nothing revealed and
- * nothing put back, and leaving it alone spares the document a change it would
- * otherwise have to react to.
+ * is an RAII holder, so restoration happens on every path out — including
+ * destruction — and cannot be forgotten. Nothing is written to the document: an
+ * object already visible is tracked like any other and simply stays as it is.
  */
 class GuiExport HighlightVisibility
 {
@@ -78,30 +73,10 @@ public:
     void setRevealed(const std::vector<App::DocumentObject*>& objects);
 
 private:
-    /// Holds one object visible and puts back the visibility it found, on
-    /// destruction, whenever that happens.
-    class Override
-    {
-    public:
-        explicit Override(App::DocumentObject* object);
-        ~Override();
-
-        FC_DISABLE_COPY_MOVE(Override)
-
-    private:
-        /// Held weakly: an object deleted meanwhile resolves to null, and the
-        /// override is then abandoned rather than written back through a property
-        /// that died with it.
-        App::DocumentObjectWeakPtrT _object;
-        /// Empty for an object that was already visible, which owns no override and
-        /// restores nothing.
-        std::optional<App::ScopedPropertyOverride<App::PropertyBool>> _visible;
-    };
-
     /// One entry per object this revealed; erasing an entry restores it. The key is
     /// only ever compared, never dereferenced, so one belonging to a deleted object
     /// does no harm.
-    std::map<App::DocumentObject*, Override> _revealed;
+    std::map<App::DocumentObject*, TemporaryVisibility> _revealed;
 };
 
 /**
