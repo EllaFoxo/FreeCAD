@@ -26,6 +26,7 @@
 #include <cstddef>
 #include <map>
 #include <string>
+#include <vector>
 #include <Inventor/SbColor.h>
 #include <Base/Color.h>
 #include <Gui/GeometryReference.h>
@@ -104,14 +105,16 @@ private:
     HighlightRoleNodes* highlightRole(HighlightRole role);
     /// The subgroup holding @p owner's annotations of a role, created on first use.
     static SoGroup* highlightOwnerGroup(HighlightRoleNodes& nodes, const void* owner);
-    /// Resolves @p subName against @p vp and, if it renders, adds one more annotation
-    /// to @p owner's subgroup of @p nodes. Does nothing when @p subName does not
-    /// resolve to a detail.
-    void addHighlightElement(
+    /// Draws @p elements of @p vp under @p owner's subgroup of @p nodes. Elements
+    /// that resolve onto the same scene-graph path share one annotation, so their
+    /// secondary selection contexts are written together rather than one element
+    /// blanking the nodes another one targets. Elements that do not resolve are
+    /// skipped.
+    void addHighlightElements(
         HighlightRoleNodes& nodes,
         const void* owner,
         ViewProviderDocumentObject& vp,
-        const char* subName
+        const std::vector<std::string>& elements
     );
 
     SoGroup* pcGroupOnTop;

@@ -21,15 +21,18 @@
  ****************************************************************************/
 
 
+#include <Inventor/SoPath.h>
 #include <Inventor/details/SoDetail.h>
 #include <Inventor/nodes/SoDrawStyle.h>
 #include <Inventor/nodes/SoMaterial.h>
 #include <Inventor/nodes/SoPickStyle.h>
 #include <Inventor/nodes/SoSeparator.h>
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "Application.h"
 #include "Document.h"
@@ -67,6 +70,53 @@ void hldbg(const std::string& message)
 {
     static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
     stream << message << std::endl;  // flush every line: the process may be killed
+}
+
+/// Whether an annotation already replays exactly @p candidate, and so can carry
+/// its detail instead of a second annotation being made for it.
+bool sameNodes(SoPath* stored, const SoTempPath& candidate)
+{
+    if (!stored || stored->getLength() != candidate.getLength()) {
+        return false;
+    }
+    for (int index = 0; index < candidate.getLength(); ++index) {
+        if (stored->getNode(index) != candidate.getNode(index)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/// Writes one element's index and colour into the secondary selection context of
+/// every node @p path reaches, below @p node. A null @p det means the whole
+/// object rather than one of its elements.
+void applyHighlightDetail(
+    SoGroup* roleGroup,
+    SoGroup* ownerGroup,
+    SoFCPathAnnotation* node,
+    SoTempPath& path,
+    const SoDetail* det,
+    const SbColor& color
+)
+{
+    // The colour rides in the secondary selection context rather than an
+    // overriding material, because that is what narrows the render to the
+    // detail; an override material would repaint the whole object.
+    SoSelectionElementAction action(
+        det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
+        true
+    );
+    action.setColor(color);
+    action.setElement(det);
+
+    SoTempPath tmpPath(path.getLength() + 3);
+    tmpPath.ref();
+    tmpPath.append(roleGroup);
+    tmpPath.append(ownerGroup);
+    tmpPath.append(node);
+    tmpPath.append(&path);
+    action.apply(&tmpPath);
+    tmpPath.unrefNoDelete();
 }
 }  // namespace
 
@@ -501,12 +551,6 @@ void View3DInventorSelection::addHighlight(
         return;
     }
 
-    // A face drawn alone leaves its boundary invisible: edges live on a node of their
-    // own, separate from faces. Its boundary elements are drawn alongside it, under the
-    // same owner and role, so a highlighted face still reads as a face rather than a
-    // bare patch.
-    addHighlightElement(*nodes, owner, *vp, subName);
-
     // Log the quoted subName and view provider type name before boundary loop (NEW DIAGNOSTIC 3)
     std::ostringstream quotedMsg;
     quotedMsg << "[HLDBG] addHighlight boundary loop: subName='" << (subName ? subName : "") << "'"
@@ -529,104 +573,119 @@ void View3DInventorSelection::addHighlight(
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
     }
-    for (const std::string& boundaryElement : boundaryElements) {
-        addHighlightElement(*nodes, owner, *vp, boundaryElement.c_str());
+    // A face drawn alone leaves its boundary invisible: edges live on a node of their
+    // own, separate from faces. Its boundary elements are drawn alongside it, under the
+    // same owner and role, so a highlighted face still reads as a face rather than a
+    // bare patch.
+    std::vector<std::string> elements;
+    elements.reserve(boundaryElements.size() + 1);
+    elements.emplace_back(subName ? subName : "");
+    for (std::string& boundaryElement : boundaryElements) {
+        elements.push_back(std::move(boundaryElement));
     }
+
+    addHighlightElements(*nodes, owner, *vp, elements);
 }
 
-void View3DInventorSelection::addHighlightElement(
+void View3DInventorSelection::addHighlightElements(
     HighlightRoleNodes& nodes,
     const void* owner,
     ViewProviderDocumentObject& vp,
-    const char* subName
+    const std::vector<std::string>& elements
 )
 {
     std::ostringstream msg;
     std::string msgStr;
 
-    msg.str("");
-    msg << "[HLDBG] addHighlightElement: subName=" << (subName ? subName : "<null>");
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
+    // Every annotation made for this reference so far. An element whose path is
+    // already covered joins that annotation rather than getting one of its own:
+    // annotations that replay the same path share their nodes' secondary
+    // selection contexts, and a second annotation applying a detail of a type a
+    // node does not carry leaves that node's context empty, which the Part shape
+    // nodes read as "draw nothing".
+    std::vector<SoFCPathAnnotation*> annotations;
 
-    SoTempPath path(10);
-    path.ref();
-    if (!appendGroupPath(&vp, path)) {
-        msgStr = "[HLDBG]   appendGroupPath failed";
+    for (const std::string& element : elements) {
+        msg.str("");
+        msg << "[HLDBG] addHighlightElement: subName=" << element;
+        msgStr = msg.str();
         Base::Console().message("%s\n", msgStr.c_str());
         hldbg(msgStr);
+
+        SoTempPath path(10);
+        path.ref();
+        if (!appendGroupPath(&vp, path)) {
+            msgStr = "[HLDBG]   appendGroupPath failed";
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+            path.unrefNoDelete();
+            continue;
+        }
+        msgStr = "[HLDBG]   appendGroupPath succeeded";
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
+
+        SoDetail* det = nullptr;
+        // The annotation holds a plain SoPath into the view provider's live nodes. A
+        // recompute that rebuilds that scene graph makes Coin's path auditing truncate
+        // the path rather than leave it dangling, so the highlight silently stops
+        // rendering until the next refresh. checkGroupOnTop() has exactly the same
+        // exposure.
+        const bool resolved = vp.getDetailPath(element.c_str(), &path, true, det);
+
+        msg.str("");
+        msg << "[HLDBG]   getDetailPath returned " << (resolved ? "true" : "false")
+            << ", path.getLength()=" << path.getLength()
+            << ", det=" << (det ? det->getTypeId().getName().getString() : "null");
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
+
+        if (!resolved || !path.getLength()) {
+            delete det;
+            path.unrefNoDelete();
+            continue;
+        }
+
+        auto found = std::ranges::find_if(annotations, [&path](SoFCPathAnnotation* candidate) {
+            return sameNodes(candidate->getPath(), path);
+        });
+
+        SoGroup* grp = highlightOwnerGroup(nodes, owner);
+        if (found == annotations.end()) {
+            auto node = new SoFCPathAnnotation;
+            node->setPath(&path);
+            grp->addChild(node);
+            annotations.push_back(node);
+            msgStr = "[HLDBG]   created SoFCPathAnnotation and added to group";
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+
+            applyHighlightDetail(nodes.group, grp, node, path, det, nodes.color);
+            // The annotation frees exactly one detail, and it is this one: the first
+            // element to reach this path is the one whose detail decides how the
+            // annotation renders — with a detail it replays the geometry, without one
+            // it falls back to whole-object rendering.
+            node->setDetail(det);
+            det = nullptr;
+        }
+        else if ((*found)->getDetail()) {
+            msgStr = "[HLDBG]   appending detail to the annotation already on this path";
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+            applyHighlightDetail(nodes.group, grp, *found, path, det, nodes.color);
+        }
+        else {
+            // The annotation on this path already draws the whole object; appending
+            // an element would narrow it back down to that element alone.
+            msgStr = "[HLDBG]   skipped: the annotation on this path covers the whole object";
+            Base::Console().message("%s\n", msgStr.c_str());
+            hldbg(msgStr);
+        }
+
+        delete det;
         path.unrefNoDelete();
-        return;
     }
-    msgStr = "[HLDBG]   appendGroupPath succeeded";
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
-    SoDetail* det = nullptr;
-    // The annotation holds a plain SoPath into the view provider's live nodes. A
-    // recompute that rebuilds that scene graph makes Coin's path auditing truncate the
-    // path rather than leave it dangling, so the highlight silently stops rendering
-    // until the next refresh. checkGroupOnTop() has exactly the same exposure.
-    bool detailPathResult = vp.getDetailPath(subName, &path, true, det);
-    int pathLength = path.getLength();
-
-    msg.str("");
-    msg << "[HLDBG]   getDetailPath returned " << (detailPathResult ? "true" : "false")
-        << ", path.getLength()=" << pathLength << ", det=" << (det ? "non-null" : "null");
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
-    if (det) {
-        msg.str("");
-        msg << "[HLDBG]   det type: " << det->getTypeId().getName().getString();
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-    }
-
-    if (detailPathResult && pathLength) {
-        auto grp = highlightOwnerGroup(nodes, owner);
-        auto node = new SoFCPathAnnotation;
-        node->setPath(&path);
-        grp->addChild(node);
-        msgStr = "[HLDBG]   created SoFCPathAnnotation and added to group";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-
-        // The colour rides in the secondary selection context rather than an
-        // overriding material, because that is what narrows the render to the
-        // detail; an override material would repaint the whole object.
-        const char* actionType = det ? "Append" : "All";
-        SoSelectionElementAction action(
-            det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
-            true
-        );
-
-        msg.str("");
-        msg << "[HLDBG]   applying SoSelectionElementAction: " << actionType;
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-
-        action.setColor(nodes.color);
-        action.setElement(det);
-
-        SoTempPath tmpPath(path.getLength() + 3);
-        tmpPath.ref();
-        tmpPath.append(nodes.group);
-        tmpPath.append(grp);
-        tmpPath.append(node);
-        tmpPath.append(&path);
-        action.apply(&tmpPath);
-        tmpPath.unrefNoDelete();
-
-        node->setDetail(det);
-        det = nullptr;
-    }
-    delete det;
-    path.unrefNoDelete();
 }
 
 void View3DInventorSelection::clearHighlight(HighlightRole role, const void* owner)
