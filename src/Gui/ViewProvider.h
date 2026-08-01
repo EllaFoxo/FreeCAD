@@ -328,6 +328,10 @@ public:
      */
     virtual bool getDetailPath(const char* subname, SoFullPath* pPath, bool append, SoDetail*& det) const;
 
+    /// Sub-elements that bound @p subName — for a face, the edges around it.
+    /// Empty when the element has no boundary or the provider does not model one.
+    virtual std::vector<std::string> getBoundaryElements(const char* subName) const;
+
     /** partial rendering setup
      *
      * @param subelements: a list of dot separated string refer to the sub element

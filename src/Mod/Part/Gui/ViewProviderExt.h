@@ -126,6 +126,8 @@ public:
     std::vector<Base::Vector3d> getModelPoints(const SoPickedPoint*) const override;
     /// return the highlight lines for a given element or the whole shape
     std::vector<Base::Vector3d> getSelectionShape(const char* Element) const override;
+    /// For a face, its bounding edges; empty for any other kind of sub-element.
+    std::vector<std::string> getBoundaryElements(const char* subName) const override;
     //@}
 
     virtual Part::TopoShape getRenderedShape() const

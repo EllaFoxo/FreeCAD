@@ -104,6 +104,15 @@ private:
     HighlightRoleNodes* highlightRole(HighlightRole role);
     /// The subgroup holding @p owner's annotations of a role, created on first use.
     static SoGroup* highlightOwnerGroup(HighlightRoleNodes& nodes, const void* owner);
+    /// Resolves @p subName against @p vp and, if it renders, adds one more annotation
+    /// to @p owner's subgroup of @p nodes. Does nothing when @p subName does not
+    /// resolve to a detail.
+    void addHighlightElement(
+        HighlightRoleNodes& nodes,
+        const void* owner,
+        ViewProviderDocumentObject& vp,
+        const char* subName
+    );
 
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;

@@ -22,6 +22,8 @@
  *                                                                         *
  ***************************************************************************/
 
+#include <algorithm>
+
 #include <Bnd_Box.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepTools.hxx>
@@ -669,6 +671,46 @@ std::vector<Base::Vector3d> ViewProviderPartExt::getModelPoints(const SoPickedPo
 std::vector<Base::Vector3d> ViewProviderPartExt::getSelectionShape(const char* /*Element*/) const
 {
     return {};
+}
+
+std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
+{
+    if (!subName) {
+        return {};
+    }
+
+    auto [elementType, elementIndex] = Part::TopoShape::getElementTypeAndIndex(subName);
+    if (elementType != "Face" || elementIndex == 0) {
+        return {};
+    }
+
+    TopoDS_Shape shape = getRenderedShape().getShape();
+    if (shape.IsNull()) {
+        return {};
+    }
+
+    TopTools_IndexedMapOfShape faceMap;
+    TopExp::MapShapes(shape, TopAbs_FACE, faceMap);
+    if (static_cast<int>(elementIndex) > faceMap.Extent()) {
+        return {};
+    }
+
+    TopTools_IndexedMapOfShape edgeMap;
+    TopExp::MapShapes(shape, TopAbs_EDGE, edgeMap);
+
+    std::vector<std::string> boundaryElements;
+    const TopoDS_Shape& face = faceMap.FindKey(static_cast<int>(elementIndex));
+    for (TopExp_Explorer explorer(face, TopAbs_EDGE); explorer.More(); explorer.Next()) {
+        int edgeIndex = edgeMap.FindIndex(explorer.Current());
+        if (edgeIndex <= 0) {
+            continue;
+        }
+        std::string edgeName = "Edge" + std::to_string(edgeIndex);
+        if (std::ranges::find(boundaryElements, edgeName) == boundaryElements.end()) {
+            boundaryElements.push_back(std::move(edgeName));
+        }
+    }
+    return boundaryElements;
 }
 
 void ViewProviderPartExt::setHighlightedFaces(const std::vector<App::Material>& materials)

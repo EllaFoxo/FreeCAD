@@ -436,9 +436,26 @@ void View3DInventorSelection::addHighlight(
         return;
     }
 
+    // A face drawn alone leaves its boundary invisible: edges live on a node of their
+    // own, separate from faces. Its boundary elements are drawn alongside it, under the
+    // same owner and role, so a highlighted face still reads as a face rather than a
+    // bare patch.
+    addHighlightElement(*nodes, owner, *vp, subName);
+    for (const std::string& boundaryElement : vp->getBoundaryElements(subName)) {
+        addHighlightElement(*nodes, owner, *vp, boundaryElement.c_str());
+    }
+}
+
+void View3DInventorSelection::addHighlightElement(
+    HighlightRoleNodes& nodes,
+    const void* owner,
+    ViewProviderDocumentObject& vp,
+    const char* subName
+)
+{
     SoTempPath path(10);
     path.ref();
-    if (!appendGroupPath(vp, path)) {
+    if (!appendGroupPath(&vp, path)) {
         path.unrefNoDelete();
         return;
     }
@@ -448,8 +465,8 @@ void View3DInventorSelection::addHighlight(
     // recompute that rebuilds that scene graph makes Coin's path auditing truncate the
     // path rather than leave it dangling, so the highlight silently stops rendering
     // until the next refresh. checkGroupOnTop() has exactly the same exposure.
-    if (vp->getDetailPath(subName, &path, true, det) && path.getLength()) {
-        auto grp = highlightOwnerGroup(*nodes, owner);
+    if (vp.getDetailPath(subName, &path, true, det) && path.getLength()) {
+        auto grp = highlightOwnerGroup(nodes, owner);
         auto node = new SoFCPathAnnotation;
         node->setPath(&path);
         grp->addChild(node);
@@ -461,12 +478,12 @@ void View3DInventorSelection::addHighlight(
             det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
             true
         );
-        action.setColor(nodes->color);
+        action.setColor(nodes.color);
         action.setElement(det);
 
         SoTempPath tmpPath(path.getLength() + 3);
         tmpPath.ref();
-        tmpPath.append(nodes->group);
+        tmpPath.append(nodes.group);
         tmpPath.append(grp);
         tmpPath.append(node);
         tmpPath.append(&path);
