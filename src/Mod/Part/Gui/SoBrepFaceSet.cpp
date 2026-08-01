@@ -79,7 +79,7 @@ void hldbg(const std::string& message)
 /// without flooding the log.
 void hldbgRender(
     const void* node,
-    bool hasContext,
+    const Gui::SoFCSelectionContextExPtr& ctx,
     std::size_t secondaryCount,
     bool hasSecondary,
     int partCount,
@@ -91,9 +91,16 @@ void hldbgRender(
 
     std::ostringstream msg;
     msg << "[HLDBG] SoBrepFaceSet::GLRender node=" << node << " parts=" << partCount
-        << " ctx=" << (hasContext ? "yes" : "no") << " ctx2=" << (hasSecondary ? "yes" : "no")
+        << " ctx=" << (ctx ? "yes" : "no") << " ctx2=" << (hasSecondary ? "yes" : "no")
         << " ctx2Selected=" << secondaryCount << " materialBinding=" << materialBinding
         << " narrowed=" << (pushed ? "yes" : "no");
+    // The colour the face is actually painted in: the primary context is the only
+    // place overrideMaterialBinding() takes it from once it selects everything.
+    if (ctx) {
+        msg << " ctxSelectAll=" << (ctx->isSelectAll() ? "yes" : "no")
+            << " ctxColor=" << ctx->selectionColor[0] << "," << ctx->selectionColor[1] << ","
+            << ctx->selectionColor[2];
+    }
     std::string message = msg.str();
 
     std::string& last = reported[node];
@@ -756,7 +763,7 @@ void SoBrepFaceSet::GLRender(SoGLRenderAction* action)
     const bool pushed = overrideMaterialBinding(action, ctx, ctx2);
     hldbgRender(
         this,
-        static_cast<bool>(ctx),
+        ctx,
         ctx2 ? ctx2->selectionIndex.size() : 0U,
         static_cast<bool>(ctx2),
         partIndex.getNum(),

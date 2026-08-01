@@ -87,9 +87,9 @@ bool sameNodes(SoPath* stored, const SoTempPath& candidate)
     return true;
 }
 
-/// Writes one element's index and colour into the secondary selection context of
-/// every node @p path reaches, below @p node. A null @p det means the whole
-/// object rather than one of its elements.
+/// Writes one element's index into the secondary selection context of every node
+/// @p path reaches, below @p node. A null @p det means the whole object rather
+/// than one of its elements.
 void applyHighlightDetail(
     SoGroup* roleGroup,
     SoGroup* ownerGroup,
@@ -99,9 +99,9 @@ void applyHighlightDetail(
     const SbColor& color
 )
 {
-    // The colour rides in the secondary selection context rather than an
-    // overriding material, because that is what narrows the render to the
-    // detail; an override material would repaint the whole object.
+    // The secondary context is what narrows the render down to the detail; an
+    // overriding material would instead repaint the whole object. It carries the
+    // colour too, which is what a shape node without a primary context reads.
     SoSelectionElementAction action(
         det ? SoSelectionElementAction::Append : SoSelectionElementAction::All,
         true
@@ -117,6 +117,35 @@ void applyHighlightDetail(
     tmpPath.append(&path);
     action.apply(&tmpPath);
     tmpPath.unrefNoDelete();
+}
+
+/// Runs @p action over everything @p ownerGroup replays, entered through
+/// @p roleGroup. The path matters as much as the destination: a selection context
+/// is keyed by the chain of SoFCSelectionRoot nodes leading to the querying node,
+/// so an action applied to the owner subgroup alone would write a context the
+/// render traversal — which arrives through the role group — never looks up.
+void applyToOwnerGroup(SoGroup* roleGroup, SoGroup* ownerGroup, SoSelectionElementAction& action)
+{
+    SoTempPath path(2);
+    path.ref();
+    path.append(roleGroup);
+    path.append(ownerGroup);
+    action.apply(&path);
+    path.unrefNoDelete();
+}
+
+/// Gives every node this owner replays a primary selection context in the role's
+/// colour.
+///
+/// The secondary contexts alone decide which subelements draw, but a shape node
+/// that finds no primary context draws them in the object's own material: an
+/// on-top replay of a grey face over the same grey face reads as nothing having
+/// been highlighted at all. checkGroupOnTop() pairs the two actions the same way.
+void applyHighlightColor(SoGroup* roleGroup, SoGroup* ownerGroup, const SbColor& color)
+{
+    SoSelectionElementAction action(SoSelectionElementAction::All);
+    action.setColor(color);
+    applyToOwnerGroup(roleGroup, ownerGroup, action);
 }
 }  // namespace
 
@@ -604,6 +633,9 @@ void View3DInventorSelection::addHighlightElements(
     // node does not carry leaves that node's context empty, which the Part shape
     // nodes read as "draw nothing".
     std::vector<SoFCPathAnnotation*> annotations;
+    // Left null until an element actually resolves, so an owner whose elements all
+    // fail to resolve does not leave an empty subgroup behind.
+    SoGroup* ownerGroup = nullptr;
 
     for (const std::string& element : elements) {
         msg.str("");
@@ -652,6 +684,7 @@ void View3DInventorSelection::addHighlightElements(
         });
 
         SoGroup* grp = highlightOwnerGroup(nodes, owner);
+        ownerGroup = grp;
         if (found == annotations.end()) {
             auto node = new SoFCPathAnnotation;
             node->setPath(&path);
@@ -686,6 +719,18 @@ void View3DInventorSelection::addHighlightElements(
         delete det;
         path.unrefNoDelete();
     }
+
+    // After the annotations exist, and again on every rebuild: the colour is written
+    // into contexts the nodes below hold, and each teardown drops them.
+    if (ownerGroup) {
+        applyHighlightColor(nodes.group, ownerGroup, nodes.color);
+        msg.str("");
+        msg << "[HLDBG]   applied primary selection colour " << nodes.color[0] << ","
+            << nodes.color[1] << "," << nodes.color[2] << " to the owner subgroup";
+        msgStr = msg.str();
+        Base::Console().message("%s\n", msgStr.c_str());
+        hldbg(msgStr);
+    }
 }
 
 void View3DInventorSelection::clearHighlight(HighlightRole role, const void* owner)
@@ -701,16 +746,14 @@ void View3DInventorSelection::clearHighlight(HighlightRole role, const void* own
     SoGroup* grp = found->second;
     nodes->owners.erase(found);
 
-    // Drop the secondary contexts this owner's annotations created before the nodes go
-    // away. Applied along the role group so the context key matches the one
-    // addHighlight() wrote under; every other owner's subtree is left untouched.
-    SoTempPath path(2);
-    path.ref();
-    path.append(nodes->group);
-    path.append(grp);
-    SoSelectionElementAction action(SoSelectionElementAction::None, true);
-    action.apply(&path);
-    path.unrefNoDelete();
+    // Drop both contexts this owner's annotations created before the nodes go away.
+    // Neither clear covers the other: they live in different maps, keyed differently.
+    // A surviving primary context would keep colouring whatever the subgroup's address
+    // is reused for, since the key holds the subgroup by pointer.
+    SoSelectionElementAction clearSecondary(SoSelectionElementAction::None, true);
+    applyToOwnerGroup(nodes->group, grp, clearSecondary);
+    SoSelectionElementAction clearPrimary(SoSelectionElementAction::None);
+    applyToOwnerGroup(nodes->group, grp, clearPrimary);
 
     nodes->group->removeChild(grp);
 }
