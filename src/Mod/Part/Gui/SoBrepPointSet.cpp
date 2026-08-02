@@ -309,7 +309,10 @@ void SoBrepPointSet::GLRender(SoGLRenderAction* action)
     if (ctx2 && !ctx2->selectionIndex.empty()) {
         renderSelection(action, ctx2, false);
     }
-    else if (Gui::SoDelayedAnnotationsElement::isProcessingDelayedPaths) {
+    else if (
+        Gui::Selection().isClarifySelectionActive()
+        && Gui::SoDelayedAnnotationsElement::isProcessingDelayedPaths
+    ) {
         state->push();
         SoDepthBufferElement::set(state, FALSE, FALSE, SoDepthBufferElement::ALWAYS, SbVec2f(0.0f, 1.0f));
         inherited::GLRender(action);
