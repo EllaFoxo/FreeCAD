@@ -2655,6 +2655,10 @@ void FreeCADStyle::polish(QWidget* widget)
 {
     QProxyStyle::polish(widget);
 
+    if (widget == nullptr) {
+        return;
+    }
+
     // Transparency is inherited down the widget tree. Seeding from the parent here covers
     // widgets built after their parent's subtree was propagated — lazily created editors,
     // popups and the like — without an extra event filter. QWidget::ensurePolished() already
@@ -2725,6 +2729,8 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
 
     StyleContext context;
     context.component = StyleComponent::DropdownList;
+    applyTransparency(context, listView);
+
     const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
     if (!geometry.maxHeight) {
         return;
