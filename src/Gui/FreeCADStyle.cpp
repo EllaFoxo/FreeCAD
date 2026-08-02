@@ -2862,8 +2862,16 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
 
         // IsTransparent may resolve differently after a reload, so the tags the propagator
         // produced from the previous theme have to be recomputed before anything repaints.
+        // Guard the list: updateTransparency() sends StyleChange synchronously and in-tree
+        // handlers may destroy other top-level widgets while we are still walking them.
+        QList<QPointer<QWidget>> topLevels;
         for (QWidget* topLevel : QApplication::topLevelWidgets()) {
-            updateTransparency(topLevel, false);
+            topLevels.append(topLevel);
+        }
+        for (const QPointer<QWidget>& topLevel : topLevels) {
+            if (!topLevel.isNull()) {
+                updateTransparency(topLevel, false);
+            }
         }
 
         for (QWidget* widget : QApplication::allWidgets()) {

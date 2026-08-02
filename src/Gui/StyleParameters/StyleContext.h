@@ -199,9 +199,8 @@ enum class TransparencyMode : uint8_t
  *   2. Defining the values enum with Default = 0 and COUNT as the last value.
  *   3. Adding a string table and entry in ParameterDescriptorRegistry.cpp::variantSlotNames.
  *   4. Setting the slot in FreeCADStyle.cpp::contextOf().
- *
- * Slots that apply to every component (see globalSlots in ParameterDescriptorRegistry.cpp)
- * must stay last in this enum; a static_assert there enforces it.
+ *   5. Placing the entry last if the slot applies to every component (see globalSlots in
+ *      ParameterDescriptorRegistry.cpp); a static_assert there enforces it.
  */
 enum class VariantSlot : uint8_t
 {
