@@ -36,6 +36,7 @@
 
 #include "Application.h"
 #include "Document.h"
+#include "Inventor/So3DAnnotation.h"
 #include "SoFCUnifiedSelection.h"
 #include "Utilities.h"
 #include "View3DInventorSelection.h"
@@ -157,7 +158,16 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
     pcGroupOnTop = new SoSeparator;
     pcGroupOnTop->ref();
     pcGroupOnTop->setName("GroupOnTop");
-    root->addChild(pcGroupOnTop);
+
+    // The overlay groups share one delayed-path pipeline with the preview shapes and
+    // the draggers. The layer is what orders them against those: a preview must not
+    // paint over a selection, and a dragger must stay reachable above both.
+    pcGroupOnTopLayer = new So3DAnnotation;
+    pcGroupOnTopLayer->ref();
+    pcGroupOnTopLayer->setName("GroupOnTopLayer");
+    pcGroupOnTopLayer->layer = static_cast<int>(AnnotationLayer::Selection);
+    pcGroupOnTopLayer->addChild(pcGroupOnTop);
+    root->addChild(pcGroupOnTopLayer);
 
     auto pcGroupOnTopPickStyle = new SoPickStyle;
     pcGroupOnTopPickStyle->style = SoPickStyle::UNPICKABLE;
@@ -197,7 +207,13 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
     pcGroupHighlight = new SoSeparator;
     pcGroupHighlight->ref();
     pcGroupHighlight->setName("GroupHighlight");
-    root->addChild(pcGroupHighlight);
+
+    pcGroupHighlightLayer = new So3DAnnotation;
+    pcGroupHighlightLayer->ref();
+    pcGroupHighlightLayer->setName("GroupHighlightLayer");
+    pcGroupHighlightLayer->layer = static_cast<int>(AnnotationLayer::Highlight);
+    pcGroupHighlightLayer->addChild(pcGroupHighlight);
+    root->addChild(pcGroupHighlightLayer);
 
     auto pcHighlightPickStyle = new SoPickStyle;
     pcHighlightPickStyle->style = SoPickStyle::UNPICKABLE;
@@ -236,9 +252,11 @@ View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
 View3DInventorSelection::~View3DInventorSelection()
 {
     selectionRoot->unref();
+    pcGroupOnTopLayer->unref();
     pcGroupOnTop->unref();
     pcGroupOnTopPreSel->unref();
     pcGroupOnTopSel->unref();
+    pcGroupHighlightLayer->unref();
     pcGroupHighlight->unref();
     for (HighlightRoleNodes& role : highlightRoles) {
         role.group->unref();

@@ -48,6 +48,7 @@ namespace Gui
 
 class Document;
 class SoFCUnifiedSelection;
+class So3DAnnotation;
 class ViewProviderDocumentObject;
 
 class GuiExport View3DInventorSelection
@@ -117,9 +118,13 @@ private:
         const std::vector<std::string>& elements
     );
 
+    /// Parents pcGroupOnTop so it draws in the Selection layer of the overlay pipeline.
+    So3DAnnotation* pcGroupOnTopLayer;
     SoGroup* pcGroupOnTop;
     SoGroup* pcGroupOnTopSel;
     SoGroup* pcGroupOnTopPreSel;
+    /// Parents pcGroupHighlight so it draws in the Highlight layer, above pcGroupOnTop.
+    So3DAnnotation* pcGroupHighlightLayer;
     SoGroup* pcGroupHighlight;
     std::array<HighlightRoleNodes, highlightRoleCount> highlightRoles;
     SoFCUnifiedSelection* selectionRoot;
