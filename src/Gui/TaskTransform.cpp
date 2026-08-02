@@ -928,6 +928,7 @@ void TaskTransform::showCoordinateSystemIndicator()
     }
 
     auto* annotation = new So3DAnnotation();
+    annotation->layer = static_cast<int>(AnnotationLayer::Handle);
     annotation->addChild(csIndicatorTransform);
     annotation->addChild(indicator);
 

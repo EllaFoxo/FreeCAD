@@ -2224,6 +2224,7 @@ void View3DInventorViewer::setAxisCross(bool on)
             axisCrossKit->axisLength = axisCrossLength;
 
             auto annotation = new So3DAnnotation();
+            annotation->layer = static_cast<int>(AnnotationLayer::Handle);
             annotation->addChild(axisCrossKit);
 
             axisGroup = new SoSkipBoundingGroup;
