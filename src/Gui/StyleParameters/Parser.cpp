@@ -51,6 +51,11 @@ Value Number::evaluate([[maybe_unused]] const EvaluationContext& context) const
     return value;
 }
 
+Value Boolean::evaluate([[maybe_unused]] const EvaluationContext& context) const
+{
+    return value;
+}
+
 Value Color::evaluate([[maybe_unused]] const EvaluationContext& context) const
 {
     return color;
@@ -453,6 +458,39 @@ bool Parser::peekString(const char* function) const
     return input.compare(pos, strlen(function), function) == 0;
 }
 
+bool Parser::peekKeyword(const char* keyword) const
+{
+    if (!peekString(keyword)) {
+        return false;
+    }
+
+    // A keyword only matches when nothing identifier-like follows it, so names such as
+    // "truncate(" are still parsed as function calls.
+    const size_t after = pos + strlen(keyword);
+    return after >= input.size() || (isalnum(input[after]) == 0 && input[after] != '_');
+}
+
+bool Parser::peekBoolean()
+{
+    const size_t saved = pos;
+    skipWhitespace();
+
+    const bool found = peekKeyword(trueKeyword) || peekKeyword(falseKeyword);
+
+    pos = saved;
+    return found;
+}
+
+std::unique_ptr<Expr> Parser::parseBoolean()
+{
+    skipWhitespace();
+
+    const bool value = peekKeyword(trueKeyword);
+    pos += strlen(value ? trueKeyword : falseKeyword);
+
+    return std::make_unique<Boolean>(value);
+}
+
 std::unique_ptr<Expr> Parser::parseExpression()
 {
     auto expr = parseTerm();
@@ -530,6 +568,9 @@ std::unique_ptr<Expr> Parser::parseFactor()
     }
     else if (peekParameter()) {
         expr = parseParameter();
+    }
+    else if (peekBoolean()) {
+        expr = parseBoolean();
     }
     else if (peekFunction()) {
         expr = parseFunctionCall();
