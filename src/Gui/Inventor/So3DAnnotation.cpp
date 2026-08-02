@@ -101,6 +101,8 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
 
     Base::StateLocker processing(isProcessingDelayedPaths, true);
 
+    bool clearedForHandles = false;
+
     // One apply per layer, not per path. Each apply runs its own nested delayed-path
     // phase on the way out, and that phase is where a nested SoFCPathAnnotation draws;
     // finishing a layer before starting the next is what keeps the layers ordered.
@@ -114,6 +116,15 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
         SoPathList batch;
         for (auto entry = layerBegin; entry != layerEnd; ++entry) {
             batch.append(entry->path);
+        }
+
+        // Handles have to beat everything under them, but the layers below do write depth
+        // (a preview shape is a filled faceset) and every apply restores depth testing on
+        // the way in. Clearing once, at the boundary, frees the handles from that without
+        // changing how the layers below occlude each other.
+        if (!clearedForHandles && currentLayer >= static_cast<int>(AnnotationLayer::Handle)) {
+            glClear(GL_DEPTH_BUFFER_BIT);
+            clearedForHandles = true;
         }
 
         // Apply without obeysrules: Coin would otherwise sort and split the batch by head
