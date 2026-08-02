@@ -1874,6 +1874,12 @@ void OverlayTabWidget::removeWidget(QDockWidget* dock, QDockWidget* lastDock)
 
     setOverlayMode(dock, OverlayOption::Disable);
 
+    // The dock is back on an opaque surface, so close the transparency root the overlay panel
+    // opened for it; nothing else clears the tags left on the subtree.
+    if (auto* style = Application::Instance->freeCADStyle()) {
+        style->updateTransparency(dock, false);
+    }
+
     saveTabs();
 }
 

@@ -2853,6 +2853,13 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
 {
     if (event->type() == ThemeReloadEvent::registeredType()) {
         clearTokenCache();
+
+        // IsTransparent may resolve differently after a reload, so the tags the propagator
+        // produced from the previous theme have to be recomputed before anything repaints.
+        for (QWidget* topLevel : QApplication::topLevelWidgets()) {
+            updateTransparency(topLevel, false);
+        }
+
         for (QWidget* widget : QApplication::allWidgets()) {
             widget->update();
         }
