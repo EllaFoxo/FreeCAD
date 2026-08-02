@@ -34,6 +34,7 @@
 #endif
 
 #include <Inventor/elements/SoCacheElement.h>
+#include <Inventor/lists/SoPathList.h>
 #include <algorithm>
 
 #include "So3DAnnotation.h"
@@ -135,6 +136,25 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
 
         layerBegin = layerEnd;
     }
+}
+
+void SoDelayedAnnotationsElement::discardDelayedPaths(SoState* state)
+{
+    auto elt = static_cast<SoDelayedAnnotationsElement*>(state->getElementNoPush(classStackIndex));
+
+    if (elt->paths.empty()) {
+        return;
+    }
+
+    // The copies handed to addDelayedPath arrive at refcount 0 and are held as raw
+    // pointers, so appending them to a list that refs on append and unrefs on destruction
+    // is what actually frees them.
+    SoPathList discarded;
+    for (const PriorityPath& entry : elt->paths) {
+        discarded.append(entry.path);
+    }
+
+    elt->paths.clear();
 }
 
 SO_NODE_SOURCE(So3DAnnotation);

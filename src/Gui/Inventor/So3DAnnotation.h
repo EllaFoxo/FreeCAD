@@ -94,6 +94,14 @@ public:
 
     static void processDelayedPathsWithPriority(SoState* state, SoGLRenderAction* action);
 
+    /*! @brief Drop the paths accumulated on @p state without drawing them.
+     *
+     * For renderers that deliberately produce no overlay, such as the offscreen
+     * ones behind saved pictures and thumbnails. Without this the deferred paths
+     * are never released and pile up on the render action for its whole lifetime.
+     */
+    static void discardDelayedPaths(SoState* state);
+
     static bool isProcessingDelayedPaths;
 
     SbBool matches([[maybe_unused]] const SoElement* element) const override

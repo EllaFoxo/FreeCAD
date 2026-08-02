@@ -3191,6 +3191,10 @@ bool View3DInventorViewer::renderToFramebuffer(QOpenGLFramebufferObject* fbo, bo
         this->drawAxisCross();
     }
 
+    // This capture path draws no overlay, so the annotations it collected along the way
+    // have no consumer. Release them before the local action goes away with them.
+    SoDelayedAnnotationsElement::discardDelayedPaths(gl.getState());
+
     return true;
 }
 
