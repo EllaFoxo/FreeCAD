@@ -27,11 +27,29 @@
 #include <Inventor/nodes/SoSeparator.h>
 #include <Inventor/elements/SoElement.h>
 #include <Inventor/elements/SoSubElement.h>
+#include <Inventor/fields/SoSFInt32.h>
 #include <FCGlobal.h>
 #include <vector>
 
 namespace Gui
 {
+
+/*! @brief Draw order of an annotation within the delayed-path overlay pipeline.
+ *
+ * Everything that draws over the scene shares one pipeline; the layer is what
+ * orders an annotation against the others. Lower layers draw first, so a higher
+ * layer appears on top.
+ *
+ * These are spaced so that a caller with several related annotations can offset
+ * from a named layer without colliding with the next one.
+ */
+enum class AnnotationLayer : int
+{
+    Overlay = 0,       //!< Preview shapes and datums. The default.
+    Selection = 1000,  //!< The on-top selection and preselection groups.
+    Highlight = 2000,  //!< The reference and hover highlight groups.
+    Handle = 3000,     //!< Draggers, gizmos, the axis cross, placement indicators.
+};
 
 class GuiExport SoDelayedAnnotationsElement: public SoElement
 {
@@ -108,6 +126,9 @@ class GuiExport So3DAnnotation: public SoSeparator
 
 public:
     static bool render;
+
+    /// Where this annotation draws relative to the other overlay annotations.
+    SoSFInt32 layer;
 
     So3DAnnotation();
 

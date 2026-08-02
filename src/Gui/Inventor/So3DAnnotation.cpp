@@ -135,6 +135,8 @@ bool So3DAnnotation::render = false;
 So3DAnnotation::So3DAnnotation()
 {
     SO_NODE_CONSTRUCTOR(So3DAnnotation);
+
+    SO_NODE_ADD_FIELD(layer, (static_cast<int>(AnnotationLayer::Overlay)));
 }
 
 void So3DAnnotation::initClass()
@@ -165,7 +167,11 @@ void So3DAnnotation::GLRenderBelowPath(SoGLRenderAction* action)
     }
     else {
         SoCacheElement::invalidate(action->getState());
-        SoDelayedAnnotationsElement::addDelayedPath(action->getState(), action->getCurPath()->copy());
+        SoDelayedAnnotationsElement::addDelayedPath(
+            action->getState(),
+            action->getCurPath()->copy(),
+            layer.getValue()
+        );
     }
 }
 
@@ -176,7 +182,11 @@ void So3DAnnotation::GLRenderInPath(SoGLRenderAction* action)
     }
     else {
         SoCacheElement::invalidate(action->getState());
-        SoDelayedAnnotationsElement::addDelayedPath(action->getState(), action->getCurPath()->copy());
+        SoDelayedAnnotationsElement::addDelayedPath(
+            action->getState(),
+            action->getCurPath()->copy(),
+            layer.getValue()
+        );
     }
 }
 
