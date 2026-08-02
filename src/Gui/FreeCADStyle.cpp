@@ -3193,14 +3193,13 @@ bool FreeCADStyle::transparencyBelow(const QWidget* widget) const
         return false;
     }
 
-    // The context is the single source of truth for the transparency the widget renders with:
-    // it covers both the propagated tag and the rules contextOf() applies on its own, such as
-    // toolbars hosted in the status bar. Falling back to the tag alone would miss the latter.
-    const StyleContext context = contextOf(widget);
-    const bool ownTransparency = context.variant.get(VariantSlot::TransparencyMode)
-        == static_cast<uint8_t>(TransparencyMode::Transparent);
-
-    return resolve<bool>(context, StyleProperty::IsTransparent).value_or(ownTransparency);
+    // Only the propagated tag describes the surface: it says the widget is painted over
+    // something see-through. The Transparent variant contextOf() derives for a toolbar hosted
+    // in a status bar means the opposite direction — suppress my own chrome, I blend into an
+    // opaque host — and must not be mistaken for a see-through surface for the children.
+    // A theme that does want such a toolbar's children in the Transparent chain says so with
+    // ToolBarTransparentIsTransparent, which resolves here for exactly that widget.
+    return resolve<bool>(contextOf(widget), StyleProperty::IsTransparent).value_or(isTransparent(widget));
 }
 
 void FreeCADStyle::tagWidgetTransparency(QWidget* widget, bool surface) const
