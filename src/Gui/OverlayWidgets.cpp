@@ -1831,6 +1831,13 @@ void OverlayTabWidget::addWidget(QDockWidget* dock, const QString& title)
         setRect(rect);
     }
 
+    // The dock joined this panel's subtree, so re-seed the panel's transparency root to reach
+    // it. Nothing on the drag-and-drop path does: the destination panel is the reveal target,
+    // which onTimer() excludes from every setOverlayMode() call it makes.
+    if (auto* style = Application::Instance->freeCADStyle()) {
+        style->updateTransparency(this, false);
+    }
+
     saveTabs();
 }
 
@@ -1875,7 +1882,8 @@ void OverlayTabWidget::removeWidget(QDockWidget* dock, QDockWidget* lastDock)
     setOverlayMode(dock, OverlayOption::Disable);
 
     // The dock is back on an opaque surface, so close the transparency root the overlay panel
-    // opened for it; nothing else clears the tags left on the subtree.
+    // opened for it; nothing else clears the tags left on the subtree. The hardcoded surface
+    // is safe only because the dock always returns to MainWindow, which never goes transparent.
     if (auto* style = Application::Instance->freeCADStyle()) {
         style->updateTransparency(dock, false);
     }
