@@ -377,7 +377,7 @@ public:
      * @param inherited Transparency of the surface behind @p widget. A widget carrying the
      *                  "transparent" property overrides this for itself, opening a root.
      */
-    void updateTransparency(QWidget* widget, bool inherited) const;
+    void updateTransparency(QWidget* widget, bool inherited);
 
     /**
      * @brief Whether @p widget is painted over a transparent surface.
@@ -814,6 +814,13 @@ private:
      * the widget is painted.
      */
     static void applyTransparency(StyleParameters::StyleContext& context, const QWidget* widget);
+
+    /**
+     * @brief Tags @p widget itself with @p surface and notifies it, without touching children.
+     *
+     * The single implementation of the tag write, shared by updateTransparency() and polish().
+     */
+    void tagWidgetTransparency(QWidget* widget, bool surface) const;
 
     /**
      * @brief Resolves the icon color for @p context.

@@ -47,7 +47,7 @@ private Q_SLOTS:
         breaker->setProperty("component", "List");
         auto* child = new QWidget(breaker);
 
-        const Gui::FreeCADStyle style;
+        Gui::FreeCADStyle style;
         style.updateTransparency(&root, true);
 
         QVERIFY(Gui::FreeCADStyle::isTransparent(&root));
@@ -64,7 +64,7 @@ private Q_SLOTS:
         opener->setProperty("component", "Tree");
         auto* child = new QWidget(opener);
 
-        const Gui::FreeCADStyle style;
+        Gui::FreeCADStyle style;
         style.updateTransparency(&root, false);
 
         QVERIFY(!Gui::FreeCADStyle::isTransparent(&root));
@@ -80,7 +80,7 @@ private Q_SLOTS:
         panel->setProperty("transparent", true);
         auto* child = new QWidget(panel);
 
-        const Gui::FreeCADStyle style;
+        Gui::FreeCADStyle style;
         style.updateTransparency(&root, false);
 
         QVERIFY(!Gui::FreeCADStyle::isTransparent(&root));
@@ -95,7 +95,7 @@ private Q_SLOTS:
         panel->setProperty("transparent", true);
         auto* child = new QWidget(panel);
 
-        const Gui::FreeCADStyle style;
+        Gui::FreeCADStyle style;
         style.updateTransparency(&root, false);
         QVERIFY(Gui::FreeCADStyle::isTransparent(child));
 
@@ -103,6 +103,27 @@ private Q_SLOTS:
         style.updateTransparency(&root, false);
 
         QVERIFY(!Gui::FreeCADStyle::isTransparent(panel));
+        QVERIFY(!Gui::FreeCADStyle::isTransparent(child));
+    }
+
+    // polish() must seed a widget from what its parent presents downward
+    // (transparencyBelow()), not from what the parent renders with (isTransparent()) —
+    // the two disagree here precisely because breaker is a chain-breaker.
+    void test_polishSeedsFromTransparencyBelowNotIsTransparent()  // NOLINT
+    {
+        QWidget root;
+        auto* breaker = new QWidget(&root);
+        breaker->setProperty("component", "List");
+
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&root, true);
+        QVERIFY(Gui::FreeCADStyle::isTransparent(breaker));
+
+        // Simulate a widget built after the subtree was propagated — e.g. a lazily created
+        // editor — whose only transparency signal comes from polish().
+        auto* child = new QWidget(breaker);
+        style.polish(child);
+
         QVERIFY(!Gui::FreeCADStyle::isTransparent(child));
     }
 };

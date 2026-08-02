@@ -63,6 +63,7 @@
 #include <QMainWindow>
 #include <QStatusBar>
 #include <QTabBar>
+#include <QTabWidget>
 #include <QTimer>
 #include <QToolBar>
 
@@ -1477,6 +1478,7 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
         StyleContext paneContext;
         paneContext.component = StyleComponent::TabWidget;
         paneContext.element = StyleComponentElement::Root;
+        applyTransparency(paneContext, widget);
         const BoxGeometryDefinition geometry = resolveBoxGeometry(paneContext);
         const QRect paneRect = QProxyStyle::subElementRect(SE_TabWidgetTabPane, option, widget);
         return geometry.contentRect(paneRect);
@@ -2437,7 +2439,8 @@ void FreeCADStyle::drawTabWidgetFrame(
     stripContext.component = StyleComponent::TabBar;
     stripContext.element = StyleComponentElement::Base;
     stripContext.variant.set(VariantSlot::Position, position);
-    applyTransparency(stripContext, widget);
+    const auto* tabWidget = qobject_cast<const QTabWidget*>(widget);
+    applyTransparency(stripContext, tabWidget != nullptr ? tabWidget->tabBar() : nullptr);
 
     const int stripHeight = resolve<int>(stripContext, StyleProperty::Height).value_or(0);
     if (stripHeight == 0) {
@@ -2654,8 +2657,10 @@ void FreeCADStyle::polish(QWidget* widget)
 
     // Transparency is inherited down the widget tree. Seeding from the parent here covers
     // widgets built after their parent's subtree was propagated — lazily created editors,
-    // popups and the like — without an extra event filter.
-    updateTransparency(widget, transparencyBelow(widget->parentWidget()));
+    // popups and the like — without an extra event filter. QWidget::ensurePolished() already
+    // walks descendants top-down and polishes each in turn, so tag only this widget here;
+    // recursing would redo Qt's own walk and turn total work into Σ(subtree) instead of N.
+    tagWidgetTransparency(widget, transparencyBelow(widget->parentWidget()));
 
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
@@ -3174,7 +3179,21 @@ bool FreeCADStyle::transparencyBelow(const QWidget* widget) const
     return resolve<bool>(contextOf(widget), StyleProperty::IsTransparent).value_or(isTransparent(widget));
 }
 
-void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited) const
+void FreeCADStyle::tagWidgetTransparency(QWidget* widget, bool surface) const
+{
+    if (isTransparent(widget) == surface) {
+        return;
+    }
+
+    widget->setProperty(transparencyProperty, surface);
+
+    // The tag changes padding, spacing and height tokens as well as colours, so a repaint
+    // is not enough — QTabBar caches its tab sizes until the style changes.
+    QEvent styleChange(QEvent::StyleChange);
+    QCoreApplication::sendEvent(widget, &styleChange);
+}
+
+void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited)
 {
     if (widget == nullptr) {
         return;
@@ -3184,21 +3203,29 @@ void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited) const
     const QVariant seed = widget->property(transparencyOverrideProperty);
     const bool surface = seed.isValid() ? seed.toBool() : inherited;
 
-    if (isTransparent(widget) != surface) {
-        widget->setProperty(transparencyProperty, surface);
-
-        // The tag changes padding, spacing and height tokens as well as colours, so a repaint
-        // is not enough — QTabBar caches its tab sizes until the style changes.
-        QEvent styleChange(QEvent::StyleChange);
-        QCoreApplication::sendEvent(widget, &styleChange);
-    }
+    tagWidgetTransparency(widget, surface);
 
     const bool below = transparencyBelow(widget);
 
-    for (QObject* child : widget->children()) {
-        if (auto* childWidget = qobject_cast<QWidget*>(child)) {
-            updateTransparency(childWidget, below);
+    // Copy first: the StyleChange sent above (and any DynamicPropertyChange delivered while
+    // recursing) is handled synchronously, and in-tree handlers may add or remove siblings —
+    // e.g. DlgToolbarsImp repopulates a tree on StyleChange — which would invalidate a live
+    // QObjectList mid-iteration.
+    const QObjectList children = widget->children();
+    for (QObject* child : children) {
+        auto* childWidget = qobject_cast<QWidget*>(child);
+        if (childWidget == nullptr) {
+            continue;
         }
+
+        if (childWidget->isWindow()) {
+            // Popups, menus, tooltips and dialogs are separate top-level surfaces over the
+            // desktop, not surfaces over the 3D view — do not inherit through the QObject
+            // parent/child link used purely for lifetime management.
+            continue;
+        }
+
+        updateTransparency(childWidget, below);
     }
 }
 
