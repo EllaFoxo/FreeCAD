@@ -39,6 +39,9 @@ public:
                     // A Numeric is not a boolean, so a strictly typed read rejects it and the
                     // surface passes through unchanged.
                     {.name = "TestNumericIsTransparent", .value = "1"},
+                    // Mirrors the production token: the property editor paints an opaque
+                    // panel, so it presents an opaque surface to everything inside it.
+                    {.name = "PropertyEditorTransparentIsTransparent", .value = "false"},
                 },
                 {.name = "Transparency Fixture"}
             )
@@ -274,6 +277,22 @@ private Q_SLOTS:
 
         QVERIFY(Gui::FreeCADStyle::isTransparent(transparentChild));
         QVERIFY(!Gui::FreeCADStyle::isTransparent(opaqueChild));
+    }
+
+    // An unregistered component override participates in the fallback chain exactly like a
+    // registered component, so PropertyEditor can stop the chain without a StyleComponent value.
+    void test_componentOverrideBreaksChainBelow()  // NOLINT
+    {
+        QWidget root;
+        auto* editor = new QWidget(&root);
+        editor->setProperty("component", "PropertyEditor");
+        auto* viewport = new QWidget(editor);
+
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&root, true);
+
+        QVERIFY(Gui::FreeCADStyle::isTransparent(editor));
+        QVERIFY(!Gui::FreeCADStyle::isTransparent(viewport));
     }
 };
 

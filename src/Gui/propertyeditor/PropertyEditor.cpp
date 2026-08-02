@@ -71,6 +71,10 @@ PropertyEditor::PropertyEditor(QWidget* parent)
     propertyModel = new PropertyModel(this);
     setModel(propertyModel);
 
+    // Resolves PropertyEditor* tokens ahead of the Tree and List chain, so the overlay
+    // treatment can differ from the document tree's.
+    setProperty("component", "PropertyEditor");
+
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
 
