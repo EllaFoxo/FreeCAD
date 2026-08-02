@@ -258,9 +258,9 @@ struct GuiExport Tuple
  *
  * As a rule, operations can be only performed over values of the same type.
  */
-struct GuiExport Value: std::variant<Numeric, Base::Color, std::string, Tuple, None>
+struct GuiExport Value: std::variant<Numeric, Base::Color, std::string, Tuple, bool, None>
 {
-    using std::variant<Numeric, Base::Color, std::string, Tuple, None>::variant;
+    using std::variant<Numeric, Base::Color, std::string, Tuple, bool, None>::variant;
 
     /**
      * Converts the object into its string representation.
@@ -324,6 +324,9 @@ constexpr const char* valueTypeName()
     }
     else if constexpr (std::is_same_v<T, Tuple>) {
         return "tuple";
+    }
+    else if constexpr (std::is_same_v<T, bool>) {
+        return "boolean";
     }
     else if constexpr (std::is_same_v<T, None>) {
         return "none";
@@ -441,8 +444,24 @@ std::optional<T> valueAs(const std::optional<Value>& value)
     return value->get<T>();
 }
 
+/**
+ * @brief Boolean tokens resolve only from a genuine boolean value.
+ *
+ * A Numeric never converts, so a token written as `1` is not accepted where a boolean
+ * is expected.
+ */
 template<typename T>
-    requires std::is_arithmetic_v<T>
+    requires std::is_same_v<T, bool>
+std::optional<bool> valueAs(const std::optional<Value>& value)
+{
+    if (!value || !value->holds<bool>()) {
+        return std::nullopt;
+    }
+    return value->get<bool>();
+}
+
+template<typename T>
+    requires std::is_arithmetic_v<T> && (!std::is_same_v<T, bool>)
 std::optional<T> valueAs(const std::optional<Value>& value)
 {
     if (const auto numeric = valueAs<Numeric>(value)) {
