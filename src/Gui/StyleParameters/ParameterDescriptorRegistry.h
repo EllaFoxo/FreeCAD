@@ -122,6 +122,15 @@ public:
     void registerVariant(ParameterVariant variant);
 
     /**
+     * @brief Registers a variant that participates in every component's token names.
+     *
+     * Use for dimensions that apply across the whole design system rather than to one
+     * component, so that name parsing describes the same token space that context-based
+     * resolution already produces.
+     */
+    void registerGlobalVariant(ParameterVariant variant);
+
+    /**
      * @brief Registers a component descriptor.
      *
      * Optionally associates a StyleComponent enum value with this descriptor so
@@ -204,6 +213,9 @@ public:
 
 private:
     std::map<std::string, ParameterVariant> _variants;
+    // Variant names that apply to every descriptor, appended after the descriptor's own
+    // variants so the matching order still mirrors VariantSlot declaration order.
+    std::vector<std::string> _globalVariantNames;
     std::map<std::string, ParameterDescriptor> _descriptors;
 
     // Each StyleComponent enum value maps to the full chain of prefix names
@@ -234,6 +246,9 @@ private:
     // Callers are responsible for providing a fully-flattened inherits list in
     // the descriptor — this function does not recurse into grandparent chains.
     std::vector<std::string> resolveChainNames(const std::string& name) const;
+
+    // Returns the descriptor's own variant names followed by the global ones, in match order.
+    std::vector<std::string> variantNamesFor(const ParameterDescriptor& descriptor) const;
 };
 
 /**

@@ -15,6 +15,7 @@ add_executable(Gui_tests_run
         StyleParameters/YamlParameterSourceTest.cpp
         StyleParameters/ColorEffectTest.cpp
         StyleParameters/ValueTest.cpp
+        StyleParameters/DescriptorRegistryTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
         GeometrySelectionTest.cpp

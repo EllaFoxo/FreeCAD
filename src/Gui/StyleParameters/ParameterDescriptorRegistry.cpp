@@ -241,6 +241,15 @@ void ParameterDescriptorRegistry::registerVariant(ParameterVariant variant)
     _variants[variant.name] = std::move(variant);
 }
 
+void ParameterDescriptorRegistry::registerGlobalVariant(ParameterVariant variant)
+{
+    if (std::ranges::find(_globalVariantNames, variant.name) == _globalVariantNames.end()) {
+        _globalVariantNames.push_back(variant.name);
+    }
+
+    registerVariant(std::move(variant));
+}
+
 void ParameterDescriptorRegistry::registerDescriptor(
     ParameterDescriptor descriptor,
     StyleComponent component
@@ -289,7 +298,7 @@ std::optional<ParsedParameterName> ParameterDescriptorRegistry::parse(const std:
     ParsedParameterName result;
     result.component = componentName;
 
-    for (const std::string& variantName : desc->variants) {
+    for (const std::string& variantName : variantNamesFor(*desc)) {
         const auto variantIt = _variants.find(variantName);
         if (variantIt == _variants.end()) {
             continue;
@@ -354,7 +363,7 @@ std::vector<std::string> ParameterDescriptorRegistry::buildPrefixesFromParsed(
     std::vector<std::string> fragments;
     std::vector<std::string> activeStates;
 
-    for (const std::string& variantName : desc->variants) {
+    for (const std::string& variantName : variantNamesFor(*desc)) {
         const auto variantIt = _variants.find(variantName);
         if (variantIt == _variants.end()) {
             continue;
@@ -469,10 +478,24 @@ std::vector<std::string> ParameterDescriptorRegistry::resolveChainNames(const st
     return chain;
 }
 
+std::vector<std::string> ParameterDescriptorRegistry::variantNamesFor(
+    const ParameterDescriptor& descriptor
+) const
+{
+    std::vector<std::string> names = descriptor.variants;
+    names.insert(names.end(), _globalVariantNames.begin(), _globalVariantNames.end());
+
+    return names;
+}
+
 // ─── Registry population ─────────────────────────────────────────────────────
 
 void registerBuiltinVariants(ParameterDescriptorRegistry& registry)
 {
+    // TransparencyMode applies to every component: buildPrefixes() walks all variant slots
+    // regardless of the descriptor, so parse() has to recognise it everywhere too.
+    constexpr auto globalSlots = std::to_array({VariantSlot::TransparencyMode});
+
     // Variant-kind dimensions — derived from the canonical variantSlotNames tables.
     for (size_t index = 0; index < variantSlotDisplayNames.size(); ++index) {
         const auto variantSlot = static_cast<VariantSlot>(index);
@@ -485,7 +508,15 @@ void registerBuiltinVariants(ParameterDescriptorRegistry& registry)
         for (const auto& [key, name] : valueMap) {
             variant.values.emplace_back(name);
         }
-        registry.registerVariant(std::move(variant));
+
+        const bool isGlobal = std::ranges::find(globalSlots, variantSlot) != globalSlots.end();
+
+        if (isGlobal) {
+            registry.registerGlobalVariant(std::move(variant));
+        }
+        else {
+            registry.registerVariant(std::move(variant));
+        }
     }
 
     // State-kind dimension — derived from the canonical stateNames table.
