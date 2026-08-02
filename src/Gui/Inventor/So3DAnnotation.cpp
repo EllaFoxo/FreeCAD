@@ -37,6 +37,7 @@
 #include <algorithm>
 
 #include "So3DAnnotation.h"
+#include <Base/Tools.h>
 #include <Gui/Selection/Selection.h>
 
 using namespace Gui;
@@ -98,7 +99,7 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
     std::vector<PriorityPath> ordered;
     ordered.swap(elt->paths);
 
-    isProcessingDelayedPaths = true;
+    Base::StateLocker processing(isProcessingDelayedPaths, true);
 
     // One apply per layer, not per path. Each apply runs its own nested delayed-path
     // phase on the way out, and that phase is where a nested SoFCPathAnnotation draws;
@@ -123,8 +124,6 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
 
         layerBegin = layerEnd;
     }
-
-    isProcessingDelayedPaths = false;
 }
 
 SO_NODE_SOURCE(So3DAnnotation);

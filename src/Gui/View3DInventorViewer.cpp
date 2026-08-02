@@ -3305,20 +3305,9 @@ void View3DInventorViewer::renderDelayedAnnotations(SoGLRenderAction* glra)
         return;
     }
 
-    class ScopedAnnotationRender
-    {
-    public:
-        ScopedAnnotationRender()
-        {
-            So3DAnnotation::render = true;
-        }
-
-        ~ScopedAnnotationRender()
-        {
-            So3DAnnotation::render = false;
-        }
-    } annotationRender;
-
+    // Scoped so that the flag is restored even if the replay throws; leaving it set
+    // would make every later frame draw annotations inline, without any layering.
+    Base::StateLocker annotationRender(So3DAnnotation::render, true);
     glClear(GL_DEPTH_BUFFER_BIT);
 
     Gui::SoDelayedAnnotationsElement::processDelayedPathsWithPriority(state, glra);
