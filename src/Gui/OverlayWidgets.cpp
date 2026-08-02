@@ -54,6 +54,7 @@
 #include <Base/Console.h>
 #include <App/Application.h>
 #include "Application.h"
+#include "FreeCADStyle.h"
 #include "BitmapFactory.h"
 #include "Clipping.h"
 #include "ComboView.h"
@@ -1578,6 +1579,13 @@ void OverlayTabWidget::setOverlayMode(bool enable)
     refreshStyleSheet(proxyWidget, stylesheet);
     refreshStyleSheet(this, stylesheet);
     setOverlayMode(this, option);
+
+    // The "transparent" property set above seeds this panel as a transparency root; walk the
+    // subtree so every child either adapts its painting or stops the chain where it paints a
+    // surface of its own.
+    if (auto* style = Application::Instance->freeCADStyle()) {
+        style->updateTransparency(this, false);
+    }
 
     _graphicsEffect->setEnabled(effectEnabled() && (enable || isTransparent()));
 
