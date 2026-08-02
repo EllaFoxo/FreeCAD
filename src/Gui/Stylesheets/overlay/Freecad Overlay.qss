@@ -42,9 +42,8 @@ Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item:disable
   color: @BaseDisabledTextColor;
 }
 
+/* Appearance moved to design system; margin is layout not yet expressible as token. */
 Gui--OverlayTabWidget::pane {
-  background-color: transparent;
-  border: transparent;
   margin: 40px;
 }
 
