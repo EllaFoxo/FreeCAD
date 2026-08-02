@@ -42,6 +42,10 @@ namespace Gui
  *
  * These are spaced so that a caller with several related annotations can offset
  * from a named layer without colliding with the next one.
+ *
+ * The layer is only honoured on the outermost So3DAnnotation of a subtree. An
+ * annotation nested below another one is drawn as part of its ancestor's layer
+ * and its own layer value is ignored, so put the layer on the outermost node.
  */
 enum class AnnotationLayer : int
 {
