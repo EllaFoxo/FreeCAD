@@ -101,6 +101,10 @@ public:
     QBrush itemBackground() const;
     void setItemBackground(const QBrush& c);
 
+    /// Height needed to show every visible row without scrolling; zero when there is nothing to show.
+    int contentHeight() const;
+    using QTreeView::viewportSizeHint;
+
     bool isBinding() const
     {
         return binding;
@@ -137,6 +141,7 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
     bool event(QEvent*) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void changeEvent(QEvent* event) override;
 
 private:
     void setFirstLevelExpanded(bool doExpand);
@@ -170,6 +175,9 @@ private:
     QModelIndex indexResizable(QPoint mouse_pos);
 
     App::Document* propertyDocument(App::PropertyContainer* cont) const;
+
+    void updateHeightLimit();
+    bool hasVisibleProperties() const;
 
 private:
     PropertyItemDelegate* delegate;

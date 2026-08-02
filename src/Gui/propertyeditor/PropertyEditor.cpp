@@ -41,6 +41,7 @@
 #include <Base/Tools.h>
 #include <Gui/Command.h>
 #include <Gui/Document.h>
+#include <Gui/FreeCADStyle.h>
 
 #include "Document.h"
 #include "Tree.h"
@@ -74,6 +75,16 @@ PropertyEditor::PropertyEditor(QWidget* parent)
     // Resolves PropertyEditor* tokens ahead of the Tree and List chain, so the overlay
     // treatment can differ from the document tree's.
     setProperty("component", "PropertyEditor");
+
+    // Over a transparent surface the editor paints a panel sized to its rows, so the cap has
+    // to follow anything that changes how many rows are visible.
+    // clang-format off
+    connect(propertyModel, &QAbstractItemModel::modelReset, this, &PropertyEditor::updateHeightLimit);
+    connect(propertyModel, &QAbstractItemModel::rowsInserted, this, &PropertyEditor::updateHeightLimit);
+    connect(propertyModel, &QAbstractItemModel::rowsRemoved, this, &PropertyEditor::updateHeightLimit);
+    connect(this, &QTreeView::expanded, this, &PropertyEditor::updateHeightLimit);
+    connect(this, &QTreeView::collapsed, this, &PropertyEditor::updateHeightLimit);
+    // clang-format on
 
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
@@ -183,6 +194,43 @@ QBrush PropertyEditor::itemBackground() const
 void PropertyEditor::setItemBackground(const QBrush& c)
 {
     this->_itemBackground = c;
+}
+
+bool PropertyEditor::hasVisibleProperties() const
+{
+    // Group headers survive PropertyModel::resetGroups() even once their properties are
+    // gone, so an empty model still reports top-level rows; only a group that still has
+    // children counts as content to size the panel around.
+    for (int row = 0, count = model()->rowCount(); row < count; ++row) {
+        if (model()->rowCount(model()->index(row, 0)) > 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int PropertyEditor::contentHeight() const
+{
+    if (model() == nullptr || !hasVisibleProperties()) {
+        return 0;
+    }
+
+    return viewportSizeHint().height() + 2 * frameWidth();
+}
+
+void PropertyEditor::updateHeightLimit()
+{
+    setMaximumHeight(Gui::FreeCADStyle::isTransparent(this) ? contentHeight() : QWIDGETSIZE_MAX);
+}
+
+void PropertyEditor::changeEvent(QEvent* event)
+{
+    QTreeView::changeEvent(event);
+
+    // StyleChange is what the transparency propagator dispatches when a widget's tag flips.
+    if (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange) {
+        updateHeightLimit();
+    }
 }
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
