@@ -823,6 +823,27 @@ private:
     void tagWidgetTransparency(QWidget* widget, bool surface) const;
 
     /**
+     * @brief The transparency @p widget itself renders with, given @p inherited as the fallback.
+     *
+     * An explicit "transparent" property always wins over @p inherited — even for a widget that
+     * is itself a window, which is how such a widget can still declare itself a root. The single
+     * implementation of a widget's own seed, shared by updateTransparency() and polish() so the
+     * check cannot be present in one and silently missing from the other.
+     */
+    static bool ownSurface(const QWidget* widget, bool inherited);
+
+    /**
+     * @brief Whether @p widget may inherit transparency through its QObject parent/child link.
+     *
+     * A popup, menu, tooltip or dialog is a separate top-level surface over the desktop, not
+     * over the 3D view, even when constructed as a child of a transparent widget purely for
+     * lifetime management. False here does not block an explicit "transparent" property, which
+     * ownSurface() still honours regardless. Shared by updateTransparency()'s recursion and
+     * polish()'s parent lookup, so the two cannot disagree on the rule.
+     */
+    static bool canInheritTransparency(const QWidget* widget);
+
+    /**
      * @brief Resolves the icon color for @p context.
      *
      * Tries IconColor token, then TextColor token, then falls back to palette.buttonText().

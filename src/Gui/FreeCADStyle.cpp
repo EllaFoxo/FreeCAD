@@ -2660,7 +2660,11 @@ void FreeCADStyle::polish(QWidget* widget)
     // popups and the like — without an extra event filter. QWidget::ensurePolished() already
     // walks descendants top-down and polishes each in turn, so tag only this widget here;
     // recursing would redo Qt's own walk and turn total work into Σ(subtree) instead of N.
-    tagWidgetTransparency(widget, transparencyBelow(widget->parentWidget()));
+    // ownSurface()/canInheritTransparency() are the same rule updateTransparency() uses, so an
+    // explicit override or a window boundary is honoured identically through either path.
+    const bool inherited = canInheritTransparency(widget)
+        && transparencyBelow(widget->parentWidget());
+    tagWidgetTransparency(widget, ownSurface(widget, inherited));
 
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
@@ -3193,17 +3197,29 @@ void FreeCADStyle::tagWidgetTransparency(QWidget* widget, bool surface) const
     QCoreApplication::sendEvent(widget, &styleChange);
 }
 
+bool FreeCADStyle::ownSurface(const QWidget* widget, bool inherited)
+{
+    // An explicit property opens a root; otherwise inherit.
+    const QVariant seed = widget->property(transparencyOverrideProperty);
+    return seed.isValid() ? seed.toBool() : inherited;
+}
+
+bool FreeCADStyle::canInheritTransparency(const QWidget* widget)
+{
+    // Popups, menus, tooltips and dialogs are separate top-level surfaces over the desktop,
+    // not surfaces over the 3D view — they do not inherit through the QObject parent/child
+    // link used purely for lifetime management. An explicit override still applies regardless,
+    // via ownSurface().
+    return widget != nullptr && !widget->isWindow();
+}
+
 void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited)
 {
     if (widget == nullptr) {
         return;
     }
 
-    // This widget's own surface. An explicit property opens a root; otherwise inherit.
-    const QVariant seed = widget->property(transparencyOverrideProperty);
-    const bool surface = seed.isValid() ? seed.toBool() : inherited;
-
-    tagWidgetTransparency(widget, surface);
+    tagWidgetTransparency(widget, ownSurface(widget, inherited));
 
     const bool below = transparencyBelow(widget);
 
@@ -3218,14 +3234,7 @@ void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited)
             continue;
         }
 
-        if (childWidget->isWindow()) {
-            // Popups, menus, tooltips and dialogs are separate top-level surfaces over the
-            // desktop, not surfaces over the 3D view — do not inherit through the QObject
-            // parent/child link used purely for lifetime management.
-            continue;
-        }
-
-        updateTransparency(childWidget, below);
+        updateTransparency(childWidget, canInheritTransparency(childWidget) && below);
     }
 }
 

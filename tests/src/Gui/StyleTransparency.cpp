@@ -126,6 +126,41 @@ private Q_SLOTS:
 
         QVERIFY(!Gui::FreeCADStyle::isTransparent(child));
     }
+
+    // Regression guard: an explicit "transparent" property must win in polish() exactly as it
+    // already does in updateTransparency() — the two must share one implementation of a
+    // widget's own seed, or one of them can silently forget the override.
+    void test_polishHonoursOverrideProperty()  // NOLINT
+    {
+        QWidget root;
+        auto* panel = new QWidget(&root);
+        panel->setProperty("transparent", true);
+
+        Gui::FreeCADStyle style;
+        style.polish(panel);
+
+        QVERIFY(Gui::FreeCADStyle::isTransparent(panel));
+    }
+
+    // A popup, menu, tooltip or dialog is a separate top-level surface over the desktop and
+    // must not inherit through the QObject parent/child link used only for lifetime management,
+    // even when polish() reaches it directly instead of through the recursive propagator.
+    void test_polishDoesNotInheritForWindowChild()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("transparent", true);
+
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&root, false);
+        QVERIFY(Gui::FreeCADStyle::isTransparent(&root));
+
+        // Simulate a popup created after propagation — e.g. on first show — whose only
+        // transparency signal comes from polish().
+        auto* popup = new QWidget(&root, Qt::Popup);
+        style.polish(popup);
+
+        QVERIFY(!Gui::FreeCADStyle::isTransparent(popup));
+    }
 };
 
 QTEST_MAIN(TestStyleTransparency)
