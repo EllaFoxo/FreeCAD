@@ -90,9 +90,11 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
         }
     );
 
-    // Take ownership before replaying: each apply below re-enters the render
-    // traversal, which is free to reach this element again. Iterating the member
-    // vector across that would be iterating a container someone else may append to.
+    // Move the paths out of the element. Replay needs a list it owns, and the element
+    // has to end up empty anyway so the next traversal starts from nothing; the swap
+    // does both in one step. Nothing appends while the loop runs: So3DAnnotation::render
+    // makes annotations draw inline instead of deferring, and the SoBrep*Set add-sites
+    // are gated on isProcessingDelayedPaths.
     std::vector<PriorityPath> ordered;
     ordered.swap(elt->paths);
 
