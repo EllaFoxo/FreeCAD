@@ -497,6 +497,19 @@ void registerBuiltinVariants(ParameterDescriptorRegistry& registry)
     // regardless of the descriptor, so parse() has to recognise it everywhere too.
     constexpr auto globalSlots = std::to_array({VariantSlot::TransparencyMode});
 
+    // variantNamesFor() appends global variants after the descriptor's own, so parse() only
+    // matches them in declaration order if every global slot is declared last. A global slot
+    // placed before a per-descriptor one silently mis-parses qualified token names.
+    constexpr size_t firstGlobalSlot = static_cast<size_t>(VariantSlot::COUNT) - globalSlots.size();
+    static_assert(
+        std::ranges::all_of(
+            globalSlots,
+            [](VariantSlot slot) { return static_cast<size_t>(slot) >= firstGlobalSlot; }
+        ),
+        "Global variant slots must occupy the last VariantSlot positions — move them to the "
+        "end of the enum, or teach variantNamesFor() to interleave them by slot order."
+    );
+
     // Variant-kind dimensions — derived from the canonical variantSlotNames tables.
     for (size_t index = 0; index < variantSlotDisplayNames.size(); ++index) {
         const auto variantSlot = static_cast<VariantSlot>(index);

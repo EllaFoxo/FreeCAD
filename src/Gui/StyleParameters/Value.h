@@ -250,11 +250,13 @@ struct GuiExport Tuple
 /**
  * @brief This struct represents any valid value that can be used as the parameter value.
  *
- * The value can be one of four basic types:
+ * The value can be one of:
  *  - Numbers / Lengths (so any length with optional unit) (Numeric)
  *  - Colors (Base::Color)
  *  - Any other generic expression (std::string)
  *  - Tuples of values (Tuple)
+ *  - Booleans (bool)
+ *  - The explicitly unset value (None), which cancels a token instead of giving it a value
  *
  * As a rule, operations can be only performed over values of the same type.
  */
