@@ -44,3 +44,22 @@ TEST(DescriptorRegistryTest, ParsedAndContextPrefixesAgree)
 
     EXPECT_EQ(registry.buildPrefixes(context), registry.buildPrefixesFromParsed(*parsed));
 }
+
+TEST(DescriptorRegistryTest, IsTransparentPropertyParses)
+{
+    EXPECT_EQ(propertyString(StyleProperty::IsTransparent), "IsTransparent");
+
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    const auto plain = registry.parse("ListIsTransparent");
+    ASSERT_TRUE(plain.has_value());
+    EXPECT_EQ(plain->component, "List");
+    EXPECT_EQ(plain->property, "IsTransparent");
+    EXPECT_TRUE(plain->variants.empty());
+
+    const auto qualified = registry.parse("ListTransparentIsTransparent");
+    ASSERT_TRUE(qualified.has_value());
+    EXPECT_EQ(qualified->component, "List");
+    EXPECT_EQ(qualified->property, "IsTransparent");
+    EXPECT_EQ(qualified->variants.at("TransparencyMode"), "Transparent");
+}

@@ -268,6 +268,7 @@ enum class StyleProperty : uint8_t
     BackgroundEffect,
     BorderColorEffect,
     FrameWidth,
+    IsTransparent,
     // Add new properties before COUNT
     COUNT,
 };
