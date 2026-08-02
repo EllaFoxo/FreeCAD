@@ -88,8 +88,6 @@ public:
 
     static bool hasDelayedPaths(SoState* state);
 
-    static SoPathList getDelayedPaths(SoState* state);
-
     static void processDelayedPathsWithPriority(SoState* state, SoGLRenderAction* action);
 
     static bool isProcessingDelayedPaths;

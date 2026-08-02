@@ -74,32 +74,6 @@ bool SoDelayedAnnotationsElement::hasDelayedPaths(SoState* state)
     return !getElement(state)->paths.empty();
 }
 
-SoPathList SoDelayedAnnotationsElement::getDelayedPaths(SoState* state)
-{
-    auto* elt = getElement(state);
-
-    if (elt->paths.empty()) {
-        return {};
-    }
-
-    // sort by priority (lower numbers render first)
-    std::stable_sort(
-        elt->paths.begin(),
-        elt->paths.end(),
-        [](const PriorityPath& a, const PriorityPath& b) { return a.priority < b.priority; }
-    );
-
-    SoPathList sortedPaths;
-    for (const auto& priorityPath : elt->paths) {
-        sortedPaths.append(priorityPath.path);
-    }
-
-    // Clear storage
-    elt->paths.clear();
-
-    return sortedPaths;
-}
-
 void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state, SoGLRenderAction* action)
 {
     auto elt = static_cast<SoDelayedAnnotationsElement*>(state->getElementNoPush(classStackIndex));
@@ -111,21 +85,40 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
     std::stable_sort(
         elt->paths.begin(),
         elt->paths.end(),
-        [](const PriorityPath& a, const PriorityPath& b) { return a.priority < b.priority; }
+        [](const PriorityPath& first, const PriorityPath& second) {
+            return first.priority < second.priority;
+        }
     );
+
+    // Take ownership before replaying: each apply below re-enters the render
+    // traversal, which is free to reach this element again. Iterating the member
+    // vector across that would be iterating a container someone else may append to.
+    std::vector<PriorityPath> ordered;
+    ordered.swap(elt->paths);
 
     isProcessingDelayedPaths = true;
 
-    for (const auto& priorityPath : elt->paths) {
-        SoPathList singlePath;
-        singlePath.append(priorityPath.path);
+    // One apply per layer, not per path. Each apply runs its own nested delayed-path
+    // phase on the way out, and that phase is where a nested SoFCPathAnnotation draws;
+    // finishing a layer before starting the next is what keeps the layers ordered.
+    for (auto layerBegin = ordered.begin(); layerBegin != ordered.end();) {
+        const int currentLayer = layerBegin->priority;
+        const auto layerEnd
+            = std::find_if(layerBegin, ordered.end(), [currentLayer](const PriorityPath& candidate) {
+                  return candidate.priority != currentLayer;
+              });
 
-        action->apply(singlePath, TRUE);
+        SoPathList batch;
+        for (auto entry = layerBegin; entry != layerEnd; ++entry) {
+            batch.append(entry->path);
+        }
+
+        action->apply(batch, TRUE);
+
+        layerBegin = layerEnd;
     }
 
     isProcessingDelayedPaths = false;
-
-    elt->paths.clear();
 }
 
 SO_NODE_SOURCE(So3DAnnotation);
