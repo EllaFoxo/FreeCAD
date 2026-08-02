@@ -174,11 +174,14 @@ enum class RowType : uint8_t
 };
 
 /**
- * @brief Transparency variant for container components such as ToolBar.
+ * @brief Selects the treatment a component uses when it must not paint an opaque surface.
  *
- * Transparent is applied to toolbars hosted in the status bar or as
- * QMenuBar corner widgets. Those containers blend into the host surface
- * and should not render a background.
+ * Transparent is reached two ways, which mean different things and must not be
+ * conflated. A toolbar hosted in the status bar or as a QMenuBar corner widget
+ * blends into an otherwise opaque host, so it suppresses its own chrome but the
+ * surface beneath its children is still solid. A widget carrying the propagated
+ * transparency tag genuinely sits over a see-through surface, and that is the only
+ * form that its children inherit.
  *
  * Add new modes before COUNT.
  */
