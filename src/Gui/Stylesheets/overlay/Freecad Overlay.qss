@@ -22,18 +22,6 @@ Gui--TreePanel QTreeView {
   border-radius: 0px;
 }
 
-Gui--TreePanel QTreeView::item {
-  color: @BaseTextColor;
-}
-
-Gui--TreePanel QTreeView::item:disabled {
-  color: @BaseDisabledTextColor;
-}
-
- Gui--TreePanel QTreeView:disabled  {
-  color: @BaseDisabledTextColor;
-}
-
 Gui--PropertyEditor--PropertyEditor {
   qproperty-itemBackground: @LineEditBackground;
 }
@@ -52,26 +40,6 @@ Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item {
 
 Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item:disabled {
   color: @BaseDisabledTextColor;
-}
-
-Gui--OverlayTabWidget {
-  qproperty-effectColor: @BackgroundColor;
-  qproperty-effectBlurRadius: 0;
-  qproperty-effectOffsetX: 0;
-  qproperty-effectOffsetY: 0;
-  qproperty-effectWidth: 1;
-  qproperty-effectHeight: 1;
-  qproperty-enableEffect: 1;
-}
-
- Gui--OverlayTabWidget#OverlayBottom {
-  qproperty-effectColor: @BackgroundColor;
-  qproperty-effectBlurRadius: 0;
-  qproperty-effectOffsetX: 0.0;
-  qproperty-effectOffsetY: 0.0;
-  qproperty-effectWidth: 1;
-  qproperty-effectHeight: 1;
-  qproperty-enableEffect: 1;
 }
 
 Gui--OverlayTabWidget::pane {
