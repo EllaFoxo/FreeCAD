@@ -115,7 +115,11 @@ void SoDelayedAnnotationsElement::processDelayedPathsWithPriority(SoState* state
             batch.append(entry->path);
         }
 
-        action->apply(batch, TRUE);
+        // Apply without obeysrules: Coin would otherwise sort and split the batch by head
+        // node, and SoCompactPathList requires every path in it to share one head. The
+        // batch can hold paths from different roots, since the element outlives a single
+        // apply and every root traversed with this action feeds the same one.
+        action->apply(batch, FALSE);
 
         layerBegin = layerEnd;
     }
