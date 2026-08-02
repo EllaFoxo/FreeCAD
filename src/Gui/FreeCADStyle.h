@@ -370,6 +370,22 @@ public:
         = StyleParameters::StyleComponentElement::Root
     );
 
+    /**
+     * @brief Recomputes the inherited transparency of @p widget and everything below it.
+     *
+     * @param widget    Root of the subtree to update.
+     * @param inherited Transparency of the surface behind @p widget. A widget carrying the
+     *                  "transparent" property overrides this for itself, opening a root.
+     */
+    void updateTransparency(QWidget* widget, bool inherited) const;
+
+    /**
+     * @brief Whether @p widget is painted over a transparent surface.
+     *
+     * Returns false for a null widget and for any widget the propagator has not reached.
+     */
+    static bool isTransparent(const QWidget* widget);
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,
@@ -590,7 +606,11 @@ private:
         const QWidget* widget
     ) const;
 
-    void drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const;
+    void drawTabWidgetFrame(
+        QPainter* painter,
+        const QStyleOptionTabWidgetFrame* option,
+        const QWidget* widget
+    ) const;
 
     void drawRadioButtonDot(
         QPainter* painter,
@@ -751,6 +771,8 @@ private:
     static constexpr const char* comboDropdownProperty         = "_fc_comboDropdown";
     static constexpr const char* comboContainerProperty        = "_fc_comboContainer";
     static constexpr const char* viewportMaskInstalledProperty = "_fc_viewportMask";
+    static constexpr const char* transparencyProperty          = "_fc_transparent";
+    static constexpr const char* transparencyOverrideProperty  = "transparent";
     // clang-format on
 
     void constrainComboDropdown(QComboBox* comboBox);
@@ -776,6 +798,22 @@ private:
 
     /** Resolves token padding and applies it to @p document's document margin. */
     void applyTextEditDocumentPadding(QWidget* widget, QTextDocument* document) const;
+
+    /**
+     * @brief The transparency @p widget presents to its children.
+     *
+     * Answers a different question from isTransparent(): a widget may itself be painted over
+     * the 3D view and still put an opaque surface under its children.
+     */
+    bool transparencyBelow(const QWidget* widget) const;
+
+    /**
+     * @brief Applies @p widget's transparency to a context that was not built by contextOf().
+     *
+     * Hand-built contexts must call this or they resolve the opaque tokens regardless of where
+     * the widget is painted.
+     */
+    static void applyTransparency(StyleParameters::StyleContext& context, const QWidget* widget);
 
     /**
      * @brief Resolves the icon color for @p context.

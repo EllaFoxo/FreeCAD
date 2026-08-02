@@ -34,6 +34,7 @@
 #include <vector>
 
 #include <QApplication>
+#include <QCoreApplication>
 #include <QAbstractButton>
 #include <QAbstractSpinBox>
 #include <QFrame>
@@ -1203,7 +1204,7 @@ void FreeCADStyle::drawPrimitive(
 
     if (element == PE_FrameTabWidget) {
         if (const auto* tabWidgetOption = qstyleoption_cast<const QStyleOptionTabWidgetFrame*>(option)) {
-            drawTabWidgetFrame(painter, tabWidgetOption);
+            drawTabWidgetFrame(painter, tabWidgetOption, widget);
             return;
         }
     }
@@ -2414,7 +2415,11 @@ void FreeCADStyle::drawTabBarBase(
     drawBoxBackground(painter, option->rect, resolveBoxStyle(positionContext));
 }
 
-void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWidgetFrame* option) const
+void FreeCADStyle::drawTabWidgetFrame(
+    QPainter* painter,
+    const QStyleOptionTabWidgetFrame* option,
+    const QWidget* widget
+) const
 {
     const Position position = tabPositionOf(option->shape);
 
@@ -2422,6 +2427,7 @@ void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWi
     StyleContext paneContext;
     paneContext.component = StyleComponent::TabWidget;
     paneContext.element = StyleComponentElement::Root;
+    applyTransparency(paneContext, widget);
     drawBoxBackground(painter, option->rect, resolveBoxStyle(paneContext));
 
     // Draw the shadow strip at the attachment edge.
@@ -2431,6 +2437,7 @@ void FreeCADStyle::drawTabWidgetFrame(QPainter* painter, const QStyleOptionTabWi
     stripContext.component = StyleComponent::TabBar;
     stripContext.element = StyleComponentElement::Base;
     stripContext.variant.set(VariantSlot::Position, position);
+    applyTransparency(stripContext, widget);
 
     const int stripHeight = resolve<int>(stripContext, StyleProperty::Height).value_or(0);
     if (stripHeight == 0) {
@@ -2644,6 +2651,12 @@ void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
 void FreeCADStyle::polish(QWidget* widget)
 {
     QProxyStyle::polish(widget);
+
+    // Transparency is inherited down the widget tree. Seeding from the parent here covers
+    // widgets built after their parent's subtree was propagated — lazily created editors,
+    // popups and the like — without an extra event filter.
+    updateTransparency(widget, transparencyBelow(widget->parentWidget()));
+
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
         widget->installEventFilter(this);
@@ -3140,6 +3153,55 @@ static bool isFlat(const QWidget* widget, const QStyleOption* option)
     return widget && widget->property("flat").toBool();
 }
 
+bool FreeCADStyle::isTransparent(const QWidget* widget)
+{
+    return widget != nullptr && widget->property(transparencyProperty).toBool();
+}
+
+void FreeCADStyle::applyTransparency(StyleContext& context, const QWidget* widget)
+{
+    if (isTransparent(widget)) {
+        context.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
+    }
+}
+
+bool FreeCADStyle::transparencyBelow(const QWidget* widget) const
+{
+    if (widget == nullptr) {
+        return false;
+    }
+
+    return resolve<bool>(contextOf(widget), StyleProperty::IsTransparent).value_or(isTransparent(widget));
+}
+
+void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited) const
+{
+    if (widget == nullptr) {
+        return;
+    }
+
+    // This widget's own surface. An explicit property opens a root; otherwise inherit.
+    const QVariant seed = widget->property(transparencyOverrideProperty);
+    const bool surface = seed.isValid() ? seed.toBool() : inherited;
+
+    if (isTransparent(widget) != surface) {
+        widget->setProperty(transparencyProperty, surface);
+
+        // The tag changes padding, spacing and height tokens as well as colours, so a repaint
+        // is not enough — QTabBar caches its tab sizes until the style changes.
+        QEvent styleChange(QEvent::StyleChange);
+        QCoreApplication::sendEvent(widget, &styleChange);
+    }
+
+    const bool below = transparencyBelow(widget);
+
+    for (QObject* child : widget->children()) {
+        if (auto* childWidget = qobject_cast<QWidget*>(child)) {
+            updateTransparency(childWidget, below);
+        }
+    }
+}
+
 StyleContext FreeCADStyle::contextOf(
     const QWidget* widget,
     const QStyleOption* option,
@@ -3381,6 +3443,9 @@ StyleContext FreeCADStyle::contextOf(
             }
         }
     }
+
+    // TransparencyMode — inherited down the widget tree by updateTransparency().
+    applyTransparency(context, widget);
 
     return context;
 }
