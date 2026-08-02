@@ -86,6 +86,10 @@ public:
         bool checkDocument = false
     );
     void blockCollapseAll();
+    /// Collapses every row to the top level, keeping the transparent panel's height cap in sync.
+    void collapseAll();
+    /// Expands every row, keeping the transparent panel's height cap in sync.
+    void expandAll();
     void updateProperty(const App::Property&);
     void removeProperty(const App::Property&);
     void renameProperty(const App::Property&);
@@ -103,7 +107,6 @@ public:
 
     /// Height needed to show every visible row without scrolling; zero when there is nothing to show.
     int contentHeight() const;
-    using QTreeView::viewportSizeHint;
 
     bool isBinding() const
     {
@@ -147,7 +150,6 @@ private:
     void setFirstLevelExpanded(bool doExpand);
     void expandToDefault();
     QMenu* setupExpansionSubmenu(QWidget* parent);
-    void collapseAll();
     void setEditorMode(const QModelIndex& parent, int start, int end);
     void closeTransaction();
     void recomputeDocument(App::Document*);
@@ -178,6 +180,7 @@ private:
 
     void updateHeightLimit();
     bool hasVisibleProperties() const;
+    int visibleRowsHeight(const QModelIndex& parent) const;
 
 private:
     PropertyItemDelegate* delegate;

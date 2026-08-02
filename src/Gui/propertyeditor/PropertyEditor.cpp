@@ -209,13 +209,33 @@ bool PropertyEditor::hasVisibleProperties() const
     return false;
 }
 
+int PropertyEditor::visibleRowsHeight(const QModelIndex& parent) const
+{
+    int height = 0;
+    for (int row = 0, count = model()->rowCount(parent); row < count; ++row) {
+        if (isRowHidden(row, parent)) {
+            continue;
+        }
+
+        QModelIndex index = model()->index(row, 0, parent);
+        height += rowHeight(index);
+        if (isExpanded(index)) {
+            height += visibleRowsHeight(index);
+        }
+    }
+    return height;
+}
+
 int PropertyEditor::contentHeight() const
 {
+    // Sums intrinsic row heights instead of asking QTreeView::viewportSizeHint(), which
+    // reports the last row's scrolled-away position under ScrollPerPixel rather than the
+    // panel's actual content height.
     if (model() == nullptr || !hasVisibleProperties()) {
         return 0;
     }
 
-    return viewportSizeHint().height() + 2 * frameWidth();
+    return visibleRowsHeight(QModelIndex()) + 2 * frameWidth();
 }
 
 void PropertyEditor::updateHeightLimit()
@@ -915,6 +935,15 @@ void PropertyEditor::expandToDefault()
 void PropertyEditor::collapseAll()
 {
     setFirstLevelExpanded(false);
+    updateHeightLimit();
+}
+
+void PropertyEditor::expandAll()
+{
+    // Qt's layout code only emits expanded() for a row that was not already recorded as
+    // expanded, so a repeated expandAll() call can lay out every row and emit nothing.
+    QTreeView::expandAll();
+    updateHeightLimit();
 }
 
 QMenu* PropertyEditor::setupExpansionSubmenu(QWidget* parent)

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <QScrollBar>
 #include <QTest>
 #include <QWidget>
 
@@ -70,15 +71,74 @@ private Q_SLOTS:
         QCOMPARE(editor.contentHeight(), 0);
     }
 
-    // Content height tracks the rows the view would have to show, which is exactly what
-    // QTreeView::viewportSizeHint() reports, plus the frame the box is drawn around.
-    void test_populatedModelReportsViewportHeightPlusFrame()  // NOLINT
+    // Content height must reflect what is actually on screen: once populated it covers more
+    // than a single row plus the frame, and collapsing rows away shrinks it again.
+    void test_populatedModelReportsMeaningfulHeight()  // NOLINT
     {
         PropertyEditor editor;
         buildUpSubject(editor);
+        editor.expandAll();
 
         QVERIFY(editor.model()->rowCount() > 0);
-        QCOMPARE(editor.contentHeight(), editor.viewportSizeHint().height() + 2 * editor.frameWidth());
+        int expandedHeight = editor.contentHeight();
+        QVERIFY(expandedHeight > 2 * editor.frameWidth());
+
+        editor.collapseAll();
+        int collapsedHeight = editor.contentHeight();
+
+        QVERIFY(collapsedHeight > 0);
+        QVERIFY(collapsedHeight < expandedHeight);
+    }
+
+    // Content height must not depend on how far the view happens to be scrolled — only on
+    // what rows exist and are expanded — or a docked, scrolled editor would report the wrong
+    // size the moment it becomes transparent.
+    void test_contentHeightIsIndependentOfScrollPosition()  // NOLINT
+    {
+        PropertyEditor editor;
+        buildUpSubject(editor);
+        editor.expandAll();
+        editor.resize(300, 100);
+
+        int heightAtTop = editor.contentHeight();
+
+        editor.verticalScrollBar()->setValue(editor.verticalScrollBar()->maximum());
+        QVERIFY(editor.verticalScrollBar()->value() > 0);
+        int heightWhenScrolled = editor.contentHeight();
+
+        QCOMPARE(heightWhenScrolled, heightAtTop);
+    }
+
+    // QTreeView's layout code is not guaranteed to emit expanded()/collapsed() for every row
+    // expandAll()/collapseAll() touch (it only does when a row was not already recorded as
+    // expanded), so the cap has to be refreshed as part of those calls themselves. Signals
+    // are blocked around each call so the pre-existing per-row connects cannot be the reason
+    // the cap ends up right — only the explicit refresh in expandAll()/collapseAll() can.
+    void test_expandAllAndCollapseAllKeepTheCapInSync()  // NOLINT
+    {
+        QWidget root;
+        auto* editor = new PropertyEditor(&root);
+        buildUpSubject(*editor);
+        editor->collapseAll();
+
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&root, true);
+        int collapsedCap = editor->maximumHeight();
+
+        editor->blockSignals(true);
+        editor->expandAll();
+        editor->blockSignals(false);
+        int expandedCap = editor->maximumHeight();
+
+        QVERIFY(expandedCap > collapsedCap);
+        QCOMPARE(expandedCap, editor->contentHeight());
+
+        editor->blockSignals(true);
+        editor->collapseAll();
+        editor->blockSignals(false);
+        int recollapsedCap = editor->maximumHeight();
+
+        QCOMPARE(recollapsedCap, collapsedCap);
     }
 
     // Over an opaque surface nothing is capped — the editor fills whatever it is given.
@@ -117,6 +177,9 @@ private Q_SLOTS:
 
         Gui::FreeCADStyle style;
         style.updateTransparency(&root, true);
+        // The cap must actually have engaged here, or lifting it below proves nothing.
+        QVERIFY(editor->maximumHeight() < QWIDGETSIZE_MAX);
+
         style.updateTransparency(&root, false);
 
         QCOMPARE(editor->maximumHeight(), QWIDGETSIZE_MAX);
