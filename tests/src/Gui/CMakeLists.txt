@@ -27,6 +27,7 @@ add_executable(Gui_tests_run
 setup_qt_test(QuantitySpinBox)
 setup_qt_test(GeometrySelectorWidget)
 setup_qt_test(StyleTransparency)
+setup_qt_test(ComboDropdown)
 
 target_link_libraries(Gui_tests_run PRIVATE
     GTest::gmock_main

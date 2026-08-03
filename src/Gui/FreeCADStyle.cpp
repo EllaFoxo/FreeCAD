@@ -2735,29 +2735,48 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
     listView->setProperty(comboDropdownProperty, true);
     listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    StyleContext context;
-    context.component = StyleComponent::DropdownList;
-    applyTransparency(context, listView);
-
-    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-    if (!geometry.maxHeight) {
-        return;
+    // The popup list belongs to Qt, so a caller that needs its own dropdown metrics names the
+    // component on the combo box and it is carried over here. The list then resolves against
+    // that prefix ahead of DropdownList, which is how one dropdown takes a height of its own.
+    if (const QVariant component = comboBox->property("dropdownComponent"); component.isValid()) {
+        listView->setProperty("component", component);
     }
-
-    listView->setMaximumHeight(*geometry.maxHeight);
 
     QWidget* container = listView->parentWidget();
     if (!container) {
         return;
     }
 
-    container->setMaximumHeight(*geometry.maxHeight);
-    hideScrollerButtons(container);
+    applyComboDropdownMaxHeight(listView);
 
     // Guard against double-installation on re-polish (e.g. theme change).
     if (!container->property(comboContainerProperty).toBool()) {
         container->setProperty(comboContainerProperty, true);
         container->installEventFilter(this);
+    }
+}
+
+void FreeCADStyle::applyComboDropdownMaxHeight(QListView* listView) const
+{
+    QWidget* container = listView->parentWidget();
+    if (!container) {
+        return;
+    }
+
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(listView));
+
+    // An absent MaxHeight — including one a theme cleared with reset() — means the dropdown is
+    // bounded only by Qt, which keeps it on screen and honours maxVisibleItems. Qt's own
+    // scroller buttons take over there, so they go back into service with it.
+    const int maxHeight = geometry.maxHeight.value_or(QWIDGETSIZE_MAX);
+    listView->setMaximumHeight(maxHeight);
+    container->setMaximumHeight(maxHeight);
+
+    if (geometry.maxHeight) {
+        hideScrollerButtons(container);
+    }
+    else {
+        restoreScrollerButtons(container);
     }
 }
 

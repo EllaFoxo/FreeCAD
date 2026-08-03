@@ -290,7 +290,10 @@ ListRowHoveredBackground: "opacity(@Accent.500, 20%)"
 ListRowPressedBackground: "@Background.200"
 
 # ── Dropdown List (QComboBox popup) ────────────────────────────────────────
+# A combo box names its own dropdown component through the "dropdownComponent" property, so a
+# popup that must not be capped clears the height here rather than in shared code.
 DropdownListMaxHeight: "250px"
+WorkbenchSelectorDropdownMaxHeight: "reset()"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"

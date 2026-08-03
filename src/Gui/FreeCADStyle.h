@@ -47,6 +47,7 @@
 #include "StyleParameters/Value.h"
 #include "StyleParameters/StyleContext.h"
 
+class QListView;
 class QTextDocument;
 
 namespace Gui
@@ -786,7 +787,24 @@ private:
     static constexpr const char* transparencyOverrideProperty  = "transparent";
     // clang-format on
 
+    /**
+     * @brief Applies the token-driven dropdown metrics to a combo box's popup list.
+     *
+     * A combo box may name the component its popup resolves against by carrying a
+     * "dropdownComponent" property; the name is given the usual override treatment, so the
+     * dropdown can take a height of its own without moving every other dropdown. The property
+     * is read once, when the combo box is polished.
+     */
     void constrainComboDropdown(QComboBox* comboBox);
+
+    /**
+     * @brief Bounds a popup list, and the container holding it, to the resolved MaxHeight.
+     *
+     * With no MaxHeight the dropdown is left to Qt, which keeps it on screen and shows as many
+     * rows as maxVisibleItems allows.
+     */
+    void applyComboDropdownMaxHeight(QListView* listView) const;
+
     void restoreComboDropdownDefaults(QComboBox* comboBox);
     static void hideScrollerButtons(QWidget* container);
     static void restoreScrollerButtons(QWidget* container);
