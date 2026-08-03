@@ -64,6 +64,12 @@ void StyleContext::Intern::clear()
 
 uint64_t StyleContext::cacheKey() const
 {
+    static_assert(
+        static_cast<uint64_t>(StyleComponentElement::COUNT)
+            <= (uint64_t {1} << (stateBitOffset - elementBitOffset)),
+        "StyleComponentElement no longer fits in the 4-bit element field packed at elementBitOffset"
+    );
+
     const uint8_t overrideId = componentOverride.empty()
         ? static_cast<uint8_t>(0)
         : Intern::global().intern(componentOverride);
