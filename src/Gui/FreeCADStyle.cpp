@@ -3419,7 +3419,16 @@ StyleContext FreeCADStyle::contextOf(
     // For unrecognised widget types the name is resolved to a StyleComponent enum value
     // when possible (e.g. QFrame[component="List"] → StyleComponent::List). For recognised
     // widget types the name becomes a prefix override (e.g. "DocumentTree" on a QTreeView).
-    if (widget) {
+    //
+    // The property names what the widget itself is, so it does not apply to an indicator the
+    // style paints on the widget's behalf for a different component — a check indicator inside
+    // an item view belongs to CheckBox, and letting the host's name win would rank the host's
+    // own box tokens above the indicator's.
+    const bool indicatorOfAnotherComponent = element == StyleComponentElement::Indicator
+        && qobject_cast<const QCheckBox*>(widget) == nullptr
+        && qobject_cast<const QRadioButton*>(widget) == nullptr;
+
+    if (widget && !indicatorOfAnotherComponent) {
         const std::string overrideName = widget->property("component").toString().toStdString();
         if (!overrideName.empty()) {
             auto* manager = Application::Instance->styleParameterManager();
