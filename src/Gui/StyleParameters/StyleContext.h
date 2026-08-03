@@ -83,6 +83,7 @@ enum class StyleComponentElement : uint8_t
     Base,         // Base strip of a TabBar (PE_FrameTabBarBase)
     Menu,         // Dropdown menu strip of a MenuButtonPopup ToolButton
     CloseButton,  // Tab close button (QAbstractButton child of QTabBar)
+    Branch,       // Connector lines in the indent column of a tree view
     // Add new components before COUNT
     COUNT,
 };

@@ -2,6 +2,9 @@
 
 #include <gtest/gtest.h>
 
+#include <string>
+#include <vector>
+
 #include <Gui/StyleParameters/ParameterDescriptorRegistry.h>
 
 using namespace Gui::StyleParameters;
@@ -62,4 +65,18 @@ TEST(DescriptorRegistryTest, IsTransparentPropertyParses)
     EXPECT_EQ(qualified->component, "List");
     EXPECT_EQ(qualified->property, "IsTransparent");
     EXPECT_EQ(qualified->variants.at("TransparencyMode"), "Transparent");
+}
+
+// A Branch element names its own token namespace under every component in the tree's chain,
+// which is what lets a theme style connector lines without touching the item tokens.
+TEST(DescriptorRegistryTest, BranchElementNamesPrefixesAlongTheChain)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    StyleContext context;
+    context.component = StyleComponent::Tree;
+    context.element = StyleComponentElement::Branch;
+
+    const std::vector<std::string> expected {"TreeBranch", "ListBranch"};
+    EXPECT_EQ(registry.buildPrefixes(context), expected);
 }

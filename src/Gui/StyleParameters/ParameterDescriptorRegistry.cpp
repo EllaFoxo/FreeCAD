@@ -64,6 +64,7 @@ const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Base,        "Base"},
     {StyleComponentElement::Menu,        "Menu"},
     {StyleComponentElement::CloseButton, "CloseButton"},
+    {StyleComponentElement::Branch,      "Branch"},
 };
 // clang-format on
 
