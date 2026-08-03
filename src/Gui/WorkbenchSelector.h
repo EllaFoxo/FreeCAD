@@ -51,7 +51,6 @@ Q_OBJECT  // NOLINT
     public: explicit WorkbenchComboBox(WorkbenchGroup* aGroup, QWidget* parent = nullptr);
     ~WorkbenchComboBox() override = default;
     WorkbenchComboBox(WorkbenchComboBox&& rhs) = delete;
-    void showPopup() override;
     void setVisible(bool visible) override;
 
     WorkbenchComboBox operator=(WorkbenchComboBox&& rhs) = delete;

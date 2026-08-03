@@ -24,7 +24,6 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QMenuBar>
-#include <QScreen>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QLayout>
@@ -58,18 +57,6 @@ WorkbenchComboBox::WorkbenchComboBox(WorkbenchGroup* aGroup, QWidget* parent)
     connect(this, qOverload<int>(&WorkbenchComboBox::activated), aGroup, [aGroup](int index) {
         aGroup->actions()[index]->trigger();
     });
-}
-
-void WorkbenchComboBox::showPopup()
-{
-    int rows = count();
-    if (rows > 0) {
-        int height = view()->sizeHintForRow(0);
-        int maxHeight = QApplication::primaryScreen()->size().height();
-        view()->setMinimumHeight(qMin(height * rows, maxHeight / 2));
-    }
-
-    QComboBox::showPopup();
 }
 
 void WorkbenchComboBox::refreshList(QList<QAction*> actionList)
