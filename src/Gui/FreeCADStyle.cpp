@@ -945,7 +945,12 @@ void FreeCADStyle::paintBox(
     drawBoxBackground(painter, borderRect, resolveBoxStyle(context));
 }
 
-QList<QLineF> FreeCADStyle::branchSegments(const QRect& cell, QStyle::State state, bool topLevel)
+QList<QLineF> FreeCADStyle::branchSegments(
+    const QRect& cell,
+    QStyle::State state,
+    bool topLevel,
+    Qt::LayoutDirection direction
+)
 {
     if (topLevel) {
         return {};
@@ -968,7 +973,11 @@ QList<QLineF> FreeCADStyle::branchSegments(const QRect& cell, QStyle::State stat
     }
 
     if (ownsItem) {
-        segments.append(QLineF(centerX, centerY, cell.right() + 1, centerY));
+        // In a right-to-left layout the item's own cell is the leftmost of the branch
+        // cells and the label sits to its left, so the stub must reach toward the left
+        // edge rather than the right edge it uses in left-to-right layouts.
+        const qreal stubEnd = direction == Qt::RightToLeft ? cell.left() : cell.right() + 1;
+        segments.append(QLineF(centerX, centerY, stubEnd, centerY));
     }
 
     return segments;
@@ -1044,7 +1053,9 @@ void FreeCADStyle::drawItemViewBranch(
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing, false);
             painter->setPen(pen);
-            painter->drawLines(branchSegments(option->rect, option->state, topLevel));
+            painter->drawLines(
+                branchSegments(option->rect, option->state, topLevel, option->direction)
+            );
             painter->restore();
         }
     }

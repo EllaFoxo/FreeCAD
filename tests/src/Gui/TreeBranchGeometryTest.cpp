@@ -20,9 +20,13 @@ constexpr QRect cell(20, 48, 20, 24);
 constexpr qreal centerX = 30.5;
 constexpr qreal centerY = 60.5;
 
-QList<QLineF> segmentsFor(QStyle::State state, bool topLevel = false)
+QList<QLineF> segmentsFor(
+    QStyle::State state,
+    bool topLevel = false,
+    Qt::LayoutDirection direction = Qt::LeftToRight
+)
 {
-    return Gui::FreeCADStyle::branchSegments(cell, state, topLevel);
+    return Gui::FreeCADStyle::branchSegments(cell, state, topLevel, direction);
 }
 
 }  // namespace
@@ -67,4 +71,24 @@ TEST(TreeBranchGeometryTest, TopLevelCellDrawsNothing)
 {
     EXPECT_TRUE(segmentsFor(QStyle::State_Item | QStyle::State_Sibling, true).isEmpty());
     EXPECT_TRUE(segmentsFor(QStyle::State_Sibling, true).isEmpty());
+}
+
+// In a right-to-left layout the item's own cell is the leftmost of the branch cells, so
+// the elbow's stub must reach the cell's left edge rather than its right edge.
+TEST(TreeBranchGeometryTest, RightToLeftStubReachesTheLeftEdge)
+{
+    const QList<QLineF> segments = segmentsFor(QStyle::State_Item, /*topLevel=*/false, Qt::RightToLeft);
+
+    ASSERT_EQ(segments.size(), 2);
+    EXPECT_EQ(segments.at(0), QLineF(centerX, 48, centerX, centerY));
+    EXPECT_EQ(segments.at(1), QLineF(centerX, centerY, 20, centerY));
+}
+
+// Left-to-right keeps the stub pointed at the right edge, unaffected by the new parameter.
+TEST(TreeBranchGeometryTest, LeftToRightStubReachesTheRightEdge)
+{
+    const QList<QLineF> segments = segmentsFor(QStyle::State_Item, /*topLevel=*/false, Qt::LeftToRight);
+
+    ASSERT_EQ(segments.size(), 2);
+    EXPECT_EQ(segments.at(1), QLineF(centerX, centerY, 40, centerY));
 }

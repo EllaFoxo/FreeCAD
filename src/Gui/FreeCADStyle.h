@@ -397,8 +397,16 @@ public:
      *                 State_Sibling means a sibling follows below at that level.
      * @param topLevel True for a cell belonging to a root item, which has no parent to
      *                 reach toward and so draws nothing.
+     * @param direction Layout direction of the view. In a right-to-left layout the item's
+     *                  own cell is the leftmost of the branch cells, so the elbow's stub
+     *                  runs to the cell's left edge instead of its right edge.
      */
-    static QList<QLineF> branchSegments(const QRect& cell, QStyle::State state, bool topLevel);
+    static QList<QLineF> branchSegments(
+        const QRect& cell,
+        QStyle::State state,
+        bool topLevel,
+        Qt::LayoutDirection direction
+    );
 
 protected:
     void drawPrimitive(
