@@ -22,26 +22,6 @@ Gui--TreePanel QTreeView {
   border-radius: 0px;
 }
 
-Gui--PropertyEditor--PropertyEditor {
-  qproperty-itemBackground: @LineEditBackground;
-}
-
-Gui--OverlayTabWidget Gui--TreePanel QTreeView::item {
-  color: @BaseTextColor;
-}
-
-Gui--OverlayTabWidget[transparent="false"]  Gui--TreePanel QTreeView::item:disabled {
-  color: @BaseDisabledTextColor;
-}
-
-Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item {
-  color: @BaseTextColor;
-}
-
-Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item:disabled {
-  color: @BaseDisabledTextColor;
-}
-
 /* Appearance moved to design system; margin is layout not yet expressible as token. */
 Gui--OverlayTabWidget::pane {
   margin: 25px;
