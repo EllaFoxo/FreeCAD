@@ -110,39 +110,105 @@ private Q_SLOTS:
         QCOMPARE(heightWhenScrolled, heightAtTop);
     }
 
-    // QTreeView's layout code is not guaranteed to emit expanded()/collapsed() for every row
-    // expandAll()/collapseAll() touch (it only does when a row was not already recorded as
-    // expanded), so the cap has to be refreshed as part of those calls themselves. Signals
-    // are blocked around each call so the pre-existing per-row connects cannot be the reason
-    // the cap ends up right — only the explicit refresh in expandAll()/collapseAll() can.
-    void test_expandAllAndCollapseAllKeepTheCapInSync()  // NOLINT
+    // contentHeight() adds 2 * frameWidth() on top of the summed row heights to account for the
+    // panel's border. Nothing else in this suite pins that term down: every other assertion
+    // compares contentHeight() against itself or against maximumHeight(), which stays
+    // self-consistent whether the frame term is there or not. This is a plain change detector —
+    // ordinarily not something worth a test — but it is the only thing standing between a
+    // regression that clips the last row and raises a scrollbar, and nobody noticing.
+    void test_contentHeightIncludesTheFrameOnTopOfRowHeights()  // NOLINT
+    {
+        PropertyEditor editor;
+        buildUpSubject(editor);
+        editor.expandAll();
+
+        // Pin the frame width down explicitly: with QFrame::Box it comes straight from
+        // lineWidth + midLineWidth rather than the desktop style's PM_DefaultFrameWidth, so the
+        // assertion below does not depend on whatever style happens to be active.
+        editor.setFrameShape(QFrame::Box);
+        editor.setLineWidth(3);
+        editor.setMidLineWidth(0);
+        QVERIFY(editor.frameWidth() > 0);
+
+        QCOMPARE(editor.contentHeight(), sumOfVisibleRowHeights(editor) + 2 * editor.frameWidth());
+    }
+
+    // setEditorMode hides rows whenever "Show hidden" is off, which is the normal state of a
+    // real property view, so a hidden row's height must not count towards the panel's size.
+    void test_contentHeightExcludesHiddenRows()  // NOLINT
+    {
+        PropertyEditor editor;
+        buildUpSubject(editor);
+        editor.expandAll();
+
+        const QModelIndex group = editor.model()->index(0, 0, QModelIndex());
+        const QModelIndex hiddenRow = editor.model()->index(0, 0, group);
+        QVERIFY(hiddenRow.isValid());
+
+        const int hiddenRowHeight = subtreeHeight(editor, hiddenRow);
+        const int heightBeforeHiding = editor.contentHeight();
+
+        editor.setRowHidden(0, group, true);
+
+        QCOMPARE(editor.contentHeight(), heightBeforeHiding - hiddenRowHeight);
+    }
+
+    // The realistic sequence below (test_expandAllStaysAccurateWhenACompoundRowArrivesMidTree)
+    // fully covers expandAll()'s explicit refresh, because the mid-layout partial-signal case it
+    // exercises is what actually happens in practice. collapseAll() has no equivalent realistic
+    // reproduction — collapsing never has to reconcile a partial layout — so its own explicit
+    // refresh can only be proven by isolation: signals are blocked around the call so the
+    // pre-existing per-row connects cannot be the reason the cap ends up right, leaving only the
+    // explicit refresh in collapseAll() to account for it.
+    void test_collapseAllKeepsTheCapInSyncInIsolation()  // NOLINT
     {
         QWidget root;
         auto* editor = new PropertyEditor(&root);
         buildUpSubject(*editor);
-        editor->collapseAll();
+        editor->expandAll();
 
         Gui::FreeCADStyle style;
         style.updateTransparency(&root, true);
-        int collapsedCap = editor->maximumHeight();
-
-        editor->blockSignals(true);
-        editor->expandAll();
-        editor->blockSignals(false);
         int expandedCap = editor->maximumHeight();
-
-        QVERIFY(expandedCap > collapsedCap);
         QCOMPARE(expandedCap, editor->contentHeight());
 
         editor->blockSignals(true);
         editor->collapseAll();
         editor->blockSignals(false);
-        int recollapsedCap = editor->maximumHeight();
+        int collapsedCap = editor->maximumHeight();
 
-        QCOMPARE(recollapsedCap, collapsedCap);
+        QVERIFY(collapsedCap < expandedCap);
+        QCOMPARE(collapsedCap, editor->contentHeight());
     }
 
-    // Over an opaque surface nothing is capped — the editor fills whatever it is given.
+    // A realistic sequence rather than an isolated one: build, expand, then have a row with its
+    // own children (a compound property, e.g. Placement) arrive mid-tree — as adding a dynamic
+    // property would — and expand again. A freshly inserted row starts out not recorded as
+    // expanded, so this second expandAll() has to expand it for the first time while the rest
+    // of the tree is already laid out. QTreeViewPrivate::layout() can emit expanded() for that
+    // row while still mid-build, before the rows after it are accounted for, so a cap update
+    // driven purely by that signal undercounts. Only the explicit refresh after
+    // QTreeView::expandAll() returns sees the finished layout.
+    void test_expandAllStaysAccurateWhenACompoundRowArrivesMidTree()  // NOLINT
+    {
+        QWidget root;
+        auto* editor = new PropertyEditor(&root);
+        buildUpSubjectExcludingProperty(*editor, "Placement");
+        editor->expandAll();
+
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&root, true);
+
+        buildUpSubject(*editor);  // Placement, with its own Position/Angle/Axis children, arrives
+        editor->expandAll();
+
+        QCOMPARE(editor->maximumHeight(), editor->contentHeight());
+    }
+
+    // Over an opaque surface nothing is capped — the editor fills whatever it is given. The cap
+    // must actually have engaged first, or observing QWIDGETSIZE_MAX proves nothing: an editor
+    // that was never tagged transparent reports the same default without updateHeightLimit()
+    // doing any work at all.
     void test_opaqueEditorIsUncapped()  // NOLINT
     {
         QWidget root;
@@ -150,6 +216,9 @@ private Q_SLOTS:
         buildUpSubject(*editor);
 
         Gui::FreeCADStyle style;
+        style.updateTransparency(&root, true);
+        QVERIFY(editor->maximumHeight() < QWIDGETSIZE_MAX);
+
         style.updateTransparency(&root, false);
 
         QCOMPARE(editor->maximumHeight(), QWIDGETSIZE_MAX);
@@ -241,6 +310,55 @@ private:
         }
 
         editor.buildUp(std::move(list));
+    }
+
+    // Same as buildUpSubject, but leaves out one named property, so a later buildUpSubject()
+    // call makes that property arrive as a brand-new row.
+    void buildUpSubjectExcludingProperty(PropertyEditor& editor, const char* excludedName)
+    {
+        std::map<std::string, App::Property*> properties;
+        object->getPropertyMap(properties);
+
+        Gui::PropertyEditor::PropertyModel::PropertyList list;
+        for (const auto& [name, property] : properties) {
+            if (name == excludedName) {
+                continue;
+            }
+            list.emplace_back(name, std::vector<App::Property*> {property});
+        }
+
+        editor.buildUp(std::move(list));
+    }
+
+    // Independently recomputes the height contentHeight() is supposed to report for its visible,
+    // expanded rows, without going through contentHeight() itself.
+    int sumOfVisibleRowHeights(const PropertyEditor& editor, const QModelIndex& parent = QModelIndex())
+    {
+        int height = 0;
+        for (int row = 0, count = editor.model()->rowCount(parent); row < count; ++row) {
+            if (editor.isRowHidden(row, parent)) {
+                continue;
+            }
+
+            const QModelIndex index = editor.model()->index(row, 0, parent);
+            height += editor.visualRect(index).height();
+            if (editor.isExpanded(index)) {
+                height += sumOfVisibleRowHeights(editor, index);
+            }
+        }
+        return height;
+    }
+
+    // Height a single row contributes while it is visible: its own row plus, if it is expanded,
+    // everything under it. Measured before the row is hidden, so it captures what disappearing
+    // that row is supposed to remove from contentHeight().
+    int subtreeHeight(const PropertyEditor& editor, const QModelIndex& index)
+    {
+        int height = editor.visualRect(index).height();
+        if (editor.isExpanded(index)) {
+            height += sumOfVisibleRowHeights(editor, index);
+        }
+        return height;
     }
 
     App::Document* document = nullptr;
