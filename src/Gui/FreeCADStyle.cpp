@@ -944,6 +944,12 @@ void FreeCADStyle::paintBox(
     drawBoxBackground(painter, borderRect, resolveBoxStyle(context));
 }
 
+bool FreeCADStyle::selectsWholeRows(const QWidget* widget)
+{
+    const auto* view = qobject_cast<const QAbstractItemView*>(widget);
+    return view != nullptr && view->selectionBehavior() == QAbstractItemView::SelectRows;
+}
+
 void FreeCADStyle::drawItemViewRow(
     QPainter* painter,
     const QStyleOptionViewItem* vopt,
@@ -954,15 +960,9 @@ void FreeCADStyle::drawItemViewRow(
 
     // Expand to the full viewport width so branch/indent areas of QTreeView and
     // leading decoration regions receive the same background as the cell columns.
-    //
-    // Only a view that selects by row also invalidates by row. One that selects by cell
-    // repaints single cells on a hover or selection change, so a fill reaching past the cell
-    // would land on neighbours that are never asked to repaint and stay there — a trail of
-    // stale highlights, and a hovered cell whose own fill a later neighbour paints back over.
     QRect rowRect = vopt->rect;
-    if (const auto* view = qobject_cast<const QAbstractItemView*>(widget);
-        view && view->selectionBehavior() == QAbstractItemView::SelectRows) {
-        if (const QWidget* viewport = view->viewport()) {
+    if (selectsWholeRows(widget)) {
+        if (const QWidget* viewport = qobject_cast<const QAbstractItemView*>(widget)->viewport()) {
             rowRect.setLeft(0);
             rowRect.setWidth(viewport->width());
         }
@@ -1149,13 +1149,15 @@ void FreeCADStyle::drawPrimitive(
             return;
         }
 
-        // For multi-column views the first (or only) column owns the full-width row
-        // stripe; subsequent columns suppress to avoid painting over it.
+        // In a row-selecting view the first (or only) column owns one full-width stripe and the
+        // rest suppress, so branch and decoration areas belonging to no column are covered too.
+        // A cell-selecting view carries hover and selection per cell and repaints single cells,
+        // so there every cell draws its own stripe within its own rect.
         const bool isFirstCell = vopt->viewItemPosition == QStyleOptionViewItem::Beginning
             || vopt->viewItemPosition == QStyleOptionViewItem::OnlyOne
             || vopt->viewItemPosition == QStyleOptionViewItem::Invalid;
 
-        if (isFirstCell) {
+        if (isFirstCell || !selectsWholeRows(widget)) {
             drawItemViewRow(painter, vopt, widget);
         }
 
