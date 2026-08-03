@@ -118,6 +118,9 @@ PropertyEditor::PropertyEditor(QWidget* parent)
     connect(this, &QTreeView::expanded, this, &PropertyEditor::onItemExpanded);
     connect(this, &QTreeView::collapsed, this, &PropertyEditor::onItemCollapsed);
     connect(propertyModel, &QAbstractItemModel::rowsMoved, this, &PropertyEditor::onRowsMoved);
+    // onRowsMoved above must run first: it hides the emptied group header, and the cap has to
+    // see that hidden state rather than the pre-move row count.
+    connect(propertyModel, &QAbstractItemModel::rowsMoved, this, &PropertyEditor::updateHeightLimit);
     connect(propertyModel, &QAbstractItemModel::rowsRemoved, this, &PropertyEditor::onRowsRemoved);
     // clang-format on
 
@@ -945,8 +948,9 @@ void PropertyEditor::collapseAll()
 
 void PropertyEditor::expandAll()
 {
-    // Qt's layout code only emits expanded() for a row that was not already recorded as
-    // expanded, so a repeated expandAll() call can lay out every row and emit nothing.
+    // QTreeView's layout can emit expanded() for a row while it is still mid-build, before the
+    // rest of the tree is accounted for, so a signal-driven cap update here can undercount.
+    // Only this explicit refresh, taken after layout has settled, is reliable.
     QTreeView::expandAll();
     updateHeightLimit();
 }
