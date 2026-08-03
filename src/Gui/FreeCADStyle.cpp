@@ -954,8 +954,14 @@ void FreeCADStyle::drawItemViewRow(
 
     // Expand to the full viewport width so branch/indent areas of QTreeView and
     // leading decoration regions receive the same background as the cell columns.
+    //
+    // Only a view that selects by row also invalidates by row. One that selects by cell
+    // repaints single cells on a hover or selection change, so a fill reaching past the cell
+    // would land on neighbours that are never asked to repaint and stay there — a trail of
+    // stale highlights, and a hovered cell whose own fill a later neighbour paints back over.
     QRect rowRect = vopt->rect;
-    if (const auto* view = qobject_cast<const QAbstractItemView*>(widget)) {
+    if (const auto* view = qobject_cast<const QAbstractItemView*>(widget);
+        view && view->selectionBehavior() == QAbstractItemView::SelectRows) {
         if (const QWidget* viewport = view->viewport()) {
             rowRect.setLeft(0);
             rowRect.setWidth(viewport->width());
