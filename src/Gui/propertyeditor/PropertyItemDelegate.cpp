@@ -177,11 +177,26 @@ void PropertyItemDelegate::paint(
         qobject_cast<QWidget*>(parent())
     ));
     painter->setPen(QPen(color));
-    if (index.column() == 1 || !(property && property->isSeparator())) {
+
+    // The view draws its own outline, so the grid stops short of it: the last column needs no
+    // line down its right edge and the last row none along its bottom, or the two coincide and
+    // read as a doubled border.
+    const auto* view = qobject_cast<const PropertyEditor*>(parent());
+    const bool isLastColumn = index.column() >= index.model()->columnCount(index.parent()) - 1;
+    const bool isLastRow = view != nullptr && !view->indexBelow(index).isValid();
+
+    if (!isLastColumn && (index.column() == 1 || !(property && property->isSeparator()))) {
         int right = (option.direction == Qt::LeftToRight) ? option.rect.right() : option.rect.left();
         painter->drawLine(right, option.rect.y(), right, option.rect.bottom());
     }
-    painter->drawLine(option.rect.x(), option.rect.bottom(), option.rect.right(), option.rect.bottom());
+    if (!isLastRow) {
+        painter->drawLine(
+            option.rect.x(),
+            option.rect.bottom(),
+            option.rect.right(),
+            option.rect.bottom()
+        );
+    }
     painter->setPen(savedPen);
 }
 
