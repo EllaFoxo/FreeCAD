@@ -384,6 +384,21 @@ const QWidget* itemViewOf(const QStyleOptionViewItem* option, const QWidget* wid
     return option && option->widget ? option->widget : widget;
 }
 
+// Whether this row is the topmost one on screen, and so carries no gap above it.
+bool isFirstVisibleRow(const QStyleOption* option, const QWidget* widget)
+{
+    const auto* viewOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+    if (viewOption == nullptr || !viewOption->index.isValid()) {
+        return false;
+    }
+
+    if (const auto* tree = qobject_cast<const QTreeView*>(itemViewOf(viewOption, widget))) {
+        return !tree->indexAbove(viewOption->index).isValid();
+    }
+
+    return viewOption->index.row() == 0 && !viewOption->index.parent().isValid();
+}
+
 // How many of the three cell parts — check indicator, icon, text — this cell actually has.
 int itemViewPartCount(const QStyleOptionViewItem& option)
 {
@@ -945,11 +960,33 @@ void FreeCADStyle::paintBox(
     drawBoxBackground(painter, borderRect, resolveBoxStyle(context));
 }
 
+int FreeCADStyle::leadingRowGap(const QStyleOption* option, const QWidget* widget) const
+{
+    if (isFirstVisibleRow(option, widget)) {
+        return 0;
+    }
+
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    return resolveBoxGeometry(itemContext).spacing;
+}
+
+QPointF FreeCADStyle::branchCenter(const QRect& cell, int leadingGap)
+{
+    // Half-pixel centres keep an odd-width stroke on a single pixel row. The leading gap is
+    // excluded because it belongs to the row above, so the centre tracks the item box rather
+    // than the taller cell Qt hands over.
+    return {
+        std::floor(cell.x() + (cell.width() / 2.0)) + 0.5,
+        std::floor(cell.y() + leadingGap + ((cell.height() - leadingGap) / 2.0)) + 0.5,
+    };
+}
+
 QList<QLineF> FreeCADStyle::branchSegments(
     const QRect& cell,
     QStyle::State state,
     bool topLevel,
-    Qt::LayoutDirection direction
+    Qt::LayoutDirection direction,
+    int leadingGap
 )
 {
     if (topLevel) {
@@ -959,17 +996,15 @@ QList<QLineF> FreeCADStyle::branchSegments(
     const bool ownsItem = state.testFlag(QStyle::State_Item);
     const bool siblingFollows = state.testFlag(QStyle::State_Sibling);
 
-    // Half-pixel centres keep an odd-width stroke on a single pixel row.
-    const qreal centerX = std::floor(cell.x() + (cell.width() / 2.0)) + 0.5;
-    const qreal centerY = std::floor(cell.y() + (cell.height() / 2.0)) + 0.5;
+    const QPointF center = branchCenter(cell, leadingGap);
 
     QList<QLineF> segments;
 
     if (siblingFollows) {
-        segments.append(QLineF(centerX, cell.top(), centerX, cell.bottom() + 1));
+        segments.append(QLineF(center.x(), cell.top(), center.x(), cell.bottom() + 1));
     }
     else if (ownsItem) {
-        segments.append(QLineF(centerX, cell.top(), centerX, centerY));
+        segments.append(QLineF(center.x(), cell.top(), center.x(), center.y()));
     }
 
     if (ownsItem) {
@@ -977,7 +1012,7 @@ QList<QLineF> FreeCADStyle::branchSegments(
         // cells and the label sits to its left, so the stub must reach toward the left
         // edge rather than the right edge it uses in left-to-right layouts.
         const qreal stubEnd = direction == Qt::RightToLeft ? cell.left() : cell.right() + 1;
-        segments.append(QLineF(centerX, centerY, stubEnd, centerY));
+        segments.append(QLineF(center.x(), center.y(), stubEnd, center.y()));
     }
 
     return segments;
@@ -1010,8 +1045,8 @@ void FreeCADStyle::drawItemViewRow(
     const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(
         contextOf(widget, vopt, StyleComponentElement::Item)
     );
-    // Exclude the reserved inter-row gap so the highlight floats above the background gap.
-    rowRect.adjust(0, 0, 0, -itemGeometry.spacing);
+    // Exclude the reserved inter-row gap so the highlight floats below the background gap.
+    rowRect.adjust(0, isFirstVisibleRow(vopt, widget) ? 0 : itemGeometry.spacing, 0, 0);
 
     // Qt installs a per-cell clip before calling PE_PanelItemViewItem; replace it
     // temporarily so the wider fill is not clipped to the cell column. paintBox insets the
@@ -1083,9 +1118,13 @@ void FreeCADStyle::drawItemViewBranch(
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing, false);
             painter->setPen(pen);
-            painter->drawLines(
-                branchSegments(option->rect, option->state, topLevel, option->direction)
-            );
+            painter->drawLines(branchSegments(
+                option->rect,
+                option->state,
+                topLevel,
+                option->direction,
+                leadingRowGap(option, widget)
+            ));
             painter->restore();
         }
     }
@@ -1138,7 +1177,9 @@ std::optional<FreeCADStyle::ItemViewLayout> FreeCADStyle::itemViewLayout(
     const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
 
     // The reserved inter-row gap belongs to the list background, not to the cell content.
-    const QRect content = geometry.contentRect(option->rect).adjusted(0, 0, 0, -geometry.spacing);
+    const QRect content
+        = geometry.contentRect(option->rect)
+              .adjusted(0, isFirstVisibleRow(option, widget) ? 0 : geometry.spacing, 0, 0);
 
     const auto centredAt = [&content](int left, const QSize& size) {
         const int top = content.top() + ((content.height() - size.height()) / 2);
@@ -1282,7 +1323,12 @@ void FreeCADStyle::drawPrimitive(
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
         const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(context);
-        const QRect itemRect = option->rect.adjusted(0, 0, 0, -itemGeometry.spacing);
+        const QRect itemRect = option->rect.adjusted(
+            0,
+            isFirstVisibleRow(option, widget) ? 0 : itemGeometry.spacing,
+            0,
+            0
+        );
 
         paintBox(painter, itemRect, context);
 
@@ -1507,10 +1553,10 @@ QSize FreeCADStyle::itemViewItemSizeFromContents(
     }
 
     QSize itemSize = geometry.sizeFromContents(baseSize);
-    // ListItemSpacing: reserve an inter-row gap below each row. The gap is excluded from the
+    // ListItemSpacing: reserve an inter-row gap above each row. The gap is excluded from the
     // content rect (subElementRect) and the highlight (drawItemViewRow), so it renders as the
-    // list background between rows.
-    itemSize.rheight() += geometry.spacing;
+    // list background between rows. The topmost row has nothing above it to separate from.
+    itemSize.rheight() += isFirstVisibleRow(option, widget) ? 0 : geometry.spacing;
     return itemSize;
 }
 

@@ -23,10 +23,11 @@ constexpr qreal centerY = 60.5;
 QList<QLineF> segmentsFor(
     QStyle::State state,
     bool topLevel = false,
-    Qt::LayoutDirection direction = Qt::LeftToRight
+    Qt::LayoutDirection direction = Qt::LeftToRight,
+    int leadingGap = 0
 )
 {
-    return Gui::FreeCADStyle::branchSegments(cell, state, topLevel, direction);
+    return Gui::FreeCADStyle::branchSegments(cell, state, topLevel, direction, leadingGap);
 }
 
 }  // namespace
@@ -91,4 +92,19 @@ TEST(TreeBranchGeometryTest, LeftToRightStubReachesTheRightEdge)
 
     ASSERT_EQ(segments.size(), 2);
     EXPECT_EQ(segments.at(1), QLineF(centerX, centerY, 40, centerY));
+}
+
+// The gap above a row belongs to the row before it: the elbow follows the item box down,
+// while the guide still spans the whole cell so it meets its neighbours.
+TEST(TreeBranchGeometryTest, LeadingGapLowersTheElbowButNotTheGuide)
+{
+    constexpr int leadingGap = 4;
+    constexpr qreal loweredCenterY = 62.5;
+
+    const QList<QLineF> segments
+        = segmentsFor(QStyle::State_Item | QStyle::State_Sibling, false, Qt::LeftToRight, leadingGap);
+
+    ASSERT_EQ(segments.size(), 2);
+    EXPECT_EQ(segments.at(0), QLineF(centerX, 48, centerX, 72));
+    EXPECT_EQ(segments.at(1), QLineF(centerX, loweredCenterY, 40, loweredCenterY));
 }

@@ -401,13 +401,21 @@ public:
      * @param direction Layout direction of the view. In a right-to-left layout the item's
      *                  own cell is the leftmost of the branch cells, so the elbow's stub
      *                  runs to the cell's left edge instead of its right edge.
+     * @param leadingGap Inter-row gap reserved above this row, so the elbow meets the item
+     *                   box rather than the taller cell. Guides still span the whole cell.
      */
     static QList<QLineF> branchSegments(
         const QRect& cell,
         QStyle::State state,
         bool topLevel,
-        Qt::LayoutDirection direction
+        Qt::LayoutDirection direction,
+        int leadingGap
     );
+
+    /**
+     * @brief The point a tree indent cell's connectors converge on, and where its arrow sits.
+     */
+    static QPointF branchCenter(const QRect& cell, int leadingGap);
 
 protected:
     void drawPrimitive(
@@ -488,6 +496,11 @@ protected:
      * component whose branch colour does not resolve. The expand arrow is always drawn.
      */
     void drawItemViewBranch(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
+
+    /**
+     * @brief The inter-row gap reserved above a row, or zero for the topmost one.
+     */
+    int leadingRowGap(const QStyleOption* option, const QWidget* widget) const;
 
     /**
      * @brief Whether a branch cell sits at the leading edge of the tree's own column.
