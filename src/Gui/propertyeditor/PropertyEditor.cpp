@@ -240,7 +240,12 @@ int PropertyEditor::contentHeight() const
 
 void PropertyEditor::updateHeightLimit()
 {
-    setMaximumHeight(Gui::FreeCADStyle::isTransparent(this) ? contentHeight() : QWIDGETSIZE_MAX);
+    const int limit = Gui::FreeCADStyle::isTransparent(this) ? contentHeight() : QWIDGETSIZE_MAX;
+    if (limit == maximumHeight()) {
+        return;
+    }
+
+    setMaximumHeight(limit);
 }
 
 void PropertyEditor::changeEvent(QEvent* event)
