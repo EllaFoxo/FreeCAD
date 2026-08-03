@@ -353,21 +353,16 @@ WbTabBarTabBorderRadius: "border_radius(0px)"
 WbTabBarTabBorderThickness: "border_thickness(0px, left: 1px, right: 1px)"
 
 # ── Transparent tab bar — free-standing pills over the 3D view ───────────────
-# Token order is {Component}{Element}{Variant}{State}{Property}, so the element (Tab, Base)
-# comes before the Transparent variant.
-TabBarTabTransparentBackground:      "@DocumentTreeItemBackground"
-TabBarTabTransparentBorderColor:     "@BaseBorderColor"
+TabBarTabTransparentSpacing: "@Spacing.150"
+
+TabBarTabTransparentBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Background.050, @Background.100)"
+TabBarTabTransparentBorderRadius: "@BaseRadius.medium"
+TabBarTabTransparentBorderColor: "@BaseBorderColor"
 TabBarTabTransparentBorderThickness: 1px
-TabBarTabTransparentBorderRadius:    "border_radius(@BaseRadius.full)"
-
-# Gap semantics: positive separates the pills, unlike the default -1px which merges
-# adjacent tab borders into one.
-TabBarTabTransparentSpacing: "@Spacing.100"
-
-# Based on the transparent tab background above, not on TabBarTabBackground — that token
-# does not exist (the opaque tab bar defines only TabBarTabCheckedBackground).
-TabBarTabTransparentCheckedBackground:  "blend(@TabBarTabTransparentBackground, @Accent.500, 20%)"
-TabBarTabTransparentCheckedBorderColor: "blend(@BaseBorderColor, @Accent.500, 20%)"
+TabBarTabTransparentPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
+TabBarTabTransparentHoveredBackgroundEffect: "effect(lighten: 0.05)"
+TabBarTabTransparentCheckedBackground: "blend(@TabBarTabTransparentBackground, @Accent.500, 20%)"
+TabBarTabTransparentCheckedBorderColor: "blend(@TabBarTabTransparentBorderColor, @Accent.500, 20%)"
 
 # No base strip and no pane — the pills float over the view. Height and Overlap are 0px
 # rather than reset(), because reset() would fall through to Fusion's own metrics and
@@ -380,6 +375,7 @@ TabBarBaseTransparentOverlap:     0px
 TabWidgetTransparentBackground:      "reset()"
 TabWidgetTransparentBorderColor:     "reset()"
 TabWidgetTransparentBorderThickness: 0px
+TabWidgetTransparentPadding: "padding(bottom: @Spacing.200)"
 
 # ── Transparent property editor — an opaque panel sized to its rows ──────────
 # Unlike the tree, property rows are a dense label/value grid that needs a continuous

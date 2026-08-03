@@ -44,7 +44,7 @@ Gui--OverlayTabWidget[transparent="true"] Gui--TreePanel QTreeView::item:disable
 
 /* Appearance moved to design system; margin is layout not yet expressible as token. */
 Gui--OverlayTabWidget::pane {
-  margin: 40px;
+  margin: 25px;
 }
 
 QSint--ActionGroup QFrame[class="content"] {
@@ -64,18 +64,6 @@ QSint--ActionGroup QFrame[class="header"] {
   border-top-right-radius: 3px;
   border-bottom-left-radius: 0px;
   border-bottom-right-radius: 0px;
-}
-
-Gui--OverlayTabWidget::tab-bar:top,
-Gui--OverlayTabWidget::tab-bar:bottom {
-    left: 10px;
-    alignment: left;
-}
-
-Gui--OverlayTabWidget::tab-bar:left,
-Gui--OverlayTabWidget::tab-bar:right {
-    top: 10px;
-    alignment: top;
 }
 
 Gui--OverlayProxyWidget {
