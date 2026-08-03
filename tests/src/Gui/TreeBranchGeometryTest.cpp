@@ -94,6 +94,19 @@ TEST(TreeBranchGeometryTest, LeftToRightStubReachesTheRightEdge)
     EXPECT_EQ(segments.at(1), QLineF(centerX, centerY, 40, centerY));
 }
 
+// An expand arrow occupies the centre, so the strokes stop short of it and leave it clear.
+TEST(TreeBranchGeometryTest, ArrowCellLeavesTheCentreClear)
+{
+    const QList<QLineF> segments = segmentsFor(
+        QStyle::State_Item | QStyle::State_Sibling | QStyle::State_Children
+    );
+
+    ASSERT_EQ(segments.size(), 3);
+    EXPECT_EQ(segments.at(0), QLineF(centerX, 48, centerX, centerY - 5.0));
+    EXPECT_EQ(segments.at(1), QLineF(centerX, centerY + 5.0, centerX, 72));
+    EXPECT_EQ(segments.at(2), QLineF(centerX + 5.0, centerY, 40, centerY));
+}
+
 // The gap above a row belongs to the row before it: the elbow follows the item box down,
 // while the guide still spans the whole cell so it meets its neighbours.
 TEST(TreeBranchGeometryTest, LeadingGapLowersTheElbowButNotTheGuide)

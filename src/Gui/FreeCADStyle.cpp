@@ -384,6 +384,16 @@ const QWidget* itemViewOf(const QStyleOptionViewItem* option, const QWidget* wid
     return option && option->widget ? option->widget : widget;
 }
 
+// How far a branch connector stops short of the centre when an expand arrow sits there.
+// Sized against the chevron drawChevronArrow paints, so the two cannot drift apart.
+constexpr qreal arrowClearance = 5.0;
+
+// Odd, so a box centred on a half-pixel point keeps that point as its own centre.
+constexpr int arrowBoxSize = 13;
+
+// Matches the chevron elsewhere in the style, which is drawn slightly softer than body text.
+constexpr int arrowAlpha = 160;
+
 // Whether this row is the topmost one on screen, and so carries no gap above it.
 bool isFirstVisibleRow(const QStyleOption* option, const QWidget* widget)
 {
@@ -995,24 +1005,36 @@ QList<QLineF> FreeCADStyle::branchSegments(
 
     const bool ownsItem = state.testFlag(QStyle::State_Item);
     const bool siblingFollows = state.testFlag(QStyle::State_Sibling);
+    const bool hasArrow = state.testFlag(QStyle::State_Children);
 
     const QPointF center = branchCenter(cell, leadingGap);
 
+    // An expand arrow occupies the centre of its own cell. The connectors stop short of it so
+    // the glyph reads as a symbol rather than as a bead threaded onto a wire.
+    const qreal clearance = hasArrow ? arrowClearance : 0.0;
+
     QList<QLineF> segments;
 
-    if (siblingFollows) {
+    if (siblingFollows && !hasArrow) {
         segments.append(QLineF(center.x(), cell.top(), center.x(), cell.bottom() + 1));
     }
-    else if (ownsItem) {
-        segments.append(QLineF(center.x(), cell.top(), center.x(), center.y()));
+    else {
+        if (siblingFollows || ownsItem) {
+            segments.append(QLineF(center.x(), cell.top(), center.x(), center.y() - clearance));
+        }
+        if (siblingFollows) {
+            segments.append(QLineF(center.x(), center.y() + clearance, center.x(), cell.bottom() + 1));
+        }
     }
 
     if (ownsItem) {
         // In a right-to-left layout the item's own cell is the leftmost of the branch
         // cells and the label sits to its left, so the stub must reach toward the left
         // edge rather than the right edge it uses in left-to-right layouts.
-        const qreal stubEnd = direction == Qt::RightToLeft ? cell.left() : cell.right() + 1;
-        segments.append(QLineF(center.x(), center.y(), stubEnd, center.y()));
+        const bool rightToLeft = direction == Qt::RightToLeft;
+        const qreal stubEnd = rightToLeft ? cell.left() : cell.right() + 1;
+        const qreal stubStart = rightToLeft ? center.x() - clearance : center.x() + clearance;
+        segments.append(QLineF(stubStart, center.y(), stubEnd, center.y()));
     }
 
     return segments;
@@ -1129,16 +1151,33 @@ void FreeCADStyle::drawItemViewBranch(
         }
     }
 
-    // Clearing the topology flags leaves the base style with nothing to draw but the expand
-    // indicator, so the arrow keeps the appearance it has always had.
-    if (const auto* viewOption = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
-        QStyleOptionViewItem arrowOnly = *viewOption;
-        arrowOnly.state &= ~(State_Item | State_Sibling);
-        QProxyStyle::drawPrimitive(PE_IndicatorBranch, &arrowOnly, painter, widget);
-        return;
+    if (option->state & State_Children) {
+        drawBranchArrow(painter, option, widget);
     }
+}
 
-    QProxyStyle::drawPrimitive(PE_IndicatorBranch, option, painter, widget);
+void FreeCADStyle::drawBranchArrow(QPainter* painter, const QStyleOption* option, const QWidget* widget) const
+{
+    const bool rightToLeft = option->direction == Qt::RightToLeft;
+    const Qt::ArrowType direction = (option->state & State_Open) ? Qt::DownArrow
+        : rightToLeft                                            ? Qt::LeftArrow
+                                                                 : Qt::RightArrow;
+
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Branch);
+    QColor arrowColor = resolveIconColor(context, option->palette);
+    arrowColor.setAlpha(arrowAlpha);
+
+    // Centred on the point the connectors converge on, so the glyph sits in the gap they leave
+    // rather than beside it. The odd box size keeps that centre on the same half-pixel.
+    const QPointF center = branchCenter(option->rect, leadingRowGap(option, widget));
+    const QRect arrowRect(
+        static_cast<int>(center.x() - (arrowBoxSize / 2.0)),
+        static_cast<int>(center.y() - (arrowBoxSize / 2.0)),
+        arrowBoxSize,
+        arrowBoxSize
+    );
+
+    drawChevronArrow(painter, arrowRect, direction, arrowColor);
 }
 
 bool FreeCADStyle::ownsItemViewLayout(const QStyleOptionViewItem* option, const QWidget* widget) const

@@ -403,6 +403,9 @@ public:
      *                  runs to the cell's left edge instead of its right edge.
      * @param leadingGap Inter-row gap reserved above this row, so the elbow meets the item
      *                   box rather than the taller cell. Guides still span the whole cell.
+     *
+     * A cell carrying an expand arrow leaves it clear: the strokes stop short of the centre
+     * so the arrow occupies a gap rather than sitting on top of a line.
      */
     static QList<QLineF> branchSegments(
         const QRect& cell,
@@ -496,6 +499,14 @@ protected:
      * component whose branch colour does not resolve. The expand arrow is always drawn.
      */
     void drawItemViewBranch(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
+
+    /**
+     * @brief Paints the expand indicator of a tree item, centred in the gap its connectors leave.
+     *
+     * Uses the same chevron the style draws for combo boxes and spin boxes, so every arrow in
+     * the application is one shape.
+     */
+    void drawBranchArrow(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
 
     /**
      * @brief The inter-row gap reserved above a row, or zero for the topmost one.
