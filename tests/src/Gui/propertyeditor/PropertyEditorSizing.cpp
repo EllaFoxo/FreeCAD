@@ -10,6 +10,7 @@
 
 #include <Gui/Application.h>
 #include <Gui/FreeCADStyle.h>
+#include <Gui/PropertyView.h>
 #include <Gui/SoFCDB.h>
 #include <Gui/propertyeditor/PropertyEditor.h>
 
@@ -199,6 +200,32 @@ private Q_SLOTS:
         editor->buildUp({});
 
         QCOMPARE(editor->maximumHeight(), 0);
+    }
+
+    // A capped editor sits at the top of its tab page rather than floating in the middle.
+    // QStackedLayout sets the page's geometry directly, so QWidget::setGeometry clamps the
+    // height against the maximum while keeping the top-left corner. Introducing a page layout
+    // here would route through QWidgetItem instead, which centres the excess.
+    void test_cappedEditorAnchorsToTopOfTabPage()  // NOLINT
+    {
+        Gui::PropertyView propertyView;
+        PropertyEditor* dataEditor = propertyView.propertyEditorData;
+        buildUpSubject(*dataEditor);
+
+        const int cappedHeight = dataEditor->contentHeight();
+        QVERIFY(cappedHeight > 0);
+
+        // Set the view to be transparent so the editor caps to its content height.
+        Gui::FreeCADStyle style;
+        style.updateTransparency(&propertyView, true);
+
+        propertyView.resize(400, cappedHeight + 200);
+        propertyView.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&propertyView));
+
+        // The editor should be at the top of its tab page at y=0, not centered vertically.
+        QCOMPARE(dataEditor->y(), 0);
+        QCOMPARE(dataEditor->height(), cappedHeight);
     }
 
 private:
