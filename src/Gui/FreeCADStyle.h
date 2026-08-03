@@ -50,6 +50,7 @@
 
 class QListView;
 class QTextDocument;
+class QTreeView;
 
 namespace Gui
 {
@@ -487,6 +488,20 @@ protected:
      * component whose branch colour does not resolve. The expand arrow is always drawn.
      */
     void drawItemViewBranch(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
+
+    /**
+     * @brief Whether a branch cell sits at the leading edge of the tree's own column.
+     *
+     * Reads the tree column's own viewport position rather than assuming it starts at
+     * x == 0, so a horizontally scrolled view or a tree column relocated by
+     * QTreeView::setTreePosition() still identifies its root cells correctly. Mirrors to
+     * the column's trailing edge in a right-to-left layout.
+     */
+    static bool atTreeColumnLeadingEdge(
+        const QTreeView* view,
+        const QRect& cellRect,
+        Qt::LayoutDirection direction
+    );
 
     /**
      * @brief Placement of the three parts of an item-view cell: check indicator, icon and text.

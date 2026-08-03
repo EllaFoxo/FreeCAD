@@ -2,8 +2,10 @@
 
 #include <functional>
 
+#include <QHeaderView>
 #include <QImage>
 #include <QPainter>
+#include <QStandardItemModel>
 #include <QStyleOptionViewItem>
 #include <QTest>
 #include <QTreeView>
@@ -110,6 +112,33 @@ private Q_SLOTS:
         const QImage painted = paintCell(0, [](QTreeView& tree) { tree.setRootIsDecorated(false); });
 
         QCOMPARE(painted.pixelColor(10, 0), QColor(Qt::red));
+    }
+
+    // Scrolling the tree column right by one indentation step moves a depth-1 ancestor's
+    // cell to x == 0 -- the same pixel column an unscrolled root cell would occupy. That
+    // ancestor still has a parent to reach toward and must keep drawing its guide; only the
+    // tree column's own (now off-screen) position identifies the true root cell.
+    void test_leadingVisibleGuideDrawsWhenViewIsScrolledHorizontally()  // NOLINT
+    {
+        QStandardItemModel model(3, 1);
+        QTreeView tree;
+        tree.setIndentation(20);
+        tree.setModel(&model);
+        tree.header()->setOffset(20);
+
+        QImage canvas(40, 24, QImage::Format_ARGB32);
+        canvas.fill(Qt::transparent);
+
+        QStyleOptionViewItem option;
+        option.rect = QRect(0, 0, 20, 24);
+        option.state = QStyle::State_Enabled | QStyle::State_Sibling;
+
+        Gui::FreeCADStyle style;
+        QPainter painter(&canvas);
+        static_cast<QStyle*>(&style)->drawPrimitive(QStyle::PE_IndicatorBranch, &option, &painter, &tree);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(10, 0), QColor(Qt::red));
     }
 };
 

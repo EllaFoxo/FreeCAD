@@ -1022,6 +1022,41 @@ void FreeCADStyle::drawItemViewRow(
     painter->restore();
 }
 
+bool FreeCADStyle::atTreeColumnLeadingEdge(
+    const QTreeView* view,
+    const QRect& cellRect,
+    Qt::LayoutDirection direction
+)
+{
+    if (view == nullptr || view->header() == nullptr) {
+        return false;
+    }
+
+    // treePosition() names a logical column and defaults to 0; QTreeViewPrivate::
+    // logicalIndexForTree() only consults header->logicalIndex(0) once a caller sets it
+    // negative via setTreePosition(). A header with no sections yet (no model attached)
+    // leaves no real column to measure against; fall back to the old absolute-zero test.
+    const int treeColumn = view->treePosition() >= 0 ? view->treePosition()
+                                                     : view->header()->logicalIndex(0);
+    if (treeColumn < 0 || treeColumn >= view->header()->count()) {
+        return direction == Qt::RightToLeft ? false : cellRect.left() <= 0;
+    }
+
+    // columnViewportPosition() already accounts for horizontal scrolling, so comparing
+    // against it (rather than absolute zero) keeps the root cell test correct while a
+    // scrolled view or a relocated tree column moves the branch column's leading edge
+    // away from x == 0.
+    const int columnPosition = view->columnViewportPosition(treeColumn);
+
+    if (direction == Qt::RightToLeft) {
+        // A right-to-left layout mirrors the column so its leading edge is on the right.
+        const int trailingEdge = columnPosition + view->columnWidth(treeColumn);
+        return cellRect.right() >= trailingEdge - 1;
+    }
+
+    return cellRect.left() <= columnPosition;
+}
+
 void FreeCADStyle::drawItemViewBranch(
     QPainter* painter,
     const QStyleOption* option,
@@ -1033,13 +1068,8 @@ void FreeCADStyle::drawItemViewBranch(
     const bool suppressed = enabled.isValid() && !enabled.toBool();
 
     if (!suppressed) {
-        // The outermost cell sits at the leading edge of the branch column, which a
-        // right-to-left layout puts at the viewport's right rather than at x == 0.
-        const bool atLeadingEdge = option->direction == Qt::RightToLeft
-            ? view != nullptr && view->viewport() != nullptr
-                && option->rect.right() >= view->viewport()->width() - 1
-            : option->rect.left() <= 0;
-        const bool topLevel = view != nullptr && view->rootIsDecorated() && atLeadingEdge;
+        const bool topLevel = view != nullptr && view->rootIsDecorated()
+            && atTreeColumnLeadingEdge(view, option->rect, option->direction);
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Branch);
 
