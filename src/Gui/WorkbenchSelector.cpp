@@ -45,6 +45,11 @@ using namespace Gui;
 WorkbenchComboBox::WorkbenchComboBox(WorkbenchGroup* aGroup, QWidget* parent)
     : QComboBox(parent)
 {
+    // Every workbench has to be reachable without scrolling, so the dropdown drops the height
+    // cap the design system puts on an ordinary one and asks Qt for a row per workbench. Qt
+    // still keeps the popup on screen, scrolling if the list outgrows it.
+    setProperty("dropdownComponent", "WorkbenchSelectorDropdown");
+
     setIconSize(QSize(16, 16));
     setToolTip(aGroup->toolTip());
     setStatusTip(aGroup->action()->statusTip());
@@ -86,6 +91,8 @@ void WorkbenchComboBox::refreshList(QList<QAction*> actionList)
             this->setCurrentIndex(this->count() - 1);
         }
     }
+
+    setMaxVisibleItems(qMax(1, count()));
 }
 
 WorkbenchTabWidget::WorkbenchTabWidget(WorkbenchGroup* aGroup, QWidget* parent)
