@@ -387,7 +387,7 @@ PropertyEditorTransparentBackground: "@Background.050"
 PropertyEditorTransparentBorderColor: "@BaseBorderColor"
 PropertyEditorTransparentBorderThickness: 1px
 PropertyEditorTransparentBorderRadius: "@BaseRadius.medium"
-PropertyEditorTransparentPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.100)"
+PropertyEditorTransparentPadding: "0px"
 PropertyEditorTransparentIsTransparent: "false"
 
 # ── Tab Bar Base ─────────────────────────────────────────────────────────────
