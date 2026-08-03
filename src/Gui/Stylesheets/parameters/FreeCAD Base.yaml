@@ -301,7 +301,7 @@ TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 # Connector lines in the indent column. Kept faint on purpose — they mark hierarchy without
 # competing with the items. Any component can cancel them with reset(), and any widget with
 # setProperty("branches", false).
-TreeBranchBorderColor: "opacity(@BaseBorderColor, 60%)"
+TreeBranchBorderColor: "@BaseBorderColor"
 TreeBranchBorderThickness: 1px
 
 # PropertyEditor sets setRootIsDecorated(false), which still leaves a depth-1 branch cell to
