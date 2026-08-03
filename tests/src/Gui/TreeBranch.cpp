@@ -58,7 +58,7 @@ private:
 
         Gui::FreeCADStyle style;
         QPainter painter(&canvas);
-        style.drawPrimitive(QStyle::PE_IndicatorBranch, &option, &painter, &tree);
+        static_cast<QStyle*>(&style)->drawPrimitive(QStyle::PE_IndicatorBranch, &option, &painter, &tree);
         painter.end();
 
         return canvas;

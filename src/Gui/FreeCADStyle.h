@@ -400,7 +400,7 @@ public:
      */
     static QList<QLineF> branchSegments(const QRect& cell, QStyle::State state, bool topLevel);
 
-public:
+protected:
     void drawPrimitive(
         PrimitiveElement element,
         const QStyleOption* option,
@@ -408,7 +408,6 @@ public:
         const QWidget* widget = nullptr
     ) const override;
 
-protected:
     void drawComplexControl(
         ComplexControl control,
         const QStyleOptionComplex* option,
