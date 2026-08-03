@@ -62,6 +62,7 @@
 #include "Document.h"
 #include "ExpressionCompleter.h"
 #include "FreeCADStyle.h"
+#include "IconManager.h"
 #include "Macro.h"
 #include "MainWindow.h"
 #include "MenuManager.h"
@@ -6370,13 +6371,14 @@ void DocumentObjectItem::generateIcon(int currentStatus, QIcon::Mode mode, QIcon
 
 QIcon DocumentObjectItem::getVisibilityIcon(int currentStatus, QIcon& original_icon)
 {
-    static QPixmap pxVisible, pxInvisible;
-    if (pxVisible.isNull()) {
-        pxVisible = BitmapFactory().pixmap("TreeItemVisible");
-    }
-    if (pxInvisible.isNull()) {
-        pxInvisible = BitmapFactory().pixmap("TreeItemInvisible");
-    }
+    // Themed icons: IconManager recolours them from the current theme on every render, so they
+    // must not be cached as pixmaps here or they would survive a theme change unchanged.
+    static const QIcon visible = IconManager::instance().icon(
+        QStringLiteral(":/icons/tabler/outline/eye.svg")
+    );
+    static const QIcon invisible = IconManager::instance().icon(
+        QStringLiteral(":/icons/tabler/outline/eye-closed.svg")
+    );
 
     // Prepend the visibility pixmap to the final icon pixmaps and use these as the icon.
     QIcon new_icon;
@@ -6392,13 +6394,8 @@ QIcon DocumentObjectItem::getVisibilityIcon(int currentStatus, QIcon& original_i
         pt.begin(&px);
         pt.setPen(Qt::NoPen);
         if (object()->canToggleVisibility()) {
-            pt.drawPixmap(
-                0,
-                0,
-                px_org.width(),
-                px_org.height(),
-                (currentStatus & Status::Visible) ? pxVisible : pxInvisible
-            );
+            const QIcon& visibility = (currentStatus & Status::Visible) ? visible : invisible;
+            pt.drawPixmap(0, 0, px_org.width(), px_org.height(), visibility.pixmap(px_org.size()));
         }
         pt.drawPixmap(px_org.width() + spacing, 0, px_org.width(), px_org.height(), px_org);
         pt.end();
