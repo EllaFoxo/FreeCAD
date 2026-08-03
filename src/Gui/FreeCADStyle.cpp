@@ -944,6 +944,35 @@ void FreeCADStyle::paintBox(
     drawBoxBackground(painter, borderRect, resolveBoxStyle(context));
 }
 
+QList<QLineF> FreeCADStyle::branchSegments(const QRect& cell, QStyle::State state, bool topLevel)
+{
+    if (topLevel) {
+        return {};
+    }
+
+    const bool ownsItem = state.testFlag(QStyle::State_Item);
+    const bool siblingFollows = state.testFlag(QStyle::State_Sibling);
+
+    // Half-pixel centres keep an odd-width stroke on a single pixel row.
+    const qreal centerX = std::floor(cell.x() + (cell.width() / 2.0)) + 0.5;
+    const qreal centerY = std::floor(cell.y() + (cell.height() / 2.0)) + 0.5;
+
+    QList<QLineF> segments;
+
+    if (siblingFollows) {
+        segments.append(QLineF(centerX, cell.top(), centerX, cell.bottom() + 1));
+    }
+    else if (ownsItem) {
+        segments.append(QLineF(centerX, cell.top(), centerX, centerY));
+    }
+
+    if (ownsItem) {
+        segments.append(QLineF(centerX, centerY, cell.right() + 1, centerY));
+    }
+
+    return segments;
+}
+
 bool FreeCADStyle::selectsWholeRows(const QWidget* widget)
 {
     const auto* view = qobject_cast<const QAbstractItemView*>(widget);

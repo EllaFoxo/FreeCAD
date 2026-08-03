@@ -32,6 +32,7 @@
 #include <Base/Color.h>
 #include <QBrush>
 #include <QColor>
+#include <QLine>
 #include <QMarginsF>
 #include <QPainter>
 #include <QProxyStyle>
@@ -386,6 +387,18 @@ public:
      * Returns false for a null widget and for any widget the propagator has not reached.
      */
     static bool isTransparent(const QWidget* widget);
+
+    /**
+     * @brief The connector strokes for one indent cell of a tree view's branch column.
+     *
+     * @param cell     One indentation step wide, one row tall, as Qt hands it to
+     *                 PE_IndicatorBranch.
+     * @param state    Qt's branch flags. State_Item marks the level owning the item;
+     *                 State_Sibling means a sibling follows below at that level.
+     * @param topLevel True for a cell belonging to a root item, which has no parent to
+     *                 reach toward and so draws nothing.
+     */
+    static QList<QLineF> branchSegments(const QRect& cell, QStyle::State state, bool topLevel);
 
 protected:
     void drawPrimitive(
