@@ -295,20 +295,23 @@ DropdownListMaxHeight: "250px"
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
-DocumentTreeRowBackground: "reset()"
+# The document tree paints each item as a free-standing box only over a transparent surface,
+# where a full-width row would put an opaque stripe across the 3D view. Docked, none of these
+# tokens resolve and the tree falls back through Tree → List to the ordinary item-view look.
+DocumentTreeRowTransparentBackground: "reset()"
 
-DocumentTreeItemBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Background.050, @Background.100)"
-DocumentTreeItemBorderRadius: "@BaseRadius.medium"
-DocumentTreeItemBorderThickness: 1px
-DocumentTreeItemBorderColor: "@BaseBorderColor"
+DocumentTreeItemTransparentBackground: "linear_gradient(x1: 0, y1: 0, x2: 0, y2: 1, @Background.050, @Background.100)"
+DocumentTreeItemTransparentBorderRadius: "@BaseRadius.medium"
+DocumentTreeItemTransparentBorderThickness: 1px
+DocumentTreeItemTransparentBorderColor: "@BaseBorderColor"
 
-DocumentTreeItemPadding: "padding(horizontal: @Spacing.200, vertical: 3px)"
-DocumentTreeItemSpacing: "@Spacing.100"
+DocumentTreeItemTransparentPadding: "padding(horizontal: @Spacing.200, vertical: 3px)"
+DocumentTreeItemTransparentSpacing: "@Spacing.100"
 
-DocumentTreeItemHoveredBackgroundEffect: "effect(lighten: 0.05)"
+DocumentTreeItemTransparentHoveredBackgroundEffect: "effect(lighten: 0.05)"
 
-DocumentTreeItemCheckedBackground: "blend(@DocumentTreeItemBackground, @Accent.500, 20%)"
-DocumentTreeItemCheckedBorderColor: "blend(@DocumentTreeItemBorderColor, @Accent.500, 20%)"
+DocumentTreeItemTransparentCheckedBackground: "blend(@DocumentTreeItemTransparentBackground, @Accent.500, 20%)"
+DocumentTreeItemTransparentCheckedBorderColor: "blend(@DocumentTreeItemTransparentBorderColor, @Accent.500, 20%)"
 
 # ── Header / QHeaderView ─────────────────────────────────────────────────────
 # Section background — button-like but flat (no border radius)

@@ -394,7 +394,9 @@ void TreeWidgetItemDelegate::paint(
     auto* tree = static_cast<TreeWidget*>(parent());
     auto* fcStyle = Application::Instance->freeCADStyle();
 
-    if (index.column() == 0) {
+    // Only over a transparent surface does an item become a free-standing box hugging its own
+    // content; docked, the tree keeps the full-width row every other item view draws.
+    if (index.column() == 0 && FreeCADStyle::isTransparent(tree)) {
         using namespace StyleParameters;
         const StyleContext context = FreeCADStyle::contextOf(tree, &opt, StyleComponentElement::Item);
         const FreeCADStyle::BoxGeometryDefinition geometry = fcStyle->resolveBoxGeometry(context);
