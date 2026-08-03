@@ -46,6 +46,7 @@
 #include <QTextDocument>
 #include <QTextEdit>
 #include <QPainterPath>
+#include <QPen>
 #include <QStyleOption>
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -1012,6 +1013,54 @@ void FreeCADStyle::drawItemViewRow(
     painter->restore();
 }
 
+void FreeCADStyle::drawItemViewBranch(
+    QPainter* painter,
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    const auto* view = qobject_cast<const QTreeView*>(widget);
+    const QVariant enabled = widget != nullptr ? widget->property("branches") : QVariant();
+    const bool suppressed = enabled.isValid() && !enabled.toBool();
+
+    if (!suppressed) {
+        // The outermost cell sits at the leading edge of the branch column, which a
+        // right-to-left layout puts at the viewport's right rather than at x == 0.
+        const bool atLeadingEdge = option->direction == Qt::RightToLeft
+            ? view != nullptr && view->viewport() != nullptr
+                && option->rect.right() >= view->viewport()->width() - 1
+            : option->rect.left() <= 0;
+        const bool topLevel = view != nullptr && view->rootIsDecorated() && atLeadingEdge;
+
+        const StyleContext context = contextOf(widget, option, StyleComponentElement::Branch);
+
+        if (const auto color = resolve<Base::Color>(context, StyleProperty::BorderColor)) {
+            const auto thickness = resolve<Numeric>(context, StyleProperty::BorderThickness);
+
+            QPen pen(color->asValue<QColor>());
+            pen.setWidthF(thickness ? static_cast<double>(*thickness) : 1.0);
+            pen.setCapStyle(Qt::FlatCap);
+
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing, false);
+            painter->setPen(pen);
+            painter->drawLines(branchSegments(option->rect, option->state, topLevel));
+            painter->restore();
+        }
+    }
+
+    // Clearing the topology flags leaves the base style with nothing to draw but the expand
+    // indicator, so the arrow keeps the appearance it has always had.
+    if (const auto* viewOption = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
+        QStyleOptionViewItem arrowOnly = *viewOption;
+        arrowOnly.state &= ~(State_Item | State_Sibling);
+        QProxyStyle::drawPrimitive(PE_IndicatorBranch, &arrowOnly, painter, widget);
+        return;
+    }
+
+    QProxyStyle::drawPrimitive(PE_IndicatorBranch, option, painter, widget);
+}
+
 bool FreeCADStyle::ownsItemViewLayout(const QStyleOptionViewItem* option, const QWidget* widget) const
 {
     if (!option || !qobject_cast<const QAbstractItemView*>(widget)) {
@@ -1196,6 +1245,11 @@ void FreeCADStyle::drawPrimitive(
 
         paintBox(painter, itemRect, context);
 
+        return;
+    }
+
+    if (element == PE_IndicatorBranch) {
+        drawItemViewBranch(painter, option, widget);
         return;
     }
 

@@ -400,7 +400,7 @@ public:
      */
     static QList<QLineF> branchSegments(const QRect& cell, QStyle::State state, bool topLevel);
 
-protected:
+public:
     void drawPrimitive(
         PrimitiveElement element,
         const QStyleOption* option,
@@ -408,6 +408,7 @@ protected:
         const QWidget* widget = nullptr
     ) const override;
 
+protected:
     void drawComplexControl(
         ComplexControl control,
         const QStyleOptionComplex* option,
@@ -471,6 +472,14 @@ protected:
      * when applicable) is built inside this function from the provided option and widget.
      */
     void drawItemViewRow(QPainter* painter, const QStyleOptionViewItem* vopt, const QWidget* widget) const;
+
+    /**
+     * @brief Paints the connector lines and expand arrow for one tree indent cell.
+     *
+     * Connectors are suppressed for a widget carrying `branches == false`, and for any
+     * component whose branch colour does not resolve. The expand arrow is always drawn.
+     */
+    void drawItemViewBranch(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
 
     /**
      * @brief Placement of the three parts of an item-view cell: check indicator, icon and text.

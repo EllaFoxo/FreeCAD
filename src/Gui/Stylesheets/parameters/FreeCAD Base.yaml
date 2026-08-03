@@ -298,6 +298,12 @@ WorkbenchSelectorDropdownMaxHeight: "reset()"
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 
+# Connector lines in the indent column. Kept faint on purpose — they mark hierarchy without
+# competing with the items. Any component can cancel them with reset(), and any widget with
+# setProperty("branches", false).
+TreeBranchBorderColor: "opacity(@BaseBorderColor, 60%)"
+TreeBranchBorderThickness: 1px
+
 # The document tree paints each item as a free-standing box only over a transparent surface,
 # where a full-width row would put an opaque stripe across the 3D view. Docked, none of these
 # tokens resolve and the tree falls back through Tree → List to the ordinary item-view look.
