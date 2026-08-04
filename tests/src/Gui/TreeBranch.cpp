@@ -41,6 +41,9 @@ public:
                     // Opaque so a column that kept the resting colour is distinguishable from
                     // one the selection reached.
                     {.name = "ListRowCheckedBackground", .value = "#ff00ff"},
+                    // Translucent, so a second application of the same fill lands on a
+                    // different colour than the first.
+                    {.name = "ListRowHoveredBackground", .value = "opacity(#0000ff, 50%)"},
                 },
                 {.name = "Branch Fixture"}
             )
@@ -146,6 +149,43 @@ private Q_SLOTS:
         painter.end();
 
         QCOMPARE(canvas.pixelColor(5, 5), QColor(Qt::blue));
+    }
+
+    // Qt strips the selection from the row emission that precedes each cell but leaves the hover
+    // on it, so a style that fills from both that emission and the cell composites the hover
+    // twice over the cell and once over the branch gutter — one row, two shades.
+    void test_hoverFillsTheRowExactlyOnce()  // NOLINT
+    {
+        QTreeView tree;
+        tree.setIndentation(20);
+        tree.resize(200, 100);
+
+        QImage canvas(40, 24, QImage::Format_ARGB32);
+        canvas.fill(Qt::white);
+
+        Gui::FreeCADStyle style;
+        auto* asStyle = static_cast<QStyle*>(&style);
+        QPainter painter(&canvas);
+
+        // The gutter, then the one cell: what Qt emits for a hovered row of a one-column tree.
+        QStyleOptionViewItem gutter;
+        gutter.rect = QRect(0, 0, 20, 24);
+        gutter.state = QStyle::State_Enabled | QStyle::State_MouseOver;
+
+        QStyleOptionViewItem cell = gutter;
+        cell.rect = QRect(20, 0, 20, 24);
+        cell.viewItemPosition = QStyleOptionViewItem::OnlyOne;
+
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &gutter, &painter, &tree);
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &cell, &painter, &tree);
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewItem, &cell, &painter, &tree);
+        painter.end();
+
+        const QColor overGutter = canvas.pixelColor(10, 12);
+        const QColor overCell = canvas.pixelColor(30, 12);
+
+        QCOMPARE(overGutter, overCell);
+        QCOMPARE(overCell, QColor(127, 127, 255));
     }
 
     // Qt marks only the current cell with State_HasFocus, so a row's surface is asked for under

@@ -1040,6 +1040,26 @@ QList<QLineF> FreeCADStyle::branchSegments(
     return segments;
 }
 
+bool FreeCADStyle::isLeadingCell(const QStyleOptionViewItem* vopt)
+{
+    return vopt->viewItemPosition == QStyleOptionViewItem::Beginning
+        || vopt->viewItemPosition == QStyleOptionViewItem::OnlyOne
+        || vopt->viewItemPosition == QStyleOptionViewItem::Invalid;
+}
+
+void FreeCADStyle::reachToLeadingEdge(QRect& rect, const QStyleOptionViewItem* vopt, const QWidget* widget)
+{
+    if (vopt->direction != Qt::RightToLeft) {
+        rect.setLeft(0);
+        return;
+    }
+
+    const auto* view = qobject_cast<const QAbstractItemView*>(widget);
+    if (view != nullptr && view->viewport() != nullptr) {
+        rect.setRight(view->viewport()->width() - 1);
+    }
+}
+
 void FreeCADStyle::drawItemViewRow(
     QPainter* painter,
     const QStyleOptionViewItem* vopt,
@@ -1078,7 +1098,23 @@ void FreeCADStyle::drawItemViewRow(
     QRect rowRect = vopt->rect;
     rowRect.adjust(0, isFirstVisibleRow(vopt, widget) ? 0 : itemGeometry.spacing, 0, 0);
 
+    // A tree indents its leading cell past the branch column, which belongs to no cell and so
+    // would stay unhighlighted. The leading cell reaches back over it. Only backwards: nothing
+    // paints there after this call, whereas a fill running the other way would be buried by the
+    // next column's surface.
+    const bool coversBranchGutter = layer == RowLayer::Interaction && isLeadingCell(vopt);
+    if (coversBranchGutter) {
+        reachToLeadingEdge(rowRect, vopt, widget);
+    }
+
+    // Qt clips to the cell before calling PE_PanelItemViewItem, which the reach past its
+    // leading edge has to escape.
+    painter->save();
+    if (coversBranchGutter) {
+        painter->setClipRect(rowRect, Qt::ReplaceClip);
+    }
     paintBox(painter, rowRect, rowContext);
+    painter->restore();
 }
 
 bool FreeCADStyle::atTreeColumnLeadingEdge(
@@ -1341,10 +1377,6 @@ void FreeCADStyle::drawPrimitive(
         if (context.element == StyleComponentElement::Item) {
             if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
                 drawItemViewRow(painter, vopt, widget, RowLayer::Surface);
-                // Qt strips the selection from the emission that precedes each cell — that
-                // cell paints its own. It keeps it on the one covering a tree's branch gutter,
-                // which belongs to no cell and would otherwise stay unhighlighted.
-                drawItemViewRow(painter, vopt, widget, RowLayer::Interaction);
             }
             return;
         }
