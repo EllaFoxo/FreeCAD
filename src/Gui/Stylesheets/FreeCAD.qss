@@ -5,32 +5,6 @@ Gui--Dialog--DlgPreferencesImp #sidebar {
   background-color: @{@Background.200};
 }
 
-/* QGroupBox --------------------------------------------------------------
-https://doc.qt.io/qt-5/stylesheet-examples.html#customizing-qgroupbox
---------------------------------------------------------------------------- */
-QGroupBox {
-  background-color: transparent;
-  border-radius: @GroupBoxBorderRadius;
-  border-color: @GroupBoxBorderColor;
-  border: 1px solid @GroupBoxBorderColor;
-  border-width: @GroupBoxBorderThickness;
-  padding: @GroupBoxPadding;
-  margin-top: 9px;
-  font-weight: @GroupBoxTitleFontWeight;
-}
-
-QGroupBox::title {
-  top: -9px;
-  padding: @{padding(@GroupBoxTitlePadding)};
-  left: @{padding(@GroupBoxPadding).left - padding(@GroupBoxTitlePadding).left};
-  color: @GroupBoxTitleTextColor;
-  font-size: @GroupBoxTitleFontSize;
-  font-weight: @GroupBoxTitleFontWeight;
-  background-color: @GroupBoxBackground;
-  border-radius: 4px;
-}
-
-
 MRichTextEdit[floating="true"] {
   border: 1px solid @BaseBorderColor;
   border-radius: 2px;

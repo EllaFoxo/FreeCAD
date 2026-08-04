@@ -193,7 +193,10 @@ TextEditPadding: "padding(@FormControlPadding.left)"
 
 DialogBackground: "@Background.050"
 
-GroupBoxBackground: "@Background.050"
+# Read by resolveBoxStyle as the box's own fill. It named the opaque patch behind the title
+# while QSS drew the group box; the title is masked out of the border now, so nothing is
+# painted behind it and the body stays see-through.
+GroupBoxBackground: "@Colors.transparent"
 GroupBoxBorderColor: "@Neutral.300"
 GroupBoxBorderRadius: "@BaseRadius.medium"
 GroupBoxBorderThickness: 1px
