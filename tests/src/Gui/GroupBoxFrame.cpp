@@ -49,6 +49,9 @@ public:
                     {.name = "GroupBoxTitleFontSize", .value = "10px"},
                     {.name = "GroupBoxTitleFontWeight", .value = "600"},
                     {.name = "GroupBoxTitleTextColor", .value = "#0000ff"},
+                    // On an unrelated component so it cannot interfere with the GroupBox
+                    // fixtures above: exercises the pt-unit branch of resolveFont.
+                    {.name = "HeaderFontSize", .value = "12pt"},
                 },
                 {.name = "GroupBox Fixture"}
             )
@@ -185,6 +188,21 @@ private Q_SLOTS:
         const QFont resolved = style.resolveFont(context, base);
 
         QCOMPARE(resolved, base);
+    }
+
+    // A pt-unit token has to reach setPointSizeF, not the px-only setPixelSize path.
+    void test_resolveFontAppliesPointSizeToken()  // NOLINT
+    {
+        Gui::StyleParameters::StyleContext context;
+        context.component = Gui::StyleParameters::StyleComponent::Header;
+
+        QFont base;
+        base.setPixelSize(30);
+
+        Gui::FreeCADStyle style;
+        const QFont resolved = style.resolveFont(context, base);
+
+        QCOMPARE(resolved.pointSizeF(), 12.0);
     }
 };
 
