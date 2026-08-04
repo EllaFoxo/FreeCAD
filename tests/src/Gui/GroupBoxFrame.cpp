@@ -310,6 +310,30 @@ private Q_SLOTS:
         QVERIFY(margins.top() > 12);
     }
 
+    // The masking tests below probe at rects the style itself reports, so they hold whether the
+    // notch lands on the title or on empty space. This is the geometry that makes them mean
+    // something: the frame's top edge has to run through the title band.
+    void test_theTitleStraddlesTheFrameTopEdge()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.resize(200, 80);
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        // Strictly inside the band on both counts. Merely touching is what an AlignTop vertical
+        // alignment produces: the title ends on the frame's first row, so the notch takes the
+        // stroke out from under empty space and leaves the top-left corner a detached stub.
+        QVERIFY(label.top() < frame.top());
+        QVERIFY(frame.top() < label.bottom());
+
+        // Half the title hangs below the edge when it is centred on it; a third allows for
+        // rounding without admitting the single-row overlap AlignTop leaves behind.
+        QVERIFY(label.bottom() + 1 - frame.top() >= label.height() / 3);
+    }
+
     // The defect this whole change exists for: the stroke has to be absent under the title,
     // not covered by an opaque patch that only matches one background.
     void test_theBorderIsAbsentUnderTheTitle()  // NOLINT

@@ -785,6 +785,20 @@ int FreeCADStyle::styleHint(
         return 0;
     }
 
+    if (hint == SH_GroupBox_TextLabelVerticalAlignment) {
+        // Fusion answers AlignTop, which places the frame's top edge below the whole title band.
+        // Our group box puts the title *on* that edge so the border can be notched out from
+        // under it, and this hint is the single value both the frame geometry and the label
+        // placement are derived from. A vertical flag set explicitly on the option still wins.
+        if (const auto* groupBoxOption = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
+            const int requested = (groupBoxOption->textAlignment & Qt::AlignVertical_Mask).toInt();
+            if (requested != 0) {
+                return requested;
+            }
+        }
+        return Qt::AlignVCenter;
+    }
+
     return QProxyStyle::styleHint(hint, option, widget, returnData);
 }
 
