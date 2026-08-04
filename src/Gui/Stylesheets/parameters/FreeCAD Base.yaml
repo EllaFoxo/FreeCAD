@@ -387,7 +387,7 @@ TabBarBaseTransparentOverlap:     0px
 TabWidgetTransparentBackground:      "reset()"
 TabWidgetTransparentBorderColor:     "reset()"
 TabWidgetTransparentBorderThickness: 0px
-TabWidgetTransparentPadding: "padding(bottom: @Spacing.200)"
+TabWidgetTransparentPadding: "padding(bottom: @TabBarTabTransparentSpacing)"
 
 # ── Transparent property editor — an opaque panel sized to its rows ──────────
 # Unlike the tree, property rows are a dense label/value grid that needs a continuous
