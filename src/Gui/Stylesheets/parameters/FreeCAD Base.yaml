@@ -136,8 +136,8 @@ InternalButtonMinWidth: "reset()"
 InternalButtonHoveredBackground: "@Background.150"
 InternalButtonPressedBackground: "@Background.200"
 
-ToolBarItemSpacing: "@Spacing.100"
-ToolBarItemMargin: "@Spacing.100"
+ToolBarItemSpacing: "@Spacing.075"
+ToolBarItemMargin: "@Spacing.050"
 
 ToolBarButtonHeight: "reset()" # Do not enforce height for toolbar buttons
 
