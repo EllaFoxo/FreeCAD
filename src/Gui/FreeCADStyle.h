@@ -810,6 +810,31 @@ private:
         bool isVertical
     ) const;
 
+    /**
+     * @brief The font a group box's title is painted in.
+     */
+    QFont groupBoxTitleFont(const QStyleOptionGroupBox* option, const QWidget* widget) const;
+
+    /**
+     * @brief The area a group box's title occupies on the frame's top edge.
+     *
+     * Covers the label, the check indicator, or both. Null when the box has neither, which is
+     * the caller's signal that the frame runs unbroken.
+     */
+    QRect groupBoxTitleRect(const QStyleOptionGroupBox* option, const QWidget* widget) const;
+
+    QRect groupBoxSubControlRect(
+        const QStyleOptionGroupBox* option,
+        SubControl subControl,
+        const QWidget* widget
+    ) const;
+
+    QSize groupBoxSizeFromContents(
+        const QStyleOptionGroupBox* option,
+        const QSize& size,
+        const QWidget* widget
+    ) const;
+
     QRect comboBoxSubControlRect(
         const QStyleOptionComboBox* option,
         SubControl subControl,

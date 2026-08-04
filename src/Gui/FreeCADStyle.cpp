@@ -53,6 +53,7 @@
 #include <QHeaderView>
 #include <QRadioButton>
 #include <QListView>
+#include <QStyleOptionGroupBox>
 #include <QStyleOptionHeader>
 #include <QStyleOptionViewItem>
 #include <QTreeView>
@@ -1702,6 +1703,12 @@ QSize FreeCADStyle::sizeFromContents(
         }
     }
 
+    if (type == CT_GroupBox) {
+        if (const auto* groupBoxOption = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
+            return groupBoxSizeFromContents(groupBoxOption, size, widget);
+        }
+    }
+
     return QProxyStyle::sizeFromContents(type, option, size, widget);
 }
 
@@ -1752,6 +1759,88 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
     }
 
     return QProxyStyle::subElementRect(element, option, widget);
+}
+
+QFont FreeCADStyle::groupBoxTitleFont(const QStyleOptionGroupBox* option, const QWidget* widget) const
+{
+    const StyleContext titleContext = contextOf(widget, option, StyleComponentElement::Title);
+    return resolveFont(titleContext, widget != nullptr ? widget->font() : QApplication::font());
+}
+
+QRect FreeCADStyle::groupBoxTitleRect(const QStyleOptionGroupBox* option, const QWidget* widget) const
+{
+    QRect titleRect;
+
+    if (option->subControls & SC_GroupBoxLabel) {
+        titleRect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxLabel, widget);
+    }
+
+    if (option->subControls & SC_GroupBoxCheckBox) {
+        titleRect = titleRect.united(
+            proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxCheckBox, widget)
+        );
+    }
+
+    return titleRect;
+}
+
+QRect FreeCADStyle::groupBoxSubControlRect(
+    const QStyleOptionGroupBox* option,
+    SubControl subControl,
+    const QWidget* widget
+) const
+{
+    // QCommonStyle lays the label out from option->fontMetrics. Substituting the title font's
+    // metrics is what makes its alignment and right-to-left handling place our font correctly.
+    QStyleOptionGroupBox titled = *option;
+    titled.fontMetrics = QFontMetrics(groupBoxTitleFont(option, widget));
+
+    if (subControl != SC_GroupBoxContents) {
+        return QProxyStyle::subControlRect(CC_GroupBox, &titled, subControl, widget);
+    }
+
+    const QRect frameRect = QProxyStyle::subControlRect(CC_GroupBox, &titled, SC_GroupBoxFrame, widget);
+    const QRect titleRect = groupBoxTitleRect(&titled, widget);
+
+    // The title straddles the frame's top edge, so the part of it below that edge is space the
+    // contents cannot use. Derived from the rects rather than from the alignment style hint.
+    const int titleClearance = titleRect.isNull()
+        ? 0
+        : std::max(0, titleRect.bottom() + 1 - frameRect.top());
+
+    const QMarginsF padding = resolveBoxGeometry(contextOf(widget, option)).padding;
+
+    return frameRect.adjusted(
+        static_cast<int>(padding.left()),
+        static_cast<int>(padding.top()) + titleClearance,
+        -static_cast<int>(padding.right()),
+        -static_cast<int>(padding.bottom())
+    );
+}
+
+QSize FreeCADStyle::groupBoxSizeFromContents(
+    const QStyleOptionGroupBox* option,
+    const QSize& size,
+    const QWidget* widget
+) const
+{
+    QSize result = QProxyStyle::sizeFromContents(CT_GroupBox, option, size, widget);
+
+    if (option->text.isEmpty()) {
+        return result;
+    }
+
+    // QGroupBox::minimumSizeHint measures the title with the widget's font, and it is not a
+    // virtual we can override. Re-charge the difference here so a larger title font cannot
+    // clip and a smaller one does not reserve width it will never use.
+    const QFontMetrics titleMetrics(groupBoxTitleFont(option, widget));
+    const QString measured = option->text + u' ';
+
+    result.rwidth() += titleMetrics.horizontalAdvance(measured)
+        - option->fontMetrics.horizontalAdvance(measured);
+    result.setHeight(std::max(result.height(), titleMetrics.height()));
+
+    return result;
 }
 
 QRect FreeCADStyle::comboBoxSubControlRect(
@@ -1884,6 +1973,11 @@ QRect FreeCADStyle::subControlRect(
     if (complexControl == CC_ToolButton) {
         if (const auto* opt = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
             return toolButtonSubControlRect(opt, subControl, widget);
+        }
+    }
+    if (complexControl == CC_GroupBox) {
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
+            return groupBoxSubControlRect(opt, subControl, widget);
         }
     }
     return QProxyStyle::subControlRect(complexControl, option, subControl, widget);
@@ -3589,6 +3683,15 @@ StyleContext FreeCADStyle::contextOf(
         // Catches QTableView, QColumnView, and other item-view subclasses not matched above.
         context.component = StyleComponent::List;
         context.element = element;
+    }
+    else if (qobject_cast<const QGroupBox*>(widget)) {
+        context.component = StyleComponent::GroupBox;
+        context.element = element;
+
+        if (const auto* groupBoxOption = qstyleoption_cast<const QStyleOptionGroupBox*>(option);
+            groupBoxOption && (groupBoxOption->features & QStyleOptionFrame::Flat)) {
+            context.variant.set(VariantSlot::FrameType, FrameType::Flat);
+        }
     }
     else if (const auto* toolbar = qobject_cast<const QToolBar*>(widget)) {
         context.component = StyleComponent::ToolBar;

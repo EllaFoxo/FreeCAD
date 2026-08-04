@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <QGroupBox>
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QStyleOptionGroupBox>
 #include <QTest>
 
 #include "src/App/InitApplication.h"
@@ -18,6 +20,15 @@ class ProbeStyle: public Gui::FreeCADStyle
 {
 public:
     using Gui::FreeCADStyle::drawBoxBackground;
+};
+
+// QGroupBox::initStyleOption is protected; a using-declaration republishes it so a test can
+// build the very option Qt would hand the style.
+class ProbeGroupBox: public QGroupBox
+{
+public:
+    using QGroupBox::initStyleOption;
+    using QGroupBox::QGroupBox;
 };
 
 class TestGroupBoxFrame: public QObject
@@ -203,6 +214,71 @@ private Q_SLOTS:
         const QFont resolved = style.resolveFont(context, base);
 
         QCOMPARE(resolved.pointSizeF(), 12.0);
+    }
+
+    // The label rect has to be measured with the font the title is painted in. Qt measures it
+    // from option->fontMetrics, which is the widget's font unless the style substitutes.
+    void test_labelRectFollowsTheTokenFontNotTheWidgetFont()  // NOLINT
+    {
+        Gui::FreeCADStyle style;
+
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.resize(200, 80);
+        QFont oversized = box.font();
+        oversized.setPixelSize(30);
+        box.setFont(oversized);
+
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect label = static_cast<QStyle*>(&style)->subControlRect(
+            QStyle::CC_GroupBox,
+            &option,
+            QStyle::SC_GroupBoxLabel,
+            &box
+        );
+
+        QFont titleFont = box.font();
+        titleFont.setPixelSize(10);
+        titleFont.setWeight(QFont::Weight(600));
+
+        // Two bounds rather than an exact height: QFusionStyle sizes the label from the text's
+        // bounding box plus a couple of pixels of its own, and pinning that arithmetic here would
+        // test Fusion's padding instead of the substitution this task exists for. Below the widget
+        // font's height proves the widget font was not used; at or above the token font's bounding
+        // box proves the label is sized for the font the title is painted in.
+        QVERIFY(label.height() < QFontMetrics(oversized).height());
+        QVERIFY(label.height() >= QFontMetrics(titleFont).boundingRect(box.title()).height());
+    }
+
+    // QGroupBox turns SC_GroupBoxContents into its own contents margins, so this is what every
+    // layout inside a group box is spaced by.
+    void test_untitledContentsMarginsAreExactlyTheTokenPadding()  // NOLINT
+    {
+        Gui::FreeCADStyle style;
+
+        ProbeGroupBox box;
+        box.setStyle(&style);
+        box.resize(200, 80);
+
+        QCOMPARE(box.contentsMargins(), QMargins(12, 12, 12, 12));
+    }
+
+    // A title hangs into the frame, so contents have to start below it — but only at the top.
+    void test_aTitleAddsTopClearanceAndNothingElse()  // NOLINT
+    {
+        Gui::FreeCADStyle style;
+
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setStyle(&style);
+        box.resize(200, 80);
+
+        const QMargins margins = box.contentsMargins();
+
+        QCOMPARE(margins.left(), 12);
+        QCOMPARE(margins.right(), 12);
+        QCOMPARE(margins.bottom(), 12);
+        QVERIFY(margins.top() > 12);
     }
 };
 
