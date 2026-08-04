@@ -65,6 +65,7 @@ const std::map<StyleComponentElement, std::string_view> elementNames = {
     {StyleComponentElement::Menu,        "Menu"},
     {StyleComponentElement::CloseButton, "CloseButton"},
     {StyleComponentElement::Branch,      "Branch"},
+    {StyleComponentElement::Title,       "Title"},
 };
 // clang-format on
 
@@ -96,6 +97,9 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
     }},
     {VariantSlot::RowType, {
         {static_cast<uint8_t>(RowType::Alternate), "Alternate"},
+    }},
+    {VariantSlot::FrameType, {
+        {static_cast<uint8_t>(FrameType::Flat), "Flat"},
     }},
     {VariantSlot::TransparencyMode, {
         {static_cast<uint8_t>(TransparencyMode::Transparent), "Transparent"},
@@ -191,6 +195,7 @@ constexpr std::array<std::string_view, size_t(VariantSlot::COUNT)> variantSlotDi
     "ControlSize",      // VariantSlot::ControlSize
     "Position",         // VariantSlot::Position
     "RowType",          // VariantSlot::RowType
+    "FrameType",        // VariantSlot::FrameType
     "TransparencyMode", // VariantSlot::TransparencyMode
 };
 // clang-format on
@@ -675,6 +680,12 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
         .variants = {"State"},
         .inherits = {},
     }, StyleComponent::Header);
+
+    registry.registerDescriptor({
+        .name     = "GroupBox",
+        .variants = {"FrameType", "ControlSize", "State"},
+        .inherits = {},
+    }, StyleComponent::GroupBox);
     // clang-format on
 }
 

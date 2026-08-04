@@ -199,6 +199,11 @@ GroupBoxBorderRadius: "@BaseRadius.medium"
 GroupBoxBorderThickness: 1px
 GroupBoxPadding: "padding(@Spacing.300, top: @Spacing.400)"
 
+# Flat group boxes keep Qt's convention — a single line along the top edge, no side or bottom
+# frame. Override these two to give a flat box a frame of its own.
+GroupBoxFlatBorderThickness: "border_thickness(0px, top: 1px)"
+GroupBoxFlatBorderRadius: 0px
+
 GroupBoxTitlePadding: "padding(horizontal: @Spacing.150, vertical: 0)"
 GroupBoxTitleFontSize: 10px
 GroupBoxTitleFontWeight: 600

@@ -10,6 +10,7 @@
 #include <Gui/Application.h>
 #include <Gui/FreeCADStyle.h>
 #include <Gui/StyleParameters/ParameterManager.h>
+#include <Gui/StyleParameters/StyleContext.h>
 
 // drawBoxBackground is protected on FreeCADStyle; a using-declaration republishes it so the
 // mask can be exercised without going through a widget.
@@ -31,6 +32,27 @@ public:
         if (Gui::Application::Instance == nullptr) {
             new Gui::Application(true);
         }
+
+        // Saturated, fully opaque colours so a single pixel probe is unambiguous, and a title
+        // font far from any system default so a metric can only have come from the token.
+        Gui::Application::Instance->styleParameterManager()->addSource(
+            new Gui::StyleParameters::InMemoryParameterSource(
+                {
+                    {.name = "GroupBoxBorderColor", .value = "#ff0000"},
+                    {.name = "GroupBoxBorderThickness", .value = "1px"},
+                    {.name = "GroupBoxBorderRadius", .value = "0px"},
+                    {.name = "GroupBoxBackground", .value = "#00ff00"},
+                    {.name = "GroupBoxPadding", .value = "padding(12px)"},
+                    {.name = "GroupBoxFlatBorderThickness", .value = "border_thickness(0px, top: 1px)"},
+                    {.name = "GroupBoxFlatBorderRadius", .value = "0px"},
+                    {.name = "GroupBoxTitlePadding", .value = "padding(horizontal: 6px, vertical: 0)"},
+                    {.name = "GroupBoxTitleFontSize", .value = "10px"},
+                    {.name = "GroupBoxTitleFontWeight", .value = "600"},
+                    {.name = "GroupBoxTitleTextColor", .value = "#0000ff"},
+                },
+                {.name = "GroupBox Fixture"}
+            )
+        );
     }
 
 private:
@@ -91,6 +113,42 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(5, 0).red(), 255);
         QCOMPARE(canvas.pixelColor(20, 0).red(), 255);
         QCOMPARE(canvas.pixelColor(35, 0).red(), 255);
+    }
+
+    // The Flat variant is token data, not painting code: it has to reach a token name that
+    // carries the variant fragment, or flat group boxes silently keep the full frame.
+    void test_flatVariantKeepsOnlyTheTopBorder()  // NOLINT
+    {
+        Gui::StyleParameters::StyleContext context;
+        context.component = Gui::StyleParameters::StyleComponent::GroupBox;
+        context.variant.set(
+            Gui::StyleParameters::VariantSlot::FrameType,
+            Gui::StyleParameters::FrameType::Flat
+        );
+
+        Gui::FreeCADStyle style;
+        const Gui::FreeCADStyle::BoxStyleDefinition box = style.resolveBoxStyle(context);
+
+        QVERIFY(box.borderThickness.has_value());
+        QCOMPARE(box.borderThickness->top(), 1.0);
+        QCOMPARE(box.borderThickness->right(), 0.0);
+        QCOMPARE(box.borderThickness->bottom(), 0.0);
+        QCOMPARE(box.borderThickness->left(), 0.0);
+    }
+
+    // GroupBoxTitlePadding only resolves if the Title element contributes "Title" to the token
+    // name. Without the element registered it falls back to the root box padding.
+    void test_titleElementResolvesItsOwnPadding()  // NOLINT
+    {
+        Gui::StyleParameters::StyleContext context;
+        context.component = Gui::StyleParameters::StyleComponent::GroupBox;
+        context.element = Gui::StyleParameters::StyleComponentElement::Title;
+
+        Gui::FreeCADStyle style;
+        const Gui::FreeCADStyle::BoxGeometryDefinition geometry = style.resolveBoxGeometry(context);
+
+        QCOMPARE(geometry.padding.left(), 6.0);
+        QCOMPARE(geometry.padding.top(), 0.0);
     }
 };
 

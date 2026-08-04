@@ -63,6 +63,7 @@ enum class StyleComponent : uint8_t
     Header,            // QHeaderView sections
     InternalButton,    // Flat action button painted inside custom composite widgets
     GeometrySelector,  // Gui::GeometrySelectorWidget composite field, inherits List
+    GroupBox,          // QGroupBox frame and title
     // Add new components before COUNT
     COUNT
 };
@@ -84,6 +85,7 @@ enum class StyleComponentElement : uint8_t
     Menu,         // Dropdown menu strip of a MenuButtonPopup ToolButton
     CloseButton,  // Tab close button (QAbstractButton child of QTabBar)
     Branch,       // Connector lines in the indent column of a tree view
+    Title,        // Title of a framed container, drawn on its top edge
     // Add new components before COUNT
     COUNT,
 };
@@ -175,6 +177,21 @@ enum class RowType : uint8_t
 };
 
 /**
+ * @brief Frame treatment variant for framed containers.
+ *
+ * Flat mirrors QStyleOptionFrame::Flat, which QGroupBox sets from setFlat(true).
+ *
+ * Add new frame types before COUNT.
+ */
+enum class FrameType : uint8_t
+{
+    Default,
+    Flat,
+    // Add new frame types before COUNT
+    COUNT
+};
+
+/**
  * @brief Selects the treatment a component uses when it must not paint an opaque surface.
  *
  * Transparent is reached two ways, which mean different things and must not be
@@ -212,6 +229,7 @@ enum class VariantSlot : uint8_t
     ControlSize,
     Position,
     RowType,           // Alternate row parity for item-view components
+    FrameType,         // Flat frame treatment for framed containers
     TransparencyMode,  // Transparent background for status bar / menu bar corner toolbars
     // Add new variant dimensions before COUNT
     COUNT
