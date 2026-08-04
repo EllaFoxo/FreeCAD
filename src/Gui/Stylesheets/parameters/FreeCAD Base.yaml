@@ -304,12 +304,6 @@ TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 TreeBranchBorderColor: "@BaseBorderColor"
 TreeBranchBorderThickness: 1px
 
-# PropertyEditor sets setRootIsDecorated(false), which still leaves a depth-1 branch cell to
-# paint, and setAlternatingRowColors(true), whose opaque fill is drawn after the branches and
-# would erase the connector on every other row. A dense one-level label/value grid gains
-# nothing from connectors, so cancel them outright rather than let them flicker row to row.
-PropertyEditorBranchBorderColor: "reset()"
-
 # The document tree paints each item as a free-standing box only over a transparent surface,
 # where a full-width row would put an opaque stripe across the 3D view. Docked, none of these
 # tokens resolve and the tree falls back through Tree → List to the ordinary item-view look.
