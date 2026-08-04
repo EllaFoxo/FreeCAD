@@ -1040,12 +1040,6 @@ QList<QLineF> FreeCADStyle::branchSegments(
     return segments;
 }
 
-bool FreeCADStyle::selectsWholeRows(const QWidget* widget)
-{
-    const auto* view = qobject_cast<const QAbstractItemView*>(widget);
-    return view != nullptr && view->selectionBehavior() == QAbstractItemView::SelectRows;
-}
-
 void FreeCADStyle::drawItemViewRow(
     QPainter* painter,
     const QStyleOptionViewItem* vopt,
@@ -1068,39 +1062,14 @@ void FreeCADStyle::drawItemViewRow(
         return;
     }
 
-    // Expand to the full viewport width so branch/indent areas of QTreeView and leading
-    // decoration regions receive the same background as the cell columns.
-    //
-    // Only the interaction fill may spread. A multi-column view emits the surface once per
-    // column, interleaved with the cells, so a widened surface would let a later column
-    // repaint across a neighbour that has already drawn its content — and an opaque one would
-    // erase it. Each surface call paints the rect Qt gave it, which for the first column
-    // already reaches the leading edge and so covers the branch gutter anyway.
-    const bool spreadsAcrossRow = layer == RowLayer::Interaction && selectsWholeRows(widget);
-
-    QRect rowRect = vopt->rect;
-    if (spreadsAcrossRow) {
-        if (const QWidget* viewport = qobject_cast<const QAbstractItemView*>(widget)->viewport()) {
-            rowRect.setLeft(0);
-            rowRect.setWidth(viewport->width());
-        }
-    }
-
     const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(
         contextOf(widget, vopt, StyleComponentElement::Item)
     );
     // Exclude the reserved inter-row gap so the highlight floats below the background gap.
+    QRect rowRect = vopt->rect;
     rowRect.adjust(0, isFirstVisibleRow(vopt, widget) ? 0 : itemGeometry.spacing, 0, 0);
 
-    // Qt installs a per-cell clip before calling PE_PanelItemViewItem; replace it
-    // temporarily so the wider fill is not clipped to the cell column. paintBox insets the
-    // fill by the row's Margin token, so a list row highlight can float clear of the frame.
-    painter->save();
-    if (spreadsAcrossRow) {
-        painter->setClipRect(rowRect, Qt::ReplaceClip);
-    }
     paintBox(painter, rowRect, rowContext);
-    painter->restore();
 }
 
 bool FreeCADStyle::atTreeColumnLeadingEdge(
@@ -1358,12 +1327,15 @@ void FreeCADStyle::drawPrimitive(
     if (element == PE_PanelItemViewRow) {
         // Qt emits this before the branch column and the cells, which is exactly where the
         // row's resting surface belongs: connectors and content then sit on top of it rather
-        // than being buried by it. Interaction states are left to PE_PanelItemViewItem, whose
-        // option carries the per-cell selection this one does not.
+        // than being buried by it.
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
         if (context.element == StyleComponentElement::Item) {
             if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
                 drawItemViewRow(painter, vopt, widget, RowLayer::Surface);
+                // Qt strips the selection from the emission that precedes each cell — that
+                // cell paints its own. It keeps it on the one covering a tree's branch gutter,
+                // which belongs to no cell and would otherwise stay unhighlighted.
+                drawItemViewRow(painter, vopt, widget, RowLayer::Interaction);
             }
             return;
         }
@@ -1375,17 +1347,7 @@ void FreeCADStyle::drawPrimitive(
             return;
         }
 
-        // In a row-selecting view the first (or only) column owns one full-width stripe and the
-        // rest suppress, so branch and decoration areas belonging to no column are covered too.
-        // A cell-selecting view carries hover and selection per cell and repaints single cells,
-        // so there every cell draws its own stripe within its own rect.
-        const bool isFirstCell = vopt->viewItemPosition == QStyleOptionViewItem::Beginning
-            || vopt->viewItemPosition == QStyleOptionViewItem::OnlyOne
-            || vopt->viewItemPosition == QStyleOptionViewItem::Invalid;
-
-        if (isFirstCell || !selectsWholeRows(widget)) {
-            drawItemViewRow(painter, vopt, widget, RowLayer::Interaction);
-        }
+        drawItemViewRow(painter, vopt, widget, RowLayer::Interaction);
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
         const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(context);

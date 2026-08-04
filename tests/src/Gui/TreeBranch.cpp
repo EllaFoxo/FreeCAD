@@ -38,6 +38,9 @@ public:
                     // Fully opaque, so anything painted under it would be lost rather than
                     // merely tinted — which is what makes the layering testable.
                     {.name = "ListRowAlternateBackground", .value = "#00ff00"},
+                    // Opaque so a column that kept the resting colour is distinguishable from
+                    // one the selection reached.
+                    {.name = "ListRowCheckedBackground", .value = "#ff00ff"},
                 },
                 {.name = "Branch Fixture"}
             )
@@ -143,6 +146,46 @@ private Q_SLOTS:
         painter.end();
 
         QCOMPARE(canvas.pixelColor(5, 5), QColor(Qt::blue));
+    }
+
+    // Qt emits the row surface once per column, each immediately before that column's cell, and
+    // strips the selection from every one of them. A cell that leaves its own selection fill to
+    // an earlier column therefore loses it to the surface emitted in between.
+    void test_selectionReachesEveryColumn()  // NOLINT
+    {
+        QTreeView tree;
+        tree.setSelectionBehavior(QAbstractItemView::SelectRows);
+        tree.resize(200, 100);
+
+        QImage canvas(40, 24, QImage::Format_ARGB32);
+        canvas.fill(Qt::transparent);
+
+        Gui::FreeCADStyle style;
+        auto* asStyle = static_cast<QStyle*>(&style);
+        QPainter painter(&canvas);
+
+        const QList<QPair<int, QStyleOptionViewItem::ViewItemPosition>> columns = {
+            {0, QStyleOptionViewItem::Beginning},
+            {20, QStyleOptionViewItem::End},
+        };
+
+        for (const auto& [left, position] : columns) {
+            QStyleOptionViewItem cell;
+            cell.rect = QRect(left, 0, 20, 24);
+            cell.state = QStyle::State_Enabled | QStyle::State_Selected;
+            cell.features |= QStyleOptionViewItem::Alternate;
+            cell.viewItemPosition = position;
+
+            QStyleOptionViewItem surface = cell;
+            surface.state &= ~QStyle::State_Selected;
+
+            asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &surface, &painter, &tree);
+            asStyle->drawPrimitive(QStyle::PE_PanelItemViewItem, &cell, &painter, &tree);
+        }
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(10, 12), QColor(Qt::magenta));
+        QCOMPARE(canvas.pixelColor(30, 12), QColor(Qt::magenta));
     }
 
     // The token colour reaches the pen, on the pixel column the geometry names.

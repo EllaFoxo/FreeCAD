@@ -468,34 +468,13 @@ protected:
     static void drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& style);
 
     /**
-     * @brief Whether an item view treats a whole row as one selectable, repaintable unit.
-     *
-     * Governs how far a row background may spread. Such a view carries hover and selection
-     * per row and invalidates whole rows, so one cell may fill the row on behalf of all of
-     * them; a view that selects by cell repaints single cells, and a fill reaching past its
-     * own cell would strand colour on neighbours Qt never asks to repaint.
-     */
-    static bool selectsWholeRows(const QWidget* widget);
-
-    /**
-     * @brief Paints the row background behind one item view cell.
-     *
-     * For a row-selecting view the rect expands to the full viewport width so the branch and
-     * indent areas of QTreeView receive the same background as the cell columns; otherwise it
-     * stays within the cell. The painter clip is temporarily replaced with Qt::ReplaceClip to
-     * escape the per-cell clip that CE_ItemViewItem installs before calling
-     * PE_PanelItemViewItem.
-     *
-     * Called from PE_PanelItemViewItem — once per row for a row-selecting view, once per cell
-     * otherwise. The context for the Row element (including the RowType::Alternate variant
-     * when applicable) is built inside this function from the provided option and widget.
-     */
-    /**
      * @brief Which layer of a row's background a paint call is responsible for.
      *
      * Surface is the row at rest and is painted before the branch column and the cells, so
      * both sit on top of it. Interaction is the hover / pressed / selected fill, painted after
-     * them so it reads as an overlay.
+     * them so it reads as an overlay. Both stay inside the rect Qt hands them: a view emits
+     * these once per column, so a fill reaching past its own rect would be repainted by the
+     * next column's surface.
      */
     enum class RowLayer : std::uint8_t
     {
