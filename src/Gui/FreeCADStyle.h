@@ -490,7 +490,25 @@ protected:
      * otherwise. The context for the Row element (including the RowType::Alternate variant
      * when applicable) is built inside this function from the provided option and widget.
      */
-    void drawItemViewRow(QPainter* painter, const QStyleOptionViewItem* vopt, const QWidget* widget) const;
+    /**
+     * @brief Which layer of a row's background a paint call is responsible for.
+     *
+     * Surface is the row at rest and is painted before the branch column and the cells, so
+     * both sit on top of it. Interaction is the hover / pressed / selected fill, painted after
+     * them so it reads as an overlay.
+     */
+    enum class RowLayer : std::uint8_t
+    {
+        Surface,
+        Interaction,
+    };
+
+    void drawItemViewRow(
+        QPainter* painter,
+        const QStyleOptionViewItem* vopt,
+        const QWidget* widget,
+        RowLayer layer
+    ) const;
 
     /**
      * @brief Paints the connector lines and expand arrow for one tree indent cell.

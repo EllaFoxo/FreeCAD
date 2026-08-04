@@ -35,6 +35,9 @@ public:
                 {
                     {.name = "TreeBranchBorderColor", .value = "#ff0000"},
                     {.name = "TreeBranchBorderThickness", .value = "1px"},
+                    // Fully opaque, so anything painted under it would be lost rather than
+                    // merely tinted — which is what makes the layering testable.
+                    {.name = "ListRowAlternateBackground", .value = "#00ff00"},
                 },
                 {.name = "Branch Fixture"}
             )
@@ -79,6 +82,35 @@ private:
     }
 
 private Q_SLOTS:
+
+    // Qt paints the row, then the branch column, then the cells. An opaque row background
+    // therefore has to go down first, or it buries the connectors drawn after it — which is
+    // what happened to every alternate row of the property editor.
+    void test_opaqueAlternateRowDoesNotEraseConnectors()  // NOLINT
+    {
+        QTreeView tree;
+        tree.setIndentation(20);
+        tree.resize(200, 100);
+
+        QImage canvas(40, 24, QImage::Format_ARGB32);
+        canvas.fill(Qt::transparent);
+
+        QStyleOptionViewItem option;
+        option.rect = QRect(20, 0, 20, 24);
+        option.state = QStyle::State_Enabled | QStyle::State_Item | QStyle::State_Sibling;
+        option.features |= QStyleOptionViewItem::Alternate;
+
+        Gui::FreeCADStyle style;
+        auto* asStyle = static_cast<QStyle*>(&style);
+        QPainter painter(&canvas);
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &option, &painter, &tree);
+        asStyle->drawPrimitive(QStyle::PE_IndicatorBranch, &option, &painter, &tree);
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewItem, &option, &painter, &tree);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(30, 0), QColor(Qt::red));
+        QVERIFY(hasColour(canvas, QColor(Qt::green)));
+    }
 
     // The token colour reaches the pen, on the pixel column the geometry names.
     void test_tokenColourReachesTheStroke()  // NOLINT

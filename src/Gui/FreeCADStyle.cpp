@@ -1049,10 +1049,24 @@ bool FreeCADStyle::selectsWholeRows(const QWidget* widget)
 void FreeCADStyle::drawItemViewRow(
     QPainter* painter,
     const QStyleOptionViewItem* vopt,
-    const QWidget* widget
+    const QWidget* widget,
+    RowLayer layer
 ) const
 {
-    const StyleContext rowContext = contextOf(widget, vopt, StyleComponentElement::Row);
+    StyleContext rowContext = contextOf(widget, vopt, StyleComponentElement::Row);
+
+    const bool interactive = rowContext.state.testFlag(StyleState::Hovered)
+        || rowContext.state.testFlag(StyleState::Pressed)
+        || rowContext.state.testFlag(StyleState::Checked);
+
+    if (layer == RowLayer::Surface) {
+        // The surface is what the row looks like at rest — its own background, or the
+        // alternating one. Interaction belongs to the layer above.
+        rowContext.state = {};
+    }
+    else if (!interactive) {
+        return;
+    }
 
     // Expand to the full viewport width so branch/indent areas of QTreeView and
     // leading decoration regions receive the same background as the cell columns.
@@ -1332,12 +1346,15 @@ void FreeCADStyle::drawPrimitive(
     }
 
     if (element == PE_PanelItemViewRow) {
-        // All background painting is handled by PE_PanelItemViewItem (which always
-        // carries correct per-cell selection state). Suppress the row-level primitive
-        // for recognised item views so Fusion's row-level drawing does not paint a
-        // second time on top of PE_PanelItemViewItem's full-width stripe.
+        // Qt emits this before the branch column and the cells, which is exactly where the
+        // row's resting surface belongs: connectors and content then sit on top of it rather
+        // than being buried by it. Interaction states are left to PE_PanelItemViewItem, whose
+        // option carries the per-cell selection this one does not.
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
         if (context.element == StyleComponentElement::Item) {
+            if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
+                drawItemViewRow(painter, vopt, widget, RowLayer::Surface);
+            }
             return;
         }
     }
@@ -1357,7 +1374,7 @@ void FreeCADStyle::drawPrimitive(
             || vopt->viewItemPosition == QStyleOptionViewItem::Invalid;
 
         if (isFirstCell || !selectsWholeRows(widget)) {
-            drawItemViewRow(painter, vopt, widget);
+            drawItemViewRow(painter, vopt, widget, RowLayer::Interaction);
         }
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
