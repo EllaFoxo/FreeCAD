@@ -1068,10 +1068,18 @@ void FreeCADStyle::drawItemViewRow(
         return;
     }
 
-    // Expand to the full viewport width so branch/indent areas of QTreeView and
-    // leading decoration regions receive the same background as the cell columns.
+    // Expand to the full viewport width so branch/indent areas of QTreeView and leading
+    // decoration regions receive the same background as the cell columns.
+    //
+    // Only the interaction fill may spread. A multi-column view emits the surface once per
+    // column, interleaved with the cells, so a widened surface would let a later column
+    // repaint across a neighbour that has already drawn its content — and an opaque one would
+    // erase it. Each surface call paints the rect Qt gave it, which for the first column
+    // already reaches the leading edge and so covers the branch gutter anyway.
+    const bool spreadsAcrossRow = layer == RowLayer::Interaction && selectsWholeRows(widget);
+
     QRect rowRect = vopt->rect;
-    if (selectsWholeRows(widget)) {
+    if (spreadsAcrossRow) {
         if (const QWidget* viewport = qobject_cast<const QAbstractItemView*>(widget)->viewport()) {
             rowRect.setLeft(0);
             rowRect.setWidth(viewport->width());
@@ -1088,7 +1096,9 @@ void FreeCADStyle::drawItemViewRow(
     // temporarily so the wider fill is not clipped to the cell column. paintBox insets the
     // fill by the row's Margin token, so a list row highlight can float clear of the frame.
     painter->save();
-    painter->setClipRect(rowRect, Qt::ReplaceClip);
+    if (spreadsAcrossRow) {
+        painter->setClipRect(rowRect, Qt::ReplaceClip);
+    }
     paintBox(painter, rowRect, rowContext);
     painter->restore();
 }

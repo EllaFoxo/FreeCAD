@@ -112,6 +112,39 @@ private Q_SLOTS:
         QVERIFY(hasColour(canvas, QColor(Qt::green)));
     }
 
+    // A multi-column view emits the row surface once per column, interleaved with the cells,
+    // so column 1's surface is painted after column 0's label. It must stay inside its own
+    // column, or an opaque surface wipes out the text a neighbour already drew.
+    void test_laterColumnSurfaceDoesNotReachIntoAnEarlierOne()  // NOLINT
+    {
+        QTreeView tree;
+        tree.setIndentation(20);
+        tree.resize(200, 100);
+
+        QImage canvas(40, 24, QImage::Format_ARGB32);
+        canvas.fill(Qt::transparent);
+
+        Gui::FreeCADStyle style;
+        auto* asStyle = static_cast<QStyle*>(&style);
+        QPainter painter(&canvas);
+
+        QStyleOptionViewItem firstColumn;
+        firstColumn.rect = QRect(0, 0, 20, 24);
+        firstColumn.state = QStyle::State_Enabled;
+        firstColumn.features |= QStyleOptionViewItem::Alternate;
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &firstColumn, &painter, &tree);
+
+        // Stands in for the label the first column's cell draws onto its own surface.
+        painter.fillRect(QRect(4, 4, 6, 6), Qt::blue);
+
+        QStyleOptionViewItem secondColumn = firstColumn;
+        secondColumn.rect = QRect(20, 0, 20, 24);
+        asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &secondColumn, &painter, &tree);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(5, 5), QColor(Qt::blue));
+    }
+
     // The token colour reaches the pen, on the pixel column the geometry names.
     void test_tokenColourReachesTheStroke()  // NOLINT
     {
