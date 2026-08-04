@@ -150,6 +150,42 @@ private Q_SLOTS:
         QCOMPARE(geometry.padding.left(), 6.0);
         QCOMPARE(geometry.padding.top(), 0.0);
     }
+
+    // A theme sets the title's size and weight; the rest of the font comes from the caller.
+    void test_resolveFontAppliesSizeAndWeightTokens()  // NOLINT
+    {
+        Gui::StyleParameters::StyleContext context;
+        context.component = Gui::StyleParameters::StyleComponent::GroupBox;
+        context.element = Gui::StyleParameters::StyleComponentElement::Title;
+
+        QFont base;
+        base.setPixelSize(30);
+        base.setFamily(QStringLiteral("Some Deliberate Family"));
+
+        Gui::FreeCADStyle style;
+        const QFont resolved = style.resolveFont(context, base);
+
+        QCOMPARE(resolved.pixelSize(), 10);
+        QCOMPARE(resolved.weight(), QFont::Weight(600));
+        QCOMPARE(resolved.family(), QStringLiteral("Some Deliberate Family"));
+    }
+
+    // Every caller hands over the widget's own font, so a context with no font tokens has to
+    // give it straight back rather than substituting a default.
+    void test_resolveFontLeavesTheBaseAloneWithoutTokens()  // NOLINT
+    {
+        Gui::StyleParameters::StyleContext context;
+        context.component = Gui::StyleParameters::StyleComponent::GroupBox;
+
+        QFont base;
+        base.setPixelSize(30);
+        base.setWeight(QFont::Weight(400));
+
+        Gui::FreeCADStyle style;
+        const QFont resolved = style.resolveFont(context, base);
+
+        QCOMPARE(resolved, base);
+    }
 };
 
 QTEST_MAIN(TestGroupBoxFrame)

@@ -32,6 +32,7 @@
 #include <Base/Color.h>
 #include <QBrush>
 #include <QColor>
+#include <QFont>
 #include <QLine>
 #include <QMarginsF>
 #include <QPainter>
@@ -352,6 +353,15 @@ public:
      * @brief Resolves a BoxStyleDefinition from a @p context using the token cache.
      */
     BoxStyleDefinition resolveBoxStyle(const StyleParameters::StyleContext& context) const;
+
+    /**
+     * @brief The font @p base takes on under @p context.
+     *
+     * Applies the FontSize and FontWeight tokens. Where a token does not resolve the
+     * corresponding property of @p base is kept, so a caller can always hand over the widget's
+     * own font and get back something safe to paint with.
+     */
+    QFont resolveFont(const StyleParameters::StyleContext& context, const QFont& base) const;
 
     /**
      * @brief Paints the themed box (fill, border, overlay) resolved from @p context into

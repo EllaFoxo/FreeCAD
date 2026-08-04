@@ -3938,6 +3938,31 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
     return result;
 }
 
+QFont FreeCADStyle::resolveFont(const StyleContext& context, const QFont& base) const
+{
+    QFont font = base;
+
+    if (const auto size = resolve<Numeric>(context, StyleProperty::FontSize)) {
+        if (size->value > 0) {
+            if (size->unit == "pt") {
+                font.setPointSizeF(size->value);
+            }
+            else {
+                font.setPixelSize(static_cast<int>(*size));
+            }
+        }
+    }
+
+    if (const auto weight = resolve<Numeric>(context, StyleProperty::FontWeight)) {
+        // QFont rejects anything outside 1..1000 and warns; a malformed token should not be
+        // able to spray the log from inside a paint call.
+        const int clamped = std::clamp(static_cast<int>(*weight), 1, 1000);
+        font.setWeight(static_cast<QFont::Weight>(clamped));
+    }
+
+    return font;
+}
+
 void FreeCADStyle::clearTokenCache()
 {
     tokenCache.clear();
