@@ -1830,7 +1830,17 @@ QRect FreeCADStyle::groupBoxSubControlRect(
         const QRect delegated = QProxyStyle::subControlRect(CC_GroupBox, &titled, subControl, widget);
         const int shift = titled.direction == Qt::RightToLeft ? -leftPadding : leftPadding;
 
-        return delegated.translated(shift, 0);
+        QRect placed = delegated.translated(shift, 0);
+
+        // Fusion pads the title band by two pixels and then nudges the label a further pixel
+        // down, so the band it hands back is not centred on the frame's top edge the way the
+        // masking model needs it to be — the title reads low and the notch with it. Re-centre it
+        // here, where the label, the check indicator and the notch all read the same rect.
+        const QRect frameRect
+            = QProxyStyle::subControlRect(CC_GroupBox, &titled, SC_GroupBoxFrame, widget);
+        placed.moveTop(frameRect.top() - (placed.height() / 2));
+
+        return placed;
     }
 
     if (subControl != SC_GroupBoxContents) {

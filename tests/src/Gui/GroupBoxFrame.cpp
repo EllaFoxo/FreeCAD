@@ -123,11 +123,14 @@ private:
     }
 
     // Renders a group box over an unmistakable parent colour, exactly as Qt would. @p extraState
-    // covers the flags Qt only raises from real input, such as keyboard focus.
+    // covers the flags Qt only raises from real input, such as keyboard focus. @p parentColour
+    // defaults to the fixture's title colour, so probes that need to tell the two apart pass
+    // something else.
     static QImage paintGroupBox(
         ProbeGroupBox& box,
         QStyleOptionGroupBox& option,
-        QStyle::State extraState = {}
+        QStyle::State extraState = {},
+        QColor parentColour = QColor(0, 0, 255)
     )
     {
         box.resize(200, 80);
@@ -135,7 +138,7 @@ private:
         option.state |= extraState;
 
         QImage canvas(200, 80, QImage::Format_ARGB32);
-        canvas.fill(QColor(0, 0, 255));
+        canvas.fill(parentColour);
 
         Gui::FreeCADStyle style;
         QPainter painter(&canvas);
@@ -143,6 +146,28 @@ private:
         painter.end();
 
         return canvas;
+    }
+
+    // First and last row carrying title glyphs, on a canvas painted over white. The fixture's
+    // red stroke, green fill and white parent all fail this test and the blue title passes it,
+    // so what comes back is the glyphs' own vertical extent rather than the label rect's.
+    static std::pair<int, int> titleInkRows(const QImage& canvas)
+    {
+        int firstRow = -1;
+        int lastRow = -1;
+
+        for (int row = 0; row < canvas.height(); ++row) {
+            for (int column = 0; column < canvas.width(); ++column) {
+                const QColor pixel = canvas.pixelColor(column, row);
+                if (pixel.blue() > 60 && pixel.red() < 200 && pixel.green() < 200) {
+                    firstRow = firstRow < 0 ? row : firstRow;
+                    lastRow = row;
+                    break;
+                }
+            }
+        }
+
+        return {firstRow, lastRow};
     }
 
     // The sub-control rects the style itself reports, so probe positions are never guessed.
@@ -422,6 +447,59 @@ private Q_SLOTS:
         // Half the title hangs below the edge when it is centred on it; a third allows for
         // rounding without admitting the single-row overlap AlignTop leaves behind.
         QVERIFY(label.bottom() + 1 - frame.top() >= label.height() / 3);
+    }
+
+    // Straddling is not enough on its own — the glyphs have to sit *centred* on the border row.
+    // Placing the label band by its full ascent-plus-descent line box, as the base style hands
+    // it over, leaves a title without descenders reading a pixel and a half low.
+    void test_theTitleInkIsCentredOnTheBorderRow()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        QStyleOptionGroupBox option;
+
+        // White, so the blue title ink is the only thing in the scan that is neither the red
+        // stroke nor the green fill.
+        const QImage canvas = paintGroupBox(box, option, {}, QColor(255, 255, 255));
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const auto [inkTop, inkBottom] = titleInkRows(canvas);
+
+        QVERIFY(inkTop >= 0);
+        QVERIFY(inkTop < frame.top());
+        QVERIFY(inkBottom > frame.top());
+
+        // Within a pixel, which is as close as an integer band centred on an integer row can be
+        // pinned. The defect being guarded against is a pixel and a half, comfortably outside.
+        QVERIFY(qAbs(((inkTop + inkBottom) / 2.0) - frame.top()) <= 1.0);
+    }
+
+    // The mask is built from the same label rect the title is painted in, so re-centring the
+    // title has to carry the notch with it rather than leaving a gap beside the text.
+    void test_theNotchFollowsTheTitleInk()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option, {}, QColor(255, 255, 255));
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const auto [inkTop, inkBottom] = titleInkRows(canvas);
+
+        QVERIFY(inkTop >= 0);
+
+        // Every row the glyphs occupy is inside the label rect, which is the rect the notch is
+        // cut from, so moving one moves the other.
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QVERIFY(inkTop >= label.top());
+        QVERIFY(inkBottom <= label.bottom());
+
+        // And no stroke survives anywhere across that span: whatever border colour is left on the
+        // top row lies outside the label, never behind the text.
+        for (int column = frame.left(); column <= frame.right(); ++column) {
+            if (canvas.pixelColor(column, frame.top()) == QColor(255, 0, 0)) {
+                QVERIFY(column < label.left() || column > label.right());
+            }
+        }
     }
 
     // The defect this whole change exists for: the stroke has to be absent under the title,
