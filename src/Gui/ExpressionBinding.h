@@ -36,6 +36,7 @@ class Expression;
 
 class ExpressionButton;
 class QLineEdit;
+class QWidget;
 
 namespace Gui
 {
@@ -103,6 +104,12 @@ public:
 
 protected:
     void makeLabel(QLineEdit* parent);
+
+    /// Inset at which content sits from the edges of a line edit.
+    static int iconMargin(const QWidget* widget);
+
+    /// Places the expression button against the trailing edge of the line edit it overlays.
+    void positionIcon(const QWidget* lineEdit);
 
 protected:
     ExpressionButton* iconLabel {nullptr};

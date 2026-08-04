@@ -146,11 +146,7 @@ void ExpressionSpinBox::restoreExpression()
 
 int ExpressionSpinBox::getMargin()
 {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
-    return lineedit->style()->pixelMetric(QStyle::PM_LineEditIconMargin, nullptr, lineedit) / 2;
-#else
-    return lineedit->style()->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, lineedit);
-#endif
+    return iconMargin(lineedit);
 }
 
 void ExpressionSpinBox::bind(const App::ObjectIdentifier& _path)
@@ -267,8 +263,7 @@ void ExpressionSpinBox::onChange()
 
 void ExpressionSpinBox::resizeWidget()
 {
-    int iconWidth = iconLabel->width() + getMargin();
-    iconLabel->move(lineedit->width() - iconWidth, (lineedit->height() - iconLabel->height()) / 2);
+    positionIcon(lineedit);
     updateExpression();
 }
 
