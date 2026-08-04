@@ -106,11 +106,7 @@ InputField::InputField(QWidget* parent)
 
 int InputField::getMargin()
 {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
-    return style()->pixelMetric(QStyle::PM_LineEditIconMargin, nullptr, this) / 2;
-#else
-    return style()->pixelMetric(QStyle::PM_FocusFrameHMargin, nullptr, this);
-#endif
+    return iconMargin(this);
 }
 
 InputField::~InputField() = default;
@@ -203,8 +199,7 @@ void InputField::notifyValueChanged()
 
 void InputField::resizeEvent(QResizeEvent* /*event*/)
 {
-    QSize iconSize = iconLabel->sizeHint();
-    iconLabel->move(width() - (iconSize.width() + 2 * getMargin()), (height() - iconSize.height()) / 2);
+    positionIcon(this);
 }
 
 void InputField::updateIconLabel(const QString& text)

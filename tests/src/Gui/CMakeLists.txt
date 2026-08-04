@@ -30,6 +30,7 @@ setup_qt_test(GeometrySelectorWidget)
 setup_qt_test(StyleTransparency)
 setup_qt_test(ComboDropdown)
 setup_qt_test(TreeBranch)
+setup_qt_test(ExpressionButtonLayout)
 
 target_link_libraries(Gui_tests_run PRIVATE
     GTest::gmock_main

@@ -63,7 +63,7 @@ public:
     {
         if (auto* parentLineEdit = qobject_cast<QLineEdit*>(parent())) {
             QMargins margins = parentLineEdit->contentsMargins();
-            margins.setRight(2 * margins.right() + sizeHint().width());
+            margins.setRight(2 * margins.right() + width());
             parentLineEdit->setContentsMargins(margins);
         }
         QToolButton::show();

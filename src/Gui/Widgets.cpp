@@ -1603,9 +1603,9 @@ void ExpLineEdit::bind(const ObjectIdentifier& _path)
 
     ExpressionBinding::bind(_path);
 
-    int frameWidth = style()->pixelMetric(QStyle::PM_SpinBoxFrameWidth);
-    setStyleSheet(QStringLiteral("QLineEdit { padding-right: %1px } ")
-                      .arg(iconLabel->sizeHint().width() + frameWidth + 1));
+    QMargins margins = textMargins();
+    margins.setRight(iconLabel->width() + 2 * iconMargin(this));
+    setTextMargins(margins);
 
     iconLabel->show();
 }
@@ -1657,10 +1657,7 @@ void ExpLineEdit::resizeEvent(QResizeEvent* event)
 {
     QLineEdit::resizeEvent(event);
 
-    int frameWidth = style()->pixelMetric(QStyle::PM_SpinBoxFrameWidth);
-
-    QSize sz = iconLabel->sizeHint();
-    iconLabel->move(rect().right() - frameWidth - sz.width(), rect().center().y() - sz.height() / 2);
+    positionIcon(this);
 
     try {
         if (isBound() && getExpression()) {
