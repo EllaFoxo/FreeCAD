@@ -1795,6 +1795,31 @@ QRect FreeCADStyle::groupBoxSubControlRect(
     QStyleOptionGroupBox titled = *option;
     titled.fontMetrics = QFontMetrics(groupBoxTitleFont(option, widget));
 
+    if (subControl == SC_GroupBoxLabel || subControl == SC_GroupBoxCheckBox) {
+        // Fusion positions the title from option->rect.width() alone, never from its left edge —
+        // true of every alignment branch, not only the leading one. Insetting the rect first
+        // gives Fusion the right *available width* to align a centred or trailing title within;
+        // the same inset then has to be added back as a flat shift afterwards, because nothing
+        // downstream folds that missing origin back in. For left-to-right layouts
+        // QStyle::visualRect() is a no-op, so the whole correction is this shift. For
+        // right-to-left layouts visualRect() does reposition the rect, but only by reading the
+        // option rect's right edge and width — never its left edge — so it already absorbs the
+        // right-padding inset on its own and still leaves the same left-padding gap unresolved.
+        // That is why the shift below always uses the left padding, mirrored in sign but not in
+        // which margin it reads.
+        const QMarginsF padding = resolveBoxGeometry(contextOf(widget, option)).padding;
+        titled.rect = titled.rect.adjusted(
+            static_cast<int>(padding.left()),
+            0,
+            -static_cast<int>(padding.right()),
+            0
+        );
+        const QRect delegated = QProxyStyle::subControlRect(CC_GroupBox, &titled, subControl, widget);
+        const int shift = titled.direction == Qt::RightToLeft ? -static_cast<int>(padding.left())
+                                                              : static_cast<int>(padding.left());
+        return delegated.translated(shift, 0);
+    }
+
     if (subControl != SC_GroupBoxContents) {
         return QProxyStyle::subControlRect(CC_GroupBox, &titled, subControl, widget);
     }
@@ -2170,6 +2195,104 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::seamedBoxStyle(
     return style;
 }
 
+QPainterPath FreeCADStyle::groupBoxBorderMask(
+    const QStyleOptionGroupBox* option,
+    const QWidget* widget,
+    const QRect& frameRect
+) const
+{
+    QRect titleRect = groupBoxTitleRect(option, widget);
+    if (titleRect.isNull()) {
+        return {};
+    }
+
+    const StyleContext titleContext = contextOf(widget, option, StyleComponentElement::Title);
+    const QMarginsF titlePadding = resolveBoxGeometry(titleContext).padding;
+
+    titleRect
+        .adjust(-static_cast<int>(titlePadding.left()), 0, static_cast<int>(titlePadding.right()), 0);
+
+    // Horizontally only. The title straddles the frame's top edge, so the notch has to reach
+    // past that edge to take the whole stroke with it; a title wider than its box, on the other
+    // hand, must not cut outside the frame.
+    titleRect.setLeft(std::max(titleRect.left(), frameRect.left()));
+    titleRect.setRight(std::min(titleRect.right(), frameRect.right()));
+
+    QPainterPath mask;
+    mask.addRect(frameRect);
+
+    QPainterPath notch;
+    notch.addRect(titleRect);
+
+    return mask.subtracted(notch);
+}
+
+void FreeCADStyle::drawGroupBoxLabel(
+    QPainter* painter,
+    const QStyleOptionGroupBox* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext titleContext = contextOf(widget, option, StyleComponentElement::Title);
+    const QRect labelRect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxLabel, widget);
+
+    // A copy rather than a pen, so a theme that defines no title colour keeps Qt's own
+    // disabled-group handling.
+    QPalette palette = option->palette;
+    if (const auto colour = resolve<Base::Color>(titleContext, StyleProperty::TextColor)) {
+        palette.setColor(QPalette::WindowText, colour->asValue<QColor>());
+    }
+
+    painter->save();
+    painter->setFont(groupBoxTitleFont(option, widget));
+    proxy()->drawItemText(
+        painter,
+        labelRect,
+        Qt::AlignVCenter | option->textAlignment | mnemonicTextFlags(option, widget),
+        palette,
+        option->state & State_Enabled,
+        option->text,
+        QPalette::WindowText
+    );
+    painter->restore();
+}
+
+void FreeCADStyle::drawGroupBox(
+    QPainter* painter,
+    const QStyleOptionGroupBox* option,
+    const QWidget* widget
+) const
+{
+    if (option->subControls & SC_GroupBoxFrame) {
+        const QRect frameRect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxFrame, widget);
+
+        drawBoxBackground(
+            painter,
+            frameRect,
+            resolveBoxStyle(contextOf(widget, option)),
+            groupBoxBorderMask(option, widget, frameRect)
+        );
+    }
+
+    if (option->subControls & SC_GroupBoxCheckBox) {
+        // Built field by field rather than sliced from the group box option: copying the base
+        // would carry QStyleOptionGroupBox's type across and break the cast on the far side.
+        QStyleOptionButton indicator;
+        indicator.state = option->state;
+        indicator.palette = option->palette;
+        indicator.direction = option->direction;
+        indicator.fontMetrics = option->fontMetrics;
+        indicator.styleObject = option->styleObject;
+        indicator.rect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxCheckBox, widget);
+
+        proxy()->drawPrimitive(PE_IndicatorCheckBox, &indicator, painter, widget);
+    }
+
+    if (option->subControls & SC_GroupBoxLabel) {
+        drawGroupBoxLabel(painter, option, widget);
+    }
+}
+
 void FreeCADStyle::drawComplexControl(
     ComplexControl control,
     const QStyleOptionComplex* option,
@@ -2192,6 +2315,12 @@ void FreeCADStyle::drawComplexControl(
     if (control == CC_ToolButton) {
         if (const auto* opt = qstyleoption_cast<const QStyleOptionToolButton*>(option)) {
             drawToolButton(opt, painter, widget);
+            return;
+        }
+    }
+    if (control == CC_GroupBox) {
+        if (const auto* opt = qstyleoption_cast<const QStyleOptionGroupBox*>(option)) {
+            drawGroupBox(painter, opt, widget);
             return;
         }
     }

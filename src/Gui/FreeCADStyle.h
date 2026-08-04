@@ -788,6 +788,26 @@ private:
     void updateScrollAreaMask(QAbstractScrollArea* scrollArea) const;
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;
+
+    /**
+     * @brief The shape a group box's border is confined to, leaving its title clear.
+     *
+     * Empty for a box with neither a title nor a check indicator, so the frame stays whole.
+     */
+    QPainterPath groupBoxBorderMask(
+        const QStyleOptionGroupBox* option,
+        const QWidget* widget,
+        const QRect& frameRect
+    ) const;
+
+    void drawGroupBoxLabel(
+        QPainter* painter,
+        const QStyleOptionGroupBox* option,
+        const QWidget* widget
+    ) const;
+
+    void drawGroupBox(QPainter* painter, const QStyleOptionGroupBox* option, const QWidget* widget) const;
+
     void drawToolButton(
         const QStyleOptionToolButton* option,
         QPainter* painter,

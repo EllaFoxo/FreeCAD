@@ -97,6 +97,35 @@ private:
         return canvas;
     }
 
+    // Renders a group box over an unmistakable parent colour, exactly as Qt would.
+    static QImage paintGroupBox(ProbeGroupBox& box, QStyleOptionGroupBox& option)
+    {
+        box.resize(200, 80);
+        box.initStyleOption(&option);
+
+        QImage canvas(200, 80, QImage::Format_ARGB32);
+        canvas.fill(QColor(0, 0, 255));
+
+        Gui::FreeCADStyle style;
+        QPainter painter(&canvas);
+        static_cast<QStyle*>(&style)->drawComplexControl(QStyle::CC_GroupBox, &option, &painter, &box);
+        painter.end();
+
+        return canvas;
+    }
+
+    // The sub-control rects the style itself reports, so probe positions are never guessed.
+    static QRect groupBoxRect(
+        const QStyleOptionGroupBox& option,
+        const QWidget* widget,
+        QStyle::SubControl subControl
+    )
+    {
+        Gui::FreeCADStyle style;
+        return static_cast<QStyle*>(&style)
+            ->subControlRect(QStyle::CC_GroupBox, &option, subControl, widget);
+    }
+
 private Q_SLOTS:
 
     // The whole point of the mask: the stroke is absent inside it, not merely covered up.
@@ -279,6 +308,108 @@ private Q_SLOTS:
         QCOMPARE(margins.right(), 12);
         QCOMPARE(margins.bottom(), 12);
         QVERIFY(margins.top() > 12);
+    }
+
+    // The defect this whole change exists for: the stroke has to be absent under the title,
+    // not covered by an opaque patch that only matches one background.
+    void test_theBorderIsAbsentUnderTheTitle()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        // Three pixels left of the glyphs: inside the notch the 6px title padding opens, and
+        // clear of the text itself.
+        const int inNotch = label.left() - 3;
+        QVERIFY(inNotch > frame.left() + 1);
+
+        QCOMPARE(canvas.pixelColor(frame.left() + 1, frame.top()), QColor(255, 0, 0));
+
+        // No red: the stroke is genuinely gone here, not covered over. Not an exact parent colour —
+        // the fill sits half a pixel under where the border was and feathers into this row, which
+        // is the fill staying whole under the title exactly as intended.
+        QCOMPARE(canvas.pixelColor(inNotch, frame.top()).red(), 0);
+
+        QCOMPARE(canvas.pixelColor(frame.right() - 2, frame.top()), QColor(255, 0, 0));
+    }
+
+    // The mask governs the border ring alone, so the box keeps its own surface under the title.
+    void test_theFillRunsUnbrokenUnderTheTitle()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QCOMPARE(canvas.pixelColor(label.left() - 3, frame.top() + 3), QColor(0, 255, 0));
+    }
+
+    // A checkable box's indicator sits on the frame edge too, so the notch has to cover it.
+    void test_theNotchCoversTheCheckIndicator()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setCheckable(true);
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect indicator = groupBoxRect(option, &box, QStyle::SC_GroupBoxCheckBox);
+
+        QVERIFY(indicator.left() - 3 > frame.left() + 1);
+
+        // No red: the stroke is genuinely gone here, not covered over. See
+        // test_theBorderIsAbsentUnderTheTitle for why this isn't an exact parent-colour check.
+        QCOMPARE(canvas.pixelColor(indicator.left() - 3, frame.top()).red(), 0);
+    }
+
+    // Nothing to mask, so nothing may be cut.
+    void test_anUntitledBoxKeepsAnUnbrokenBorder()  // NOLINT
+    {
+        ProbeGroupBox box;
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+
+        for (int x = frame.left() + 1; x < frame.right() - 1; ++x) {
+            QCOMPARE(canvas.pixelColor(x, frame.top()), QColor(255, 0, 0));
+        }
+    }
+
+    // Flat is token data: the top line survives and the other three sides do not.
+    void test_aFlatBoxDrawsOnlyItsTopEdge()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setFlat(true);
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+
+        QCOMPARE(canvas.pixelColor(frame.right() - 2, frame.top()), QColor(255, 0, 0));
+        QVERIFY(canvas.pixelColor(frame.left(), frame.center().y()) != QColor(255, 0, 0));
+        QVERIFY(canvas.pixelColor(frame.center().x(), frame.bottom()) != QColor(255, 0, 0));
+    }
+
+    // The leading-edge inset the notch relies on only applies to a leading-aligned title;
+    // a centred one has to stay centred on the frame, not drift by the padding as well.
+    void test_aCentredTitleStaysCentredOnTheFrame()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setAlignment(Qt::AlignHCenter);
+        box.resize(200, 80);
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QVERIFY(qAbs(label.center().x() - frame.center().x()) <= 1);
     }
 };
 
