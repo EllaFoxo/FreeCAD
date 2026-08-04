@@ -57,6 +57,7 @@ public:
                     {.name = "GroupBoxPadding", .value = "padding(12px)"},
                     {.name = "GroupBoxFlatBorderThickness", .value = "border_thickness(0px, top: 1px)"},
                     {.name = "GroupBoxFlatBorderRadius", .value = "0px"},
+                    {.name = "GroupBoxFlatPadding", .value = "padding(0, top: 12px)"},
                     {.name = "GroupBoxTitlePadding", .value = "padding(horizontal: 6px, vertical: 0)"},
                     {.name = "GroupBoxTitleFontSize", .value = "10px"},
                     {.name = "GroupBoxTitleFontWeight", .value = "600"},
@@ -323,8 +324,10 @@ private Q_SLOTS:
         QCOMPARE(box.contentsMargins(), QMargins(12, 12, 12, 12));
     }
 
-    // A title hangs into the frame, so contents have to start below it — but only at the top.
-    void test_aTitleAddsTopClearanceAndNothingElse()  // NOLINT
+    // The padding is the gap between the frame and its contents, and it is the same on all four
+    // sides whether the box carries a title or not. The title's lower half hangs into the top
+    // padding rather than being cleared on top of it.
+    void test_aTitleLeavesTheFramePaddingUniform()  // NOLINT
     {
         Gui::FreeCADStyle style;
 
@@ -332,12 +335,69 @@ private Q_SLOTS:
         box.setStyle(&style);
         box.resize(200, 80);
 
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect contents = groupBoxRect(option, &box, QStyle::SC_GroupBoxContents);
+
+        QCOMPARE(contents, frame.adjusted(12, 12, -12, -12));
+
+        // The widget's own margins carry the frame's top offset as well, because the frame starts
+        // half a title below the widget. Everything beyond that offset is the token padding.
         const QMargins margins = box.contentsMargins();
 
         QCOMPARE(margins.left(), 12);
         QCOMPARE(margins.right(), 12);
         QCOMPARE(margins.bottom(), 12);
-        QVERIFY(margins.top() > 12);
+        QCOMPARE(margins.top(), frame.top() + 12);
+    }
+
+    // The title's descenders reach into the top padding, so the padding has to be deep enough to
+    // stay clear of them; too shallow and the first row of contents collides with the title.
+    void test_theTopPaddingClearsTheTitlesDescenders()  // NOLINT
+    {
+        Gui::FreeCADStyle style;
+
+        // A descender on purpose: "Title" has none, and the clearance only matters for one.
+        ProbeGroupBox box(QStringLiteral("Paging"));
+        box.setStyle(&style);
+        box.resize(200, 80);
+
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect contents = groupBoxRect(option, &box, QStyle::SC_GroupBoxContents);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QVERIFY(label.bottom() < contents.top());
+    }
+
+    // Flat is token data all the way down. A flat box has no side or bottom line to stand off
+    // from, so GroupBoxFlatPadding drops those three and keeps only the gap below the top line.
+    void test_aFlatBoxPadsOnlyBelowItsTopLine()  // NOLINT
+    {
+        Gui::FreeCADStyle style;
+
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setFlat(true);
+        box.setStyle(&style);
+        box.resize(200, 80);
+
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect contents = groupBoxRect(option, &box, QStyle::SC_GroupBoxContents);
+
+        QCOMPARE(contents, frame.adjusted(0, 12, 0, 0));
+
+        const QMargins margins = box.contentsMargins();
+
+        QCOMPARE(margins.left(), 0);
+        QCOMPARE(margins.right(), 0);
+        QCOMPARE(margins.bottom(), 0);
+        QCOMPARE(margins.top(), frame.top() + 12);
     }
 
     // The masking tests below probe at rects the style itself reports, so they hold whether the

@@ -1838,19 +1838,14 @@ QRect FreeCADStyle::groupBoxSubControlRect(
     }
 
     const QRect frameRect = QProxyStyle::subControlRect(CC_GroupBox, &titled, SC_GroupBoxFrame, widget);
-    const QRect titleRect = groupBoxTitleRect(&titled, widget);
-
-    // The title straddles the frame's top edge, so the part of it below that edge is space the
-    // contents cannot use. Derived from the rects rather than from the alignment style hint.
-    const int titleClearance = titleRect.isNull()
-        ? 0
-        : std::max(0, titleRect.bottom() + 1 - frameRect.top());
-
     const QMarginsF padding = resolveBoxGeometry(contextOf(widget, option)).padding;
 
+    // Uniform: the padding is the gap between the frame and its contents, and a title does not
+    // change it. The title's lower half hangs into the frame, but only into the top padding,
+    // which is deep enough for the descenders of the fonts a title is set in.
     return frameRect.adjusted(
         static_cast<int>(padding.left()),
-        static_cast<int>(padding.top()) + titleClearance,
+        static_cast<int>(padding.top()),
         -static_cast<int>(padding.right()),
         -static_cast<int>(padding.bottom())
     );
