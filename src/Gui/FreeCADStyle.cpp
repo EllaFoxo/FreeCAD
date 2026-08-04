@@ -1822,15 +1822,14 @@ QRect FreeCADStyle::groupBoxSubControlRect(
         // That is why the shift below always uses the left padding, mirrored in sign but not in
         // which margin it reads.
         const QMarginsF padding = resolveBoxGeometry(contextOf(widget, option)).padding;
-        titled.rect = titled.rect.adjusted(
-            static_cast<int>(padding.left()),
-            0,
-            -static_cast<int>(padding.right()),
-            0
-        );
+        const int leftPadding = static_cast<int>(padding.left());
+        const int rightPadding = static_cast<int>(padding.right());
+
+        titled.rect = titled.rect.adjusted(leftPadding, 0, -rightPadding, 0);
+
         const QRect delegated = QProxyStyle::subControlRect(CC_GroupBox, &titled, subControl, widget);
-        const int shift = titled.direction == Qt::RightToLeft ? -static_cast<int>(padding.left())
-                                                              : static_cast<int>(padding.left());
+        const int shift = titled.direction == Qt::RightToLeft ? -leftPadding : leftPadding;
+
         return delegated.translated(shift, 0);
     }
 
@@ -1863,21 +1862,27 @@ QSize FreeCADStyle::groupBoxSizeFromContents(
     const QWidget* widget
 ) const
 {
-    QSize result = QProxyStyle::sizeFromContents(CT_GroupBox, option, size, widget);
+    // The base style reserves the title band's height from option->fontMetrics. Substituting the
+    // title font's metrics is what keeps that band as tall as the space the layout leaves clear
+    // for it, which is measured from the same font.
+    QStyleOptionGroupBox titled = *option;
+    const QFontMetrics titleMetrics(groupBoxTitleFont(option, widget));
+    titled.fontMetrics = titleMetrics;
+
+    QSize result = QProxyStyle::sizeFromContents(CT_GroupBox, &titled, size, widget);
 
     if (option->text.isEmpty()) {
         return result;
     }
 
-    // QGroupBox::minimumSizeHint measures the title with the widget's font, and it is not a
-    // virtual we can override. Re-charge the difference here so a larger title font cannot
-    // clip and a smaller one does not reserve width it will never use.
-    const QFontMetrics titleMetrics(groupBoxTitleFont(option, widget));
+    // The width of the title itself never reaches the base style: QGroupBox::minimumSizeHint
+    // measures it with the widget's font and hands the result in as @p size, and it is not a
+    // virtual we can override. Re-charge the difference here so a larger title font cannot clip
+    // and a smaller one does not reserve width it will never use.
     const QString measured = option->text + u' ';
 
     result.rwidth() += titleMetrics.horizontalAdvance(measured)
         - option->fontMetrics.horizontalAdvance(measured);
-    result.setHeight(std::max(result.height(), titleMetrics.height()));
 
     return result;
 }
@@ -2251,10 +2256,14 @@ void FreeCADStyle::drawGroupBoxLabel(
     const QRect labelRect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxLabel, widget);
 
     // A copy rather than a pen, so a theme that defines no title colour keeps Qt's own
-    // disabled-group handling.
+    // disabled-group handling. QGroupBox fills option->textColor from SH_GroupBox_TextLabelColor
+    // whenever the palette carries no explicit WindowText brush, so it outranks the palette.
     QPalette palette = option->palette;
     if (const auto colour = resolve<Base::Color>(titleContext, StyleProperty::TextColor)) {
         palette.setColor(QPalette::WindowText, colour->asValue<QColor>());
+    }
+    else if (option->textColor.isValid()) {
+        palette.setColor(QPalette::WindowText, option->textColor);
     }
 
     painter->save();
@@ -2269,6 +2278,16 @@ void FreeCADStyle::drawGroupBoxLabel(
         QPalette::WindowText
     );
     painter->restore();
+
+    // A checkable group box takes strong focus, and the label is the only part of it that can
+    // show which one holds it.
+    if (option->state & State_HasFocus) {
+        QStyleOptionFocusRect focus;
+        focus.QStyleOption::operator=(*option);
+        focus.rect = labelRect;
+
+        proxy()->drawPrimitive(PE_FrameFocusRect, &focus, painter, widget);
+    }
 }
 
 void FreeCADStyle::drawGroupBox(
@@ -2289,14 +2308,8 @@ void FreeCADStyle::drawGroupBox(
     }
 
     if (option->subControls & SC_GroupBoxCheckBox) {
-        // Built field by field rather than sliced from the group box option: copying the base
-        // would carry QStyleOptionGroupBox's type across and break the cast on the far side.
         QStyleOptionButton indicator;
-        indicator.state = option->state;
-        indicator.palette = option->palette;
-        indicator.direction = option->direction;
-        indicator.fontMetrics = option->fontMetrics;
-        indicator.styleObject = option->styleObject;
+        indicator.QStyleOption::operator=(*option);
         indicator.rect = proxy()->subControlRect(CC_GroupBox, option, SC_GroupBoxCheckBox, widget);
 
         proxy()->drawPrimitive(PE_IndicatorCheckBox, &indicator, painter, widget);

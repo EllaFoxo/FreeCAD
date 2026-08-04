@@ -4,6 +4,7 @@
 #include <QImage>
 #include <QPainter>
 #include <QPainterPath>
+#include <QScopeGuard>
 #include <QStyleOptionGroupBox>
 #include <QTest>
 
@@ -67,9 +68,32 @@ public:
                 {.name = "GroupBox Fixture"}
             )
         );
+
+        // Registered last so it outranks the fixture above, and left empty so it costs nothing
+        // until a test asks for a different value.
+        overrides
+            = new Gui::StyleParameters::InMemoryParameterSource({}, {.name = "GroupBox Overrides"});
+        Gui::Application::Instance->styleParameterManager()->addSource(overrides);
     }
 
 private:
+    Gui::StyleParameters::InMemoryParameterSource* overrides = nullptr;
+
+    // Swaps one token in for the body of a test and puts the fixture's value back on the way
+    // out, so an assertion that returns early cannot leak it into the next test.
+    [[nodiscard]] auto overrideToken(const std::string& name, const std::string& value) const
+    {
+        auto* manager = Gui::Application::Instance->styleParameterManager();
+
+        overrides->define({.name = name, .value = value});
+        manager->reload();
+
+        return qScopeGuard([this, manager, name] {
+            overrides->remove(name);
+            manager->reload();
+        });
+    }
+
     // A red border around a green fill: either one is unmistakable in a single pixel probe.
     static Gui::FreeCADStyle::BoxStyleDefinition borderedBox()
     {
@@ -97,11 +121,17 @@ private:
         return canvas;
     }
 
-    // Renders a group box over an unmistakable parent colour, exactly as Qt would.
-    static QImage paintGroupBox(ProbeGroupBox& box, QStyleOptionGroupBox& option)
+    // Renders a group box over an unmistakable parent colour, exactly as Qt would. @p extraState
+    // covers the flags Qt only raises from real input, such as keyboard focus.
+    static QImage paintGroupBox(
+        ProbeGroupBox& box,
+        QStyleOptionGroupBox& option,
+        QStyle::State extraState = {}
+    )
     {
         box.resize(200, 80);
         box.initStyleOption(&option);
+        option.state |= extraState;
 
         QImage canvas(200, 80, QImage::Format_ARGB32);
         canvas.fill(QColor(0, 0, 255));
@@ -391,6 +421,37 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(indicator.left() - 3, frame.top()).red(), 0);
     }
 
+    // setCheckable gives a group box strong focus, so Tab can land on one. The label is the only
+    // part of it that can say so, and nothing else in the box changes appearance with focus.
+    void test_aKeyboardFocusedBoxMarksItsLabel()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setCheckable(true);
+
+        QStyleOptionGroupBox restingOption;
+        const QImage resting = paintGroupBox(box, restingOption);
+
+        QStyleOptionGroupBox focusedOption;
+        const QImage focused = paintGroupBox(
+            box,
+            focusedOption,
+            QStyle::State_HasFocus | QStyle::State_KeyboardFocusChange
+        );
+
+        // The base style outlines the label rect, so its own edges are where the difference is
+        // certain to land whatever the title's glyphs happen to cover.
+        const QRect label = groupBoxRect(focusedOption, &box, QStyle::SC_GroupBoxLabel);
+        const int probeRow = label.center().y();
+
+        QVERIFY(
+            focused.pixelColor(label.left(), probeRow) != resting.pixelColor(label.left(), probeRow)
+        );
+        QVERIFY(
+            focused.pixelColor(label.right() - 1, probeRow)
+            != resting.pixelColor(label.right() - 1, probeRow)
+        );
+    }
+
     // Nothing to mask, so nothing may be cut.
     void test_anUntitledBoxKeepsAnUnbrokenBorder()  // NOLINT
     {
@@ -434,6 +495,59 @@ private Q_SLOTS:
         const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
 
         QVERIFY(qAbs(label.center().x() - frame.center().x()) <= 1);
+    }
+
+    // A leading-aligned title starts exactly where the contents start. Fusion lays the label out
+    // from the option rect's width alone, so this only holds because of the padding shift.
+    void test_aLeftToRightTitleAlignsWithTheContentsEdge()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setLayoutDirection(Qt::LeftToRight);
+        box.resize(200, 80);
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect contents = groupBoxRect(option, &box, QStyle::SC_GroupBoxContents);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QCOMPARE(label.left(), contents.left());
+    }
+
+    // The same contract mirrored. The shift changes sign here and nothing else does, so this is
+    // the only thing standing between that sign and a silently misplaced right-to-left title.
+    void test_aRightToLeftTitleAlignsWithTheContentsEdge()  // NOLINT
+    {
+        ProbeGroupBox box(QStringLiteral("Title"));
+        box.setLayoutDirection(Qt::RightToLeft);
+        box.resize(200, 80);
+        QStyleOptionGroupBox option;
+        box.initStyleOption(&option);
+
+        const QRect contents = groupBoxRect(option, &box, QStyle::SC_GroupBoxContents);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QCOMPARE(label.right(), contents.right());
+    }
+
+    // The shipping theme leaves the group box transparent, and that is the configuration the
+    // original defect lived in: an opaque patch over the border only ever matches one surface.
+    // With no fill of its own the notch has to show the parent through exactly.
+    void test_aTransparentBoxShowsTheParentThroughTheNotch()  // NOLINT
+    {
+        const auto restore = overrideToken("GroupBoxBackground", "opacity(#ffffff, 0%)");
+
+        ProbeGroupBox box(QStringLiteral("Title"));
+        QStyleOptionGroupBox option;
+        const QImage canvas = paintGroupBox(box, option);
+
+        const QRect frame = groupBoxRect(option, &box, QStyle::SC_GroupBoxFrame);
+        const QRect label = groupBoxRect(option, &box, QStyle::SC_GroupBoxLabel);
+
+        QCOMPARE(canvas.pixelColor(frame.left() + 1, frame.top()), QColor(255, 0, 0));
+
+        // Exactly the parent colour, not merely free of red: with no fill there is nothing to
+        // feather into the row, so anything else here is a patch the mask failed to remove.
+        QCOMPARE(canvas.pixelColor(label.left() - 3, frame.top()), QColor(0, 0, 255));
     }
 };
 

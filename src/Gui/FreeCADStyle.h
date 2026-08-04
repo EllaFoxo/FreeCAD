@@ -478,7 +478,9 @@ protected:
      *
      * @param borderMask Confines the border ring to this shape. The fill and the inner shadow
      *                   are never confined by it, so a caller can cut the stroke without
-     *                   punching a hole in the surface. An empty path leaves the ring whole.
+     *                   punching a hole in the surface. An empty path leaves the ring whole,
+     *                   so a caller whose mask has subtracted everything must skip the border
+     *                   instead of passing that mask on — emptiness cannot mean "no ring".
      */
     static void drawBoxBackground(
         QPainter* painter,
