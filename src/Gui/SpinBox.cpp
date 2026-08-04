@@ -158,6 +158,8 @@ void ExpressionSpinBox::bind(const App::ObjectIdentifier& _path)
 
 void ExpressionSpinBox::showIcon()
 {
+    reserveIconSpace(lineedit);
+
     iconLabel->show();
 }
 

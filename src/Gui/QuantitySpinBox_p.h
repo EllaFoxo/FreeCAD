@@ -22,7 +22,6 @@
 
 #pragma once
 
-#include <QLineEdit>
 #include <QToolButton>
 
 #include <Gui/Application.h>
@@ -57,16 +56,6 @@ public:
         else {
             setToolTip(expressionEditorTooltipPrefix + text);
         }
-    }
-
-    void show()
-    {
-        if (auto* parentLineEdit = qobject_cast<QLineEdit*>(parent())) {
-            QMargins margins = parentLineEdit->contentsMargins();
-            margins.setRight(2 * margins.right() + width());
-            parentLineEdit->setContentsMargins(margins);
-        }
-        QToolButton::show();
     }
 
     void setNormalIcon(const QIcon& icon)

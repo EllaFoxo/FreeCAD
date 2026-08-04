@@ -28,6 +28,19 @@ public:
     }
 
 private:
+    // Reaches the space reservation, which production code runs from bind() and so behind a
+    // document object no unit test has.
+    class ProbeLineEdit: public Gui::ExpLineEdit
+    {
+    public:
+        using Gui::ExpLineEdit::ExpLineEdit;
+
+        void reserve()
+        {
+            reserveIconSpace(this);
+        }
+    };
+
     // Resizes the field and delivers the event, which Qt otherwise withholds from a widget that
     // was never shown.
     static void resizeField(QWidget& field, QSize size)
@@ -84,6 +97,22 @@ private Q_SLOTS:
         resizeField(field, {200, 24});
 
         verifyIconSitsInField(field);
+    }
+
+    // A line edit paints its panel over its contents rect, so reserving room for the button by
+    // insetting that rect withdraws the field's background from under the button. The room has
+    // to come out of the text margins instead.
+    void test_reservedSpaceLeavesTheFieldPanelWhole()  // NOLINT
+    {
+        ProbeLineEdit field;
+        resizeField(field, {200, 24});
+        field.reserve();
+
+        const auto* icon = field.findChild<QToolButton*>();
+        QVERIFY(icon != nullptr);
+
+        QCOMPARE(field.contentsRect(), field.rect());
+        QVERIFY(field.textMargins().right() >= icon->width());
     }
 };
 

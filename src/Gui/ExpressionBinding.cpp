@@ -394,3 +394,13 @@ void ExpressionWidget::positionIcon(const QWidget* lineEdit)
         (lineEdit->height() - iconLabel->height()) / 2
     );
 }
+
+void ExpressionWidget::reserveIconSpace(QLineEdit* lineEdit)
+{
+    // Text margins, not contents margins: a line edit paints its panel over its contents rect,
+    // so insetting that would pull the field's own background out from under the button.
+    QMargins margins = lineEdit->textMargins();
+    margins.setRight(iconLabel->width() + 2 * iconMargin(lineEdit));
+
+    lineEdit->setTextMargins(margins);
+}

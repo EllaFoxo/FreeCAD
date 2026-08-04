@@ -93,11 +93,11 @@ InputField::InputField(QWidget* parent)
     iconLabel->hide();
     connect(this, &QLineEdit::textChanged, this, &InputField::updateIconLabel);
 
-    // Set Margins
-    // vertical margin, such that `,` won't be clipped to a `.` and similar font descents. Relevant
-    // on some OSX versions horizontal margin, such that text will not be behind `fx` icon
+    // vertical margin, such that `,` won't be clipped to a `.` and similar font descents.
+    // Relevant on some OSX versions.
     int margin = getMargin();
-    setTextMargins(margin, margin, margin + iconSize, margin);
+    setTextMargins(margin, margin, margin, margin);
+    reserveIconSpace(this);
 
     this->setContextMenuPolicy(Qt::DefaultContextMenu);
 

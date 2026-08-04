@@ -111,6 +111,9 @@ protected:
     /// Places the expression button against the trailing edge of the line edit it overlays.
     void positionIcon(const QWidget* lineEdit);
 
+    /// Keeps the line edit's text clear of the expression button overlaying it.
+    void reserveIconSpace(QLineEdit* lineEdit);
+
 protected:
     ExpressionButton* iconLabel {nullptr};
     QPalette defaultPalette;

@@ -1603,9 +1603,7 @@ void ExpLineEdit::bind(const ObjectIdentifier& _path)
 
     ExpressionBinding::bind(_path);
 
-    QMargins margins = textMargins();
-    margins.setRight(iconLabel->width() + 2 * iconMargin(this));
-    setTextMargins(margins);
+    reserveIconSpace(this);
 
     iconLabel->show();
 }
