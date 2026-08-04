@@ -35,6 +35,7 @@
 #include <QLine>
 #include <QMarginsF>
 #include <QPainter>
+#include <QPainterPath>
 #include <QProxyStyle>
 #include <QAbstractScrollArea>
 #include <QComboBox>
@@ -464,8 +465,17 @@ protected:
 
     /**
      * @brief Paints a background box with optional rounded corners and border.
+     *
+     * @param borderMask Confines the border ring to this shape. The fill and the inner shadow
+     *                   are never confined by it, so a caller can cut the stroke without
+     *                   punching a hole in the surface. An empty path leaves the ring whole.
      */
-    static void drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& style);
+    static void drawBoxBackground(
+        QPainter* painter,
+        const QRect& rect,
+        const BoxStyleDefinition& style,
+        const QPainterPath& borderMask = {}
+    );
 
     /**
      * @brief Which layer of a row's background a paint call is responsible for.

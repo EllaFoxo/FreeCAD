@@ -467,7 +467,12 @@ static void drawBorderRingSided(
     // clang-format on
 }
 
-void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const BoxStyleDefinition& rule)
+void FreeCADStyle::drawBoxBackground(
+    QPainter* painter,
+    const QRect& rect,
+    const BoxStyleDefinition& rule,
+    const QPainterPath& borderMask
+)
 {
     const bool hasBorder = rule.borderColor.has_value() && rule.borderThickness.has_value();
     const bool hasBackground = rule.background.style() != Qt::NoBrush;
@@ -535,7 +540,9 @@ void FreeCADStyle::drawBoxBackground(QPainter* painter, const QRect& rect, const
         const QPainterPath outerPath = roundedRectPath(QRectF(rect), resolvedBorderRadius);
         const QPainterPath innerPath
             = roundedRectPath(QRectF(innerRect), innerRadii(resolvedBorderRadius, snappedThickness));
-        const QPainterPath borderRingPath = outerPath.subtracted(innerPath);
+        const QPainterPath fullRing = outerPath.subtracted(innerPath);
+        const QPainterPath borderRingPath = borderMask.isEmpty() ? fullRing
+                                                                 : fullRing.intersected(borderMask);
 
         const BorderColorsPerSide& colors = *rule.borderColor;
         if (colors.isUniform()) {
