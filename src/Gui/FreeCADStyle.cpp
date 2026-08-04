@@ -1056,7 +1056,16 @@ void FreeCADStyle::drawItemViewRow(
     if (layer == RowLayer::Surface) {
         // The surface is what the row looks like at rest — its own background, or the
         // alternating one. Interaction belongs to the layer above.
+        //
+        // contextOf only marks a row alternate when the option carries no state at all, so that
+        // an interaction resolves through ListRowHovered* rather than ListRowAlternateHovered*.
+        // At rest that rule has nothing to protect and everything to lose: State_HasFocus sits
+        // on whichever cell is current and State_MouseOver on a hovered row, and either one
+        // would drop the alternating background from that cell alone.
         rowContext.state = {};
+        if (vopt->features & QStyleOptionViewItem::Alternate) {
+            rowContext.variant.set(VariantSlot::RowType, RowType::Alternate);
+        }
     }
     else if (!interactive) {
         return;

@@ -148,6 +148,38 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(5, 5), QColor(Qt::blue));
     }
 
+    // Qt marks only the current cell with State_HasFocus, so a row's surface is asked for under
+    // a different state in one column than in its neighbours. The resting look must not depend
+    // on it, or the cell the user last clicked loses the alternating background its row has.
+    void test_alternateSurfaceIgnoresPerCellState()  // NOLINT
+    {
+        QTreeView tree;
+        tree.resize(200, 100);
+
+        Gui::FreeCADStyle style;
+        auto* asStyle = static_cast<QStyle*>(&style);
+
+        const auto surfaceUnder = [&](QStyle::State state) {
+            QImage canvas(40, 24, QImage::Format_ARGB32);
+            canvas.fill(Qt::transparent);
+
+            QStyleOptionViewItem option;
+            option.rect = QRect(0, 0, 40, 24);
+            option.state = QStyle::State_Enabled | state;
+            option.features |= QStyleOptionViewItem::Alternate;
+
+            QPainter painter(&canvas);
+            asStyle->drawPrimitive(QStyle::PE_PanelItemViewRow, &option, &painter, &tree);
+            painter.end();
+
+            return canvas.pixelColor(20, 12);
+        };
+
+        QCOMPARE(surfaceUnder(QStyle::State_None), QColor(Qt::green));
+        QCOMPARE(surfaceUnder(QStyle::State_HasFocus), QColor(Qt::green));
+        QCOMPARE(surfaceUnder(QStyle::State_MouseOver), QColor(Qt::green));
+    }
+
     // Qt emits the row surface once per column, each immediately before that column's cell, and
     // strips the selection from every one of them. A cell that leaves its own selection fill to
     // an earlier column therefore loses it to the surface emitted in between.
