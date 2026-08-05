@@ -50,6 +50,7 @@
 
 #include "StyleParameters/Value.h"
 #include "StyleParameters/StyleContext.h"
+#include "StyleParameters/StyleOverrides.h"
 
 class QListView;
 class QTextDocument;
@@ -930,6 +931,18 @@ private:
 
     /** @brief The override set in effect for @p widget, or 0 when it has none. */
     uint32_t overrideSetOf(const QWidget* widget) const;
+
+    /** @brief The overrides @p widget declares itself, with the property prefix stripped. */
+    static StyleParameters::OverrideSet declaredOverrides(const QWidget* widget);
+
+    /**
+     * @brief The override set @p widget resolves under, its own declarations merged over
+     *        everything it inherits.
+     */
+    static uint32_t computeOverrideSet(const QWidget* widget);
+
+    /** @brief Records @p set on @p widget for later lookup by overrideSetOf(). */
+    void storeOverrideSet(QWidget* widget, uint32_t set) const;
 
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.

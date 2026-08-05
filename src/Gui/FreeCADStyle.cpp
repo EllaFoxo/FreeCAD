@@ -31,6 +31,7 @@
 #include <map>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <QApplication>
@@ -3180,6 +3181,12 @@ void FreeCADStyle::polish(QWidget* widget)
         && transparencyBelow(widget->parentWidget());
     tagWidgetTransparency(widget, ownSurface(widget, inherited));
 
+    // Overrides are inherited down the widget tree. computeOverrideSet() walks up from this
+    // widget rather than seeding from the parent's stored id, so a widget polished before its
+    // parent still lands on the right set. As with transparency above, only this widget is
+    // tagged: QWidget::ensurePolished() already walks descendants and polishes each in turn.
+    storeOverrideSet(widget, computeOverrideSet(widget));
+
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
         widget->installEventFilter(this);
@@ -4259,6 +4266,67 @@ uint32_t FreeCADStyle::overrideSetOf(const QWidget* widget) const
     overrideMemoSet = widget->property(overrideSetProperty).toUInt();
 
     return overrideMemoSet;
+}
+
+StyleParameters::OverrideSet FreeCADStyle::declaredOverrides(const QWidget* widget)
+{
+    StyleParameters::OverrideSet declared;
+
+    const std::string_view prefix {overridePropertyPrefix};
+
+    for (const QByteArray& propertyName : widget->dynamicPropertyNames()) {
+        const std::string_view name {
+            propertyName.constData(),
+            static_cast<size_t>(propertyName.size()),
+        };
+
+        if (!name.starts_with(prefix) || name.size() == prefix.size()) {
+            continue;
+        }
+
+        const QVariant value = widget->property(propertyName.constData());
+        if (value.typeId() != QMetaType::QString) {
+            continue;
+        }
+
+        declared.emplace(std::string(name.substr(prefix.size())), value.toString().toStdString());
+    }
+
+    return declared;
+}
+
+uint32_t FreeCADStyle::computeOverrideSet(const QWidget* widget)
+{
+    StyleParameters::OverrideSet merged;
+
+    for (const QWidget* ancestor = widget; ancestor != nullptr; ancestor = ancestor->parentWidget()) {
+        // try_emplace keeps what is already there, so the nearest declaration of a name wins.
+        for (auto&& [name, expression] : declaredOverrides(ancestor)) {
+            merged.try_emplace(name, std::move(expression));
+        }
+
+        // A window is its own surface: its own declarations count, but it does not inherit from
+        // whatever it is parented to for lifetime management. Same rule as
+        // canInheritTransparency().
+        if (ancestor->isWindow()) {
+            break;
+        }
+    }
+
+    return Application::Instance->styleParameterManager()->overrideRegistry().intern(merged);
+}
+
+void FreeCADStyle::storeOverrideSet(QWidget* widget, uint32_t set) const
+{
+    // An invalid QVariant removes the property. Storing a zero instead would put a dynamic
+    // property on every widget in the application and slow every later collection walk.
+    widget->setProperty(
+        overrideSetProperty,
+        set == StyleParameters::OverrideRegistry::emptyId ? QVariant {} : QVariant {set}
+    );
+
+    overrideMemoWidget = nullptr;
+    overrideMemoSet = StyleParameters::OverrideRegistry::emptyId;
 }
 
 StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)

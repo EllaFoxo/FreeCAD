@@ -36,6 +36,7 @@ public:
                     {.name = "TestPanelBackground", .value = "@TestPaneBackground"},
                     {.name = "TestPanePadding", .value = "padding(4px)"},
                     {.name = "TestPanelPadding", .value = "@TestPanePadding"},
+                    {.name = "TestPanelBorderColor", .value = "#000000"},
                 },
                 {.name = "Style Overrides Fixture"}
             )
@@ -166,6 +167,177 @@ private Q_SLOTS:
 
         QCOMPARE(backgroundOf(overridden), QColor(0x44, 0x55, 0x66));
         QCOMPARE(backgroundOf(plain), QColor(0x11, 0x22, 0x33));
+    }
+
+    void test_aDeclarationOnTheWidgetItselfApplies()  // NOLINT
+    {
+        QWidget root;
+        QWidget* panel = makePanel(&root);
+        panel->setProperty("fcStyleTestPaneBackground", "#445566");
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    // The declaration goes on the container; the widget that consumes the token is somewhere
+    // below it and knows nothing about it. This is the whole feature.
+    void test_aChildInheritsAnAncestorDeclaration()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+        auto* middle = new QWidget(&root);
+        QWidget* panel = makePanel(middle);
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    void test_aNearerDeclarationWins()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+        auto* middle = new QWidget(&root);
+        middle->setProperty("fcStyleTestPaneBackground", "#778899");
+        QWidget* panel = makePanel(middle);
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x77, 0x88, 0x99));
+    }
+
+    void test_declarationsFromDifferentDepthsMerge()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+        auto* middle = new QWidget(&root);
+        middle->setProperty("fcStyleTestPanelBorderColor", "#010203");
+        QWidget* panel = makePanel(middle);
+
+        style()->polish(panel);
+
+        const auto boxStyle = style()->resolveBoxStyle(Gui::FreeCADStyle::contextOf(panel));
+        QCOMPARE(boxStyle.background.color(), QColor(0x44, 0x55, 0x66));
+        QVERIFY(boxStyle.borderColor.has_value());
+        QCOMPARE(boxStyle.borderColor->top, QColor(0x01, 0x02, 0x03));
+    }
+
+    void test_siblingSubtreesResolveIndependently()  // NOLINT
+    {
+        QWidget root;
+
+        auto* firstBranch = new QWidget(&root);
+        firstBranch->setProperty("fcStyleTestPaneBackground", "#445566");
+        QWidget* firstPanel = makePanel(firstBranch);
+
+        auto* secondBranch = new QWidget(&root);
+        secondBranch->setProperty("fcStyleTestPaneBackground", "#778899");
+        QWidget* secondPanel = makePanel(secondBranch);
+
+        style()->polish(firstPanel);
+        style()->polish(secondPanel);
+
+        QCOMPARE(backgroundOf(firstPanel), QColor(0x44, 0x55, 0x66));
+        QCOMPARE(backgroundOf(secondPanel), QColor(0x77, 0x88, 0x99));
+    }
+
+    void test_identicalDeclarationsShareOneRegistryEntry()  // NOLINT
+    {
+        const std::size_t before = manager()->overrideRegistry().size();
+
+        QWidget root;
+
+        auto* firstBranch = new QWidget(&root);
+        firstBranch->setProperty("fcStyleTestPaneBackground", "#abcdef");
+        QWidget* firstPanel = makePanel(firstBranch);
+
+        auto* secondBranch = new QWidget(&root);
+        secondBranch->setProperty("fcStyleTestPaneBackground", "#abcdef");
+        QWidget* secondPanel = makePanel(secondBranch);
+
+        style()->polish(firstPanel);
+        style()->polish(secondPanel);
+
+        QCOMPARE(manager()->overrideRegistry().size() - before, std::size_t(1));
+        QCOMPARE(
+            firstPanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt(),
+            secondPanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt()
+        );
+    }
+
+    // A dialog or popup shares a QObject parent for lifetime management only. It is its own
+    // surface and must not pick up the chrome of whatever happens to own it.
+    void test_aWindowDoesNotInheritFromItsParent()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+
+        auto* popup = new QWidget(&root, Qt::Window);
+        QWidget* panel = makePanel(popup);
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+    }
+
+    // A window's own declarations still count — only inheritance stops at the boundary.
+    void test_aWindowKeepsItsOwnDeclaration()  // NOLINT
+    {
+        QWidget root;
+        auto* popup = new QWidget(&root, Qt::Window);
+        popup->setProperty("fcStyleTestPaneBackground", "#445566");
+        QWidget* panel = makePanel(popup);
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    void test_aNonStringDeclarationIsIgnored()  // NOLINT
+    {
+        QWidget root;
+        QWidget* panel = makePanel(&root);
+        panel->setProperty("fcStyleTestPaneBackground", 42);
+
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+    }
+
+    // Storing zero would leave a dynamic property on every widget in the application.
+    void test_aWidgetWithNoOverridesCarriesNoProperty()  // NOLINT
+    {
+        QWidget root;
+        QWidget* panel = makePanel(&root);
+
+        style()->polish(panel);
+
+        QVERIFY(!panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
+    }
+
+    // overrideSetOf() memoizes the last widget->id pair it read. storeOverrideSet() must reset
+    // that memo, or a widget resolved once before its override set was written keeps returning
+    // the stale (empty) bin forever afterwards, even once the property carries a real id.
+    //
+    // The widget under test is a standalone top-level QWidget (no parent) rather than one
+    // produced via makePanel(&root): polish() on a widget with a parent also resolves a token
+    // on that parent (for inherited transparency) on the way to storeOverrideSet(), and that
+    // unrelated resolve happens to evict the memo as a side effect, hiding a missing reset.
+    // A window widget takes the isWindow() early-out instead, so the memo left behind by the
+    // first backgroundOf() call below survives untouched into storeOverrideSet() — exactly the
+    // condition the hazard describes.
+    void test_resolvingBeforeAndAfterPolishOnTheSameWidgetPicksUpTheChange()  // NOLINT
+    {
+        QWidget panel;
+        panel.setProperty("component", "TestPanel");
+
+        QCOMPARE(backgroundOf(&panel), QColor(0x11, 0x22, 0x33));
+
+        panel.setProperty("fcStyleTestPaneBackground", "#445566");
+        style()->polish(&panel);
+
+        QCOMPARE(backgroundOf(&panel), QColor(0x44, 0x55, 0x66));
     }
 };
 
