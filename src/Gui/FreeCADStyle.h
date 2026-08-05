@@ -417,11 +417,14 @@ public:
     static bool isTransparent(const QWidget* widget);
 
     /**
-     * @brief Declares a style override on @p widget and makes it take effect immediately.
+     * @brief Declares a style override on @p widget and re-derives it and its descendants.
      *
      * @p name is a token name without the property prefix, e.g. "CurrentPaneBackground";
      * @p expression is written in the same language the theme files use. The override applies
      * to @p widget and everything below it, and a nearer declaration of the same name wins.
+     *
+     * Subsequent token resolutions in the subtree see the new override. This does not itself
+     * repaint or re-layout anything already on screen — that is the caller's responsibility.
      *
      * Setting the dynamic property directly works too, but only takes effect the next time the
      * widget is polished — use this, or refreshStyleOverrides(), for a change made afterwards.
@@ -432,7 +435,9 @@ public:
      * @brief Re-derives the overrides of @p widget and everything below it.
      *
      * Call after reparenting a widget across an override boundary, or after changing an
-     * override declaration without going through setStyleOverride().
+     * override declaration without going through setStyleOverride(). As with setStyleOverride(),
+     * only future resolutions are affected; repainting or re-laying-out already-shown widgets
+     * is left to the caller.
      */
     static void refreshStyleOverrides(QWidget* widget);
 

@@ -129,6 +129,13 @@ private Q_SLOTS:
         QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
     }
 
+    // This test, and the others below it that write overrideSetProperty directly, stand in for
+    // storeOverrideSet() — the header documents that property as style-owned and the sole writer
+    // being storeOverrideSet() is what makes overrideSetOf()'s memo sound. Writing it here is
+    // still safe because each widget is freshly constructed and the property is set before any
+    // resolve, so there is no stale memo to invalidate; doing it this way lets the test target
+    // cache binning against an arbitrary interned set directly, without going through polish()'s
+    // collection walk. Do not take this as licence to write the property from production code.
     void test_aStoredSetChangesWhatTheWidgetResolves()  // NOLINT
     {
         QWidget root;
