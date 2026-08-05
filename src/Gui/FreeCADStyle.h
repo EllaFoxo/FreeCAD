@@ -416,6 +416,26 @@ public:
     static bool isTransparent(const QWidget* widget);
 
     /**
+     * @brief Declares a style override on @p widget and makes it take effect immediately.
+     *
+     * @p name is a token name without the property prefix, e.g. "CurrentPaneBackground";
+     * @p expression is written in the same language the theme files use. The override applies
+     * to @p widget and everything below it, and a nearer declaration of the same name wins.
+     *
+     * Setting the dynamic property directly works too, but only takes effect the next time the
+     * widget is polished — use this, or refreshStyleOverrides(), for a change made afterwards.
+     */
+    static void setStyleOverride(QWidget* widget, const QString& name, const QString& expression);
+
+    /**
+     * @brief Re-derives the overrides of @p widget and everything below it.
+     *
+     * Call after reparenting a widget across an override boundary, or after changing an
+     * override declaration without going through setStyleOverride().
+     */
+    static void refreshStyleOverrides(QWidget* widget);
+
+    /**
      * @brief The connector strokes for one indent cell of a tree view's branch column.
      *
      * @param cell     One indentation step wide, one row tall, as Qt hands it to
@@ -949,6 +969,9 @@ private:
      * from within this call, sees @p set.
      */
     void storeOverrideSet(QWidget* widget, uint32_t set) const;
+
+    /** @brief Recomputes and stores the override set of @p widget and every descendant. */
+    void recomputeOverrideSets(QWidget* widget) const;
 
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.

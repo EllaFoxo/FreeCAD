@@ -3317,6 +3317,11 @@ void FreeCADStyle::restoreScrollerButtons(QWidget* container)
 
 void FreeCADStyle::unpolish(QWidget* widget)
 {
+    if (widget == nullptr) {
+        QProxyStyle::unpolish(widget);
+        return;
+    }
+
     if (qobject_cast<QTabBar*>(widget)) {
         widget->removeEventFilter(this);
     }
@@ -3327,6 +3332,11 @@ void FreeCADStyle::unpolish(QWidget* widget)
         scrollArea->removeEventFilter(this);
         scrollArea->clearMask();
     }
+
+    // The id means nothing under another style, and leaving it behind would have that style's
+    // widget resolve against a set it never asked for.
+    storeOverrideSet(widget, StyleParameters::OverrideRegistry::emptyId);
+
     QProxyStyle::unpolish(widget);
 }
 
@@ -4351,6 +4361,49 @@ void FreeCADStyle::storeOverrideSet(QWidget* widget, uint32_t set) const
     // QObject::property() lookup the memo exists to avoid.
     overrideMemoWidget = widget;
     overrideMemoSet = set;
+}
+
+void FreeCADStyle::setStyleOverride(QWidget* widget, const QString& name, const QString& expression)
+{
+    if (widget == nullptr) {
+        return;
+    }
+
+    const QString propertyName = QString::fromLatin1(overridePropertyPrefix) + name;
+    widget->setProperty(propertyName.toLatin1().constData(), expression);
+
+    refreshStyleOverrides(widget);
+}
+
+void FreeCADStyle::refreshStyleOverrides(QWidget* widget)
+{
+    if (widget == nullptr) {
+        return;
+    }
+
+    // Nothing to recompute when this widget is not ours to style; the declaration stays on the
+    // widget and is picked up if a FreeCADStyle polishes it later.
+    if (const auto* style = qobject_cast<const FreeCADStyle*>(widget->style())) {
+        style->recomputeOverrideSets(widget);
+    }
+}
+
+void FreeCADStyle::recomputeOverrideSets(QWidget* widget) const
+{
+    storeOverrideSet(widget, computeOverrideSet(widget));
+
+    // Copy first: setProperty() delivers DynamicPropertyChange synchronously and a handler may
+    // add or remove siblings, which would invalidate a live QObjectList mid-iteration. The same
+    // guard updateTransparency() needs.
+    const QObjectList children = widget->children();
+    for (QObject* child : children) {
+        auto* childWidget = qobject_cast<QWidget*>(child);
+        if (childWidget == nullptr) {
+            continue;
+        }
+
+        recomputeOverrideSets(childWidget);
+    }
 }
 
 StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)

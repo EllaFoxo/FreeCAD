@@ -446,6 +446,109 @@ private Q_SLOTS:
         QVERIFY(widget.observedAStyleChange);
         QCOMPARE(widget.backgroundDuringLastStyleChange, QColor(0x77, 0x88, 0x99));
     }
+
+    void test_settingAnOverrideAfterPolishTakesEffect()  // NOLINT
+    {
+        QWidget root;
+        QWidget* panel = makePanel(&root);
+
+        style()->polish(&root);
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+
+        Gui::FreeCADStyle::setStyleOverride(
+            &root,
+            QStringLiteral("TestPaneBackground"),
+            QStringLiteral("#445566")
+        );
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    void test_changingAnOverrideAfterPolishTakesEffect()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+        QWidget* panel = makePanel(&root);
+
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+
+        Gui::FreeCADStyle::setStyleOverride(
+            &root,
+            QStringLiteral("TestPaneBackground"),
+            QStringLiteral("#778899")
+        );
+
+        QCOMPARE(backgroundOf(panel), QColor(0x77, 0x88, 0x99));
+    }
+
+    void test_reparentingIntoASubtreeTakesEffectAfterARefresh()  // NOLINT
+    {
+        QWidget root;
+        auto* overriding = new QWidget(&root);
+        overriding->setProperty("fcStyleTestPaneBackground", "#445566");
+        auto* plain = new QWidget(&root);
+
+        QWidget* panel = makePanel(plain);
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+
+        panel->setParent(overriding);
+        Gui::FreeCADStyle::refreshStyleOverrides(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    void test_reparentingOutOfASubtreeTakesEffectAfterARefresh()  // NOLINT
+    {
+        QWidget root;
+        auto* overriding = new QWidget(&root);
+        overriding->setProperty("fcStyleTestPaneBackground", "#445566");
+        auto* plain = new QWidget(&root);
+
+        QWidget* panel = makePanel(overriding);
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+
+        panel->setParent(plain);
+        Gui::FreeCADStyle::refreshStyleOverrides(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+    }
+
+    // A late change on a container has to reach everything under it, not just the container.
+    void test_aRefreshReachesTheWholeSubtree()  // NOLINT
+    {
+        QWidget root;
+        auto* middle = new QWidget(&root);
+        QWidget* panel = makePanel(middle);
+
+        style()->polish(&root);
+        style()->polish(middle);
+        style()->polish(panel);
+
+        Gui::FreeCADStyle::setStyleOverride(
+            &root,
+            QStringLiteral("TestPaneBackground"),
+            QStringLiteral("#445566")
+        );
+
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    void test_unpolishClearsTheStoredSet()  // NOLINT
+    {
+        QWidget root;
+        QWidget* panel = makePanel(&root);
+        panel->setProperty("fcStyleTestPaneBackground", "#445566");
+
+        style()->polish(panel);
+        QVERIFY(panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
+
+        style()->unpolish(panel);
+        QVERIFY(!panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
+    }
 };
 
 QTEST_MAIN(TestStyleOverrides)
