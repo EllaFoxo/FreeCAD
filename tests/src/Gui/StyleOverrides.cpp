@@ -2,6 +2,8 @@
 
 #include <QApplication>
 #include <QEvent>
+#include <QTabBar>
+#include <QTabWidget>
 #include <QTest>
 #include <QWidget>
 
@@ -74,6 +76,7 @@ public:
                     {.name = "TestPanePadding", .value = "padding(4px)"},
                     {.name = "TestPanelPadding", .value = "@TestPanePadding"},
                     {.name = "TestPanelBorderColor", .value = "#000000"},
+                    {.name = "TabBarBackground", .value = "@TestPaneBackground"},
                 },
                 {.name = "Style Overrides Fixture"}
             )
@@ -568,6 +571,32 @@ private Q_SLOTS:
         Gui::FreeCADStyle::refreshStyleOverrides(&root);
 
         QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+    }
+
+    // The shape the property editor relies on: a declaration on the container reaches the tab
+    // bar nested two levels below it, through a token the tab bar's own token references.
+    void test_aTabBarPicksUpTheContainerDeclaration()  // NOLINT
+    {
+        QWidget container;
+        auto* tabs = new QTabWidget(&container);
+        tabs->addTab(new QWidget, QStringLiteral("Data"));
+
+        QTabBar* tabBar = tabs->tabBar();
+        style()->polish(tabBar);
+        const QColor before
+            = style()->resolveBoxStyle(Gui::FreeCADStyle::contextOf(tabBar)).background.color();
+
+        Gui::FreeCADStyle::setStyleOverride(
+            &container,
+            QStringLiteral("TestPaneBackground"),
+            QStringLiteral("#445566")
+        );
+
+        const QColor after
+            = style()->resolveBoxStyle(Gui::FreeCADStyle::contextOf(tabBar)).background.color();
+
+        QVERIFY(before != after);
+        QCOMPARE(after, QColor(0x44, 0x55, 0x66));
     }
 };
 

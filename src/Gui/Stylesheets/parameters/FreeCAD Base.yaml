@@ -351,7 +351,11 @@ HeaderItemBorderRadius: "border_radius(0px)"
 # BorderThickness) are auto-rotated to South/East/West; theme authors only need
 # to define North. Per-position colour overrides: TabBarTabSouthBackground etc.
 
-TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @Background.100, @Background.000)"
+# The stop at y1 is the edge the tab shares with its pane. Routing it through a token instead
+# of a literal lets a pane whose background is not the default declare its own — see
+# FreeCADStyle::setStyleOverride and PropertyView.
+CurrentPaneBackground: "@TabWidgetBackground"
+TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @CurrentPaneBackground, @Background.000)"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
