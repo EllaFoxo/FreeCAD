@@ -1126,7 +1126,7 @@ private:
     // resolve a dozen tokens from one context, and QObject::property() scans the widget class's
     // static property table on every call. QPointer clears itself when the widget dies, so a
     // recycled address cannot be mistaken for a hit.
-    mutable QPointer<QWidget> overrideMemoWidget;
+    mutable QPointer<const QWidget> overrideMemoWidget;
     mutable uint32_t overrideMemoSet = 0;
 };
 

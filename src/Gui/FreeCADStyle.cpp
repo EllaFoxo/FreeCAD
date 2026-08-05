@@ -4056,7 +4056,8 @@ StyleContext FreeCADStyle::contextOf(
         }
     }
 
-    // TransparencyMode — inherited down the widget tree by updateTransparency().
+    // Carries the widget for override lookup and applies the TransparencyMode tag inherited
+    // down the widget tree by updateTransparency().
     bindWidget(context, widget);
 
     return context;
@@ -4254,7 +4255,7 @@ uint32_t FreeCADStyle::overrideSetOf(const QWidget* widget) const
         return overrideMemoSet;
     }
 
-    overrideMemoWidget = const_cast<QWidget*>(widget);
+    overrideMemoWidget = widget;
     overrideMemoSet = widget->property(overrideSetProperty).toUInt();
 
     return overrideMemoSet;

@@ -12,9 +12,6 @@
 #include <Gui/StyleParameters/StyleContext.h>
 #include <Gui/StyleParameters/StyleOverrides.h>
 
-using Gui::StyleParameters::OverrideRegistry;
-using Gui::StyleParameters::OverrideSet;
-
 class TestStyleOverrides: public QObject
 {
     Q_OBJECT
@@ -29,13 +26,16 @@ public:
         }
 
         // Attached to plain QWidgets through the "component" property, so no real QTabBar or
-        // QTreeView is needed. TestPanelBackground goes through TestPaneBackground so the
-        // nested-reference path is what the assertions actually exercise.
+        // QTreeView is needed. TestPanelBackground goes through TestPaneBackground, and
+        // TestPanelPadding goes through TestPanePadding the same way, so the nested-reference
+        // path is what the assertions actually exercise.
         Gui::Application::Instance->styleParameterManager()->addSource(
             new Gui::StyleParameters::InMemoryParameterSource(
                 {
                     {.name = "TestPaneBackground", .value = "#112233"},
                     {.name = "TestPanelBackground", .value = "@TestPaneBackground"},
+                    {.name = "TestPanePadding", .value = "padding(4px)"},
+                    {.name = "TestPanelPadding", .value = "@TestPanePadding"},
                 },
                 {.name = "Style Overrides Fixture"}
             )
@@ -61,6 +61,13 @@ private:
     static QColor backgroundOf(const QWidget* widget)
     {
         return style()->resolveBoxStyle(Gui::FreeCADStyle::contextOf(widget)).background.color();
+    }
+
+    /// The left padding a widget's Padding token resolves to, through resolveBoxGeometry() —
+    /// the one aggregate cache the background-only tests above never touch.
+    static qreal paddingOf(const QWidget* widget)
+    {
+        return style()->resolveBoxGeometry(Gui::FreeCADStyle::contextOf(widget)).padding.left();
     }
 
     /// A panel whose Background comes from TestPanelBackground → TestPaneBackground.
@@ -117,6 +124,32 @@ private Q_SLOTS:
         // ...and again in the opposite order, now that both are cached.
         QCOMPARE(backgroundOf(second), QColor(0x77, 0x88, 0x99));
         QCOMPARE(backgroundOf(first), QColor(0x44, 0x55, 0x66));
+    }
+
+    // Same guarantee as test_twoSetsDoNotShareCacheEntries, but through resolveBoxGeometry()
+    // rather than resolveBoxStyle() — the background-only tests above never call it, so a
+    // boxGeometryCache that forgot to bin by override set would pass every other test here.
+    void test_twoSetsDoNotShareGeometryCacheEntries()  // NOLINT
+    {
+        QWidget root;
+        QWidget* first = makePanel(&root);
+        QWidget* second = makePanel(&root);
+
+        first->setProperty(
+            Gui::FreeCADStyle::overrideSetProperty,
+            manager()->overrideRegistry().intern({{"TestPanePadding", "padding(8px)"}})
+        );
+        second->setProperty(
+            Gui::FreeCADStyle::overrideSetProperty,
+            manager()->overrideRegistry().intern({{"TestPanePadding", "padding(16px)"}})
+        );
+
+        QCOMPARE(paddingOf(first), 8.0);
+        QCOMPARE(paddingOf(second), 16.0);
+
+        // ...and again in the opposite order, now that both are cached.
+        QCOMPARE(paddingOf(second), 16.0);
+        QCOMPARE(paddingOf(first), 8.0);
     }
 
     // An overridden widget must not leave its colour in the bin every other widget reads.
