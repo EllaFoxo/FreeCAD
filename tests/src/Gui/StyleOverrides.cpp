@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include <QApplication>
+#include <QEvent>
 #include <QTest>
 #include <QWidget>
 
@@ -11,6 +12,42 @@
 #include <Gui/StyleParameters/ParameterManager.h>
 #include <Gui/StyleParameters/StyleContext.h>
 #include <Gui/StyleParameters/StyleOverrides.h>
+
+namespace
+{
+
+// Captures, at the exact moment QEvent::StyleChange arrives, whatever this widget itself
+// resolves through the production API — the same thing a real widget's changeEvent handler
+// (QTabBar::changeEvent, for one) does. QCoreApplication::sendEvent() dispatches synchronously
+// regardless of visibility, so no shown QTabBar is needed to observe whether FreeCADStyle::
+// polish() has already stored this widget's new override set by the time it dispatches the
+// event that triggers such a handler.
+class OverrideObservingWidget: public QWidget
+{
+public:
+    using QWidget::QWidget;
+
+    bool observedAStyleChange = false;
+    QColor backgroundDuringLastStyleChange;
+
+protected:
+    void changeEvent(QEvent* event) override
+    {
+        QWidget::changeEvent(event);
+
+        if (event->type() != QEvent::StyleChange) {
+            return;
+        }
+
+        observedAStyleChange = true;
+        if (auto* style = qobject_cast<Gui::FreeCADStyle*>(QApplication::style())) {
+            backgroundDuringLastStyleChange
+                = style->resolveBoxStyle(Gui::FreeCADStyle::contextOf(this)).background.color();
+        }
+    }
+};
+
+}  // namespace
 
 class TestStyleOverrides: public QObject
 {
@@ -379,6 +416,35 @@ private Q_SLOTS:
 
         QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
         QVERIFY(!panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
+    }
+
+    // storeOverrideSet() must run before tagWidgetTransparency() in polish(): that call can
+    // synchronously dispatch QEvent::StyleChange to this same widget, and a handler reacting to
+    // it — QTabBar::changeEvent, for one — resolves tokens for this widget before polish()
+    // returns. If the override id were stored after the transparency tagging, such a handler
+    // would observe the id this widget had before this polish call, not the one it is being
+    // polished into.
+    void test_theOverrideIdIsInPlaceWhenStyleChangeFires()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+
+        OverrideObservingWidget widget(&root);
+        widget.setProperty("component", "TestPanel");
+
+        style()->polish(&widget);
+        QCOMPARE(backgroundOf(&widget), QColor(0x44, 0x55, 0x66));
+
+        // Changes what the widget's override set resolves to, and forces
+        // tagWidgetTransparency() to actually flip and dispatch: it early-returns when the
+        // surface does not change, so without this the event this test depends on never fires.
+        root.setProperty("fcStyleTestPaneBackground", "#778899");
+        widget.setProperty("transparent", true);
+
+        style()->polish(&widget);
+
+        QVERIFY(widget.observedAStyleChange);
+        QCOMPARE(widget.backgroundDuringLastStyleChange, QColor(0x77, 0x88, 0x99));
     }
 };
 
