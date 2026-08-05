@@ -3796,6 +3796,19 @@ bool FreeCADStyle::canInheritTransparency(const QWidget* widget)
     return widget != nullptr && !widget->isWindow();
 }
 
+void FreeCADStyle::forEachChildWidget(QWidget* widget, const std::function<void(QWidget*)>& visit)
+{
+    // Copy first: callers invoke handlers (StyleChange, DynamicPropertyChange, ...) synchronously
+    // while recursing, and in-tree handlers may add or remove siblings — e.g. DlgToolbarsImp
+    // repopulates a tree on StyleChange — which would invalidate a live QObjectList mid-iteration.
+    const QObjectList children = widget->children();
+    for (QObject* child : children) {
+        if (auto* childWidget = qobject_cast<QWidget*>(child)) {
+            visit(childWidget);
+        }
+    }
+}
+
 void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited)
 {
     if (widget == nullptr) {
@@ -3806,19 +3819,9 @@ void FreeCADStyle::updateTransparency(QWidget* widget, bool inherited)
 
     const bool below = transparencyBelow(widget);
 
-    // Copy first: the StyleChange sent above (and any DynamicPropertyChange delivered while
-    // recursing) is handled synchronously, and in-tree handlers may add or remove siblings —
-    // e.g. DlgToolbarsImp repopulates a tree on StyleChange — which would invalidate a live
-    // QObjectList mid-iteration.
-    const QObjectList children = widget->children();
-    for (QObject* child : children) {
-        auto* childWidget = qobject_cast<QWidget*>(child);
-        if (childWidget == nullptr) {
-            continue;
-        }
-
+    forEachChildWidget(widget, [this, below](QWidget* childWidget) {
         updateTransparency(childWidget, canInheritTransparency(childWidget) && below);
-    }
+    });
 }
 
 StyleContext FreeCADStyle::contextOf(
@@ -4392,18 +4395,7 @@ void FreeCADStyle::recomputeOverrideSets(QWidget* widget) const
 {
     storeOverrideSet(widget, computeOverrideSet(widget));
 
-    // Copy first: setProperty() delivers DynamicPropertyChange synchronously and a handler may
-    // add or remove siblings, which would invalidate a live QObjectList mid-iteration. The same
-    // guard updateTransparency() needs.
-    const QObjectList children = widget->children();
-    for (QObject* child : children) {
-        auto* childWidget = qobject_cast<QWidget*>(child);
-        if (childWidget == nullptr) {
-            continue;
-        }
-
-        recomputeOverrideSets(childWidget);
-    }
+    forEachChildWidget(widget, [this](QWidget* childWidget) { recomputeOverrideSets(childWidget); });
 }
 
 StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)

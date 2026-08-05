@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <functional>
 #include <initializer_list>
 #include <optional>
 #include <string>
@@ -972,6 +973,16 @@ private:
 
     /** @brief Recomputes and stores the override set of @p widget and every descendant. */
     void recomputeOverrideSets(QWidget* widget) const;
+
+    /**
+     * @brief Calls @p visit for every direct child of @p widget that is itself a QWidget.
+     *
+     * Shared by the subtree walks in updateTransparency() and recomputeOverrideSets(): both
+     * invoke handlers synchronously that may add or remove siblings mid-walk (e.g. a
+     * StyleChange or DynamicPropertyChange handler repopulating a tree), so the child list is
+     * copied up front rather than iterated live.
+     */
+    static void forEachChildWidget(QWidget* widget, const std::function<void(QWidget*)>& visit);
 
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.
