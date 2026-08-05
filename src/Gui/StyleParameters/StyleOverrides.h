@@ -58,6 +58,13 @@ class GuiExport OverrideRegistry
 public:
     static constexpr uint32_t emptyId = 0;
 
+    OverrideRegistry() = default;
+
+    // byId holds pointers into ids's map nodes; a copy would point into the original's storage.
+    // Moving a std::map preserves node addresses, so move stays safe and available.
+    FC_DISABLE_COPY(OverrideRegistry);
+    FC_DEFAULT_MOVE(OverrideRegistry);
+
     /// Returns the id for @p set, assigning a new one the first time that content is seen.
     uint32_t intern(const OverrideSet& set);
 

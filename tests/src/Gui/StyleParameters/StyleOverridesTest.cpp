@@ -21,6 +21,8 @@
  *                                                                          *
  ***************************************************************************/
 
+#include <type_traits>
+
 #include <gtest/gtest.h>
 
 #include <Gui/StyleParameters/ParameterManager.h>
@@ -28,6 +30,14 @@
 #include <Gui/StyleParameters/Value.h>
 
 using namespace Gui::StyleParameters;
+
+// byId holds pointers into ids's map nodes; a copy would leave the copy's byId pointing into the
+// original's storage. Move is safe because std::map move preserves node addresses, and
+// ParameterManager's own move constructor depends on that staying available.
+static_assert(!std::is_copy_constructible_v<OverrideRegistry>);
+static_assert(!std::is_copy_assignable_v<OverrideRegistry>);
+static_assert(std::is_move_constructible_v<OverrideRegistry>);
+static_assert(std::is_move_assignable_v<OverrideRegistry>);
 
 TEST(OverrideRegistryTest, EmptySetIsIdZeroAndIsNotStored)
 {
