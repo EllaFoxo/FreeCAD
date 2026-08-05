@@ -549,6 +549,26 @@ private Q_SLOTS:
         style()->unpolish(panel);
         QVERIFY(!panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
     }
+
+    // recomputeOverrideSets() recurses into every child, windows included. Its correctness there
+    // rests entirely on computeOverrideSet() re-walking upward from the window and breaking
+    // immediately, the same way it does for a direct polish() — a refresh must not let a window
+    // start inheriting its parent's overrides.
+    void test_aRefreshDoesNotLeakIntoAChildWindow()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+
+        auto* popup = new QWidget(&root, Qt::Window);
+        QWidget* panel = makePanel(popup);
+
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+
+        Gui::FreeCADStyle::refreshStyleOverrides(&root);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+    }
 };
 
 QTEST_MAIN(TestStyleOverrides)
