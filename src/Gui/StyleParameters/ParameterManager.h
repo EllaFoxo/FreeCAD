@@ -34,6 +34,7 @@
 #include <Base/Parameter.h>
 
 #include "ParameterDescriptorRegistry.h"
+#include "StyleOverrides.h"
 #include "StyleParameterResolver.h"
 #include "Value.h"
 
@@ -362,6 +363,33 @@ private:
 };
 
 /**
+ * @brief Resolution context threaded through parameter lookups.
+ *
+ * Tracks recursion (to detect circular references) and, optionally, which per-widget override
+ * set is in effect.
+ *
+ * Declared at namespace scope rather than nested in ParameterManager: a nested aggregate whose
+ * own member has a default member initializer cannot be used as a default argument value
+ * (`ResolveContext context = {}`) elsewhere in that same enclosing class. ParameterManager
+ * exposes it under its original name via a member alias, so `ParameterManager::ResolveContext`
+ * keeps working everywhere it is already used.
+ */
+struct ResolveContext
+{
+    /// Names of parameters currently being resolved.
+    std::set<std::string> visited;
+
+    /**
+     * @brief Which override set is in effect, as an id from ParameterManager::overrideRegistry().
+     *
+     * Zero selects the plain resolution path and its process-wide cache. Any other value
+     * resolves against that set and caches separately, so one widget's overrides never
+     * decide another widget's colours.
+     */
+    uint32_t overrides = OverrideRegistry::emptyId;
+};
+
+/**
  * @brief Central manager for style parameters that aggregates multiple sources.
  *
  * The ParameterManager is responsible for:
@@ -377,14 +405,29 @@ class GuiExport ParameterManager
 
     StyleParameterResolver* _resolver = nullptr;
     ParameterDescriptorRegistry _descriptorRegistry;
+    OverrideRegistry _overrideRegistry;
+
+    /// Resolution cache for overridden contexts, one map per override set id. Kept apart from
+    /// _resolved so an overridden value can never escape into the shared cache.
+    mutable std::map<uint32_t, std::map<std::string, std::optional<Value>>> _overrideResolved;
 
 public:
-    struct ResolveContext
-    {
-        /// Names of parameters currently being resolved.
-        std::set<std::string> visited;
-    };
+    using ResolveContext = Gui::StyleParameters::ResolveContext;
 
+private:
+    std::optional<Value> resolveFlat(const std::string& name, ResolveContext context) const;
+    std::optional<Value> resolveOverridden(const std::string& name, ResolveContext context) const;
+    std::optional<Value> evaluateOrSubstitute(
+        const std::string& expression,
+        const ResolveContext& context
+    ) const;
+    std::optional<Value> evaluateOverride(
+        const std::string& name,
+        const std::string& expression,
+        const ResolveContext& context
+    ) const;
+
+public:
     ParameterManager();
     ParameterManager(ParameterManager&&) = default;
     FC_DISABLE_COPY(ParameterManager);
@@ -401,6 +444,10 @@ public:
     /// Access the descriptor registry that defines component chains and variant dimensions.
     ParameterDescriptorRegistry& descriptorRegistry();
     const ParameterDescriptorRegistry& descriptorRegistry() const;
+
+    /// Access the registry that deduplicates per-widget override sets into ids.
+    OverrideRegistry& overrideRegistry();
+    const OverrideRegistry& overrideRegistry() const;
 
     /**
      * @brief Clears the internal cache of resolved values.

@@ -443,9 +443,20 @@ const ParameterDescriptorRegistry& ParameterManager::descriptorRegistry() const
     return _descriptorRegistry;
 }
 
+OverrideRegistry& ParameterManager::overrideRegistry()
+{
+    return _overrideRegistry;
+}
+
+const OverrideRegistry& ParameterManager::overrideRegistry() const
+{
+    return _overrideRegistry;
+}
+
 void ParameterManager::reload()
 {
     _resolved.clear();
+    _overrideResolved.clear();
     if (_resolver) {
         _resolver->refresh();
     }
@@ -557,32 +568,113 @@ std::optional<Value> ParameterManager::resolve(const std::string& name) const
 
 std::optional<Value> ParameterManager::resolve(const std::string& name, ResolveContext context) const
 {
+    if (context.visited.contains(name)) {
+        Base::Console().warning("The style parameter '%s' contains circular-reference.\n", name);
+        return expression(name);
+    }
+
+    if (context.overrides != OverrideRegistry::emptyId) {
+        return resolveOverridden(name, std::move(context));
+    }
+
+    return resolveFlat(name, std::move(context));
+}
+
+std::optional<Value> ParameterManager::resolveFlat(const std::string& name, ResolveContext context) const
+{
     std::optional<Parameter> maybeParameter = this->parameter(name);
 
     if (!maybeParameter) {
         return std::nullopt;
     }
 
-    if (context.visited.contains(name)) {
-        Base::Console().warning("The style parameter '%s' contains circular-reference.\n", name);
-        return expression(name);
-    }
-
     const Parameter& token = *maybeParameter;
 
     if (!_resolved.contains(token.name)) {
         context.visited.insert(token.name);
-        try {
-            _resolved[token.name] = evaluate(token.value, context);
-        }
-        catch (Base::Exception&) {
-            // in case of being unable to parse it, we need to treat it as a generic value
-            _resolved[token.name] = replacePlaceholders(token.value, context);
+        if (const auto value = evaluateOrSubstitute(token.value, context)) {
+            _resolved[token.name] = *value;
         }
         context.visited.erase(token.name);
     }
 
     return _resolved[token.name];
+}
+
+std::optional<Value> ParameterManager::resolveOverridden(
+    const std::string& name,
+    ResolveContext context
+) const
+{
+    auto& cache = _overrideResolved[context.overrides];
+    if (const auto cached = cache.find(name); cached != cache.end()) {
+        return cached->second;
+    }
+
+    const OverrideSet& overrides = _overrideRegistry.get(context.overrides);
+    const auto declared = overrides.find(name);
+    const bool overridden = declared != overrides.end();
+
+    std::optional<std::string> source;
+    if (overridden) {
+        source = declared->second;
+    }
+    else if (const auto maybeParameter = this->parameter(name)) {
+        source = maybeParameter->value;
+    }
+
+    if (!source) {
+        cache[name] = std::nullopt;
+        return std::nullopt;
+    }
+
+    context.visited.insert(name);
+    const std::optional<Value> result = overridden ? evaluateOverride(name, *source, context)
+                                                   : evaluateOrSubstitute(*source, context);
+    context.visited.erase(name);
+
+    cache[name] = result;
+    return result;
+}
+
+std::optional<Value> ParameterManager::evaluateOrSubstitute(
+    const std::string& expression,
+    const ResolveContext& context
+) const
+{
+    try {
+        return evaluate(expression, context);
+    }
+    catch (const Base::Exception&) {
+        // Not an expression — treat it as a generic value.
+        return replacePlaceholders(expression, context);
+    }
+}
+
+std::optional<Value> ParameterManager::evaluateOverride(
+    const std::string& name,
+    const std::string& expression,
+    const ResolveContext& context
+) const
+{
+    try {
+        return evaluate(expression, context);
+    }
+    catch (const Base::Exception& exception) {
+        Base::Console().warning(
+            "The style override for '%s' could not be evaluated (%s); ignoring it.\n",
+            name,
+            exception.what()
+        );
+    }
+
+    // Substituting placeholders here — what an ordinary parameter falls back to — would put a
+    // literal string where the caller expects a brush. Fall back to the theme instead.
+    if (const auto maybeParameter = this->parameter(name)) {
+        return evaluateOrSubstitute(maybeParameter->value, context);
+    }
+
+    return std::nullopt;
 }
 
 Value ParameterManager::evaluate(const std::string& expression, ResolveContext context) const

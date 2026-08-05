@@ -23,7 +23,9 @@
 
 #include <gtest/gtest.h>
 
+#include <Gui/StyleParameters/ParameterManager.h>
 #include <Gui/StyleParameters/StyleOverrides.h>
+#include <Gui/StyleParameters/Value.h>
 
 using namespace Gui::StyleParameters;
 
@@ -94,4 +96,159 @@ TEST(OverrideRegistryTest, UnknownIdReturnsTheEmptySet)
     registry.intern({{"PaneBackground", "@ListBackground"}});
 
     EXPECT_TRUE(registry.get(9999).empty());
+}
+
+class OverriddenResolutionTest: public ::testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        source = std::make_unique<InMemoryParameterSource>(
+            std::list<Parameter> {
+                {"PaneBackground", "#112233"},
+                {"PanelBackground", "@PaneBackground"},
+                {"PanelBorderColor", "#aabbcc"},
+            },
+            ParameterSource::Metadata {"Override Fixture"}
+        );
+        manager.addSource(source.get());
+    }
+
+    /// The id of a set holding exactly one override, ready to drop into a ResolveContext.
+    uint32_t setOf(const std::string& name, const std::string& expression)
+    {
+        return manager.overrideRegistry().intern({{name, expression}});
+    }
+
+    static std::string colorOf(const std::optional<Value>& value)
+    {
+        return std::get<Base::Color>(*value).asHexString();
+    }
+
+    Gui::StyleParameters::ParameterManager manager;
+    std::unique_ptr<ParameterSource> source;
+};
+
+TEST_F(OverriddenResolutionTest, ADirectOverrideBeatsTheSource)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PaneBackground", context)), "#445566");
+}
+
+// The whole point of the mechanism: a token that merely *references* the overridden one
+// changes too, so a theme can route several tokens through one overridable name.
+TEST_F(OverriddenResolutionTest, ANestedReferenceSeesTheOverride)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBackground", context)), "#445566");
+}
+
+TEST_F(OverriddenResolutionTest, AnUnrelatedTokenIsUnaffected)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBorderColor", context)), "#AABBCC");
+}
+
+// An overridden resolution must not be written into the shared _resolved map, or the first
+// widget to paint would decide the colour for every other widget in the application.
+TEST_F(OverriddenResolutionTest, OverriddenResolutionDoesNotPoisonThePlainCache)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    manager.resolve("PanelBackground", context);
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBackground", {})), "#112233");
+}
+
+// ...and the reverse order: a value already in the shared cache must not shadow an override.
+TEST_F(OverriddenResolutionTest, ThePlainCacheDoesNotShadowAnOverride)
+{
+    manager.resolve("PanelBackground", {});
+
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBackground", context)), "#445566");
+}
+
+TEST_F(OverriddenResolutionTest, TwoSetsResolveIndependently)
+{
+    const ResolveContext first {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+    const ResolveContext second {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#778899"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBackground", first)), "#445566");
+    EXPECT_EQ(colorOf(manager.resolve("PanelBackground", second)), "#778899");
+}
+
+// An override may name a token the theme never defines; it simply supplies it.
+TEST_F(OverriddenResolutionTest, AnOverrideCanSupplyATokenTheSourceLacks)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneOutline", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PaneOutline", context)), "#445566");
+}
+
+// A broken override is treated as if it had never been declared, so the widget falls back to
+// the theme rather than painting a literal string.
+TEST_F(OverriddenResolutionTest, AnUnparseableOverrideFallsBackToTheSource)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "rgb(((("),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PaneBackground", context)), "#112233");
+}
+
+// Self-reference must terminate. Without the visited guard covering the override's own
+// expression this recurses until the stack runs out.
+TEST_F(OverriddenResolutionTest, ASelfReferentialOverrideTerminates)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "@PaneBackground"),
+    };
+
+    EXPECT_NO_FATAL_FAILURE(manager.resolve("PaneBackground", context));
+}
+
+TEST_F(OverriddenResolutionTest, ReloadDropsCachedOverriddenValues)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PaneBackground", context)), "#445566");
+
+    manager.reload();
+
+    // The id must survive the reload — widgets hold it — so the same context still resolves.
+    EXPECT_EQ(colorOf(manager.resolve("PaneBackground", context)), "#445566");
 }
