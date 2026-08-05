@@ -16,6 +16,7 @@ add_executable(Gui_tests_run
         StyleParameters/ColorEffectTest.cpp
         StyleParameters/ValueTest.cpp
         StyleParameters/DescriptorRegistryTest.cpp
+        StyleParameters/StyleOverridesTest.cpp
         TreeBranchGeometryTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
