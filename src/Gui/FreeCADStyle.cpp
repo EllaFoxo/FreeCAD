@@ -86,6 +86,7 @@
 #include "StyleParameters/InnerShadow.h"
 #include "StyleParameters/Insets.h"
 #include "StyleParameters/ParameterManager.h"
+#include "StyleParameters/StyleOverrides.h"
 #include "TaskView/TaskView.h"
 
 
@@ -1753,7 +1754,7 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
         StyleContext paneContext;
         paneContext.component = StyleComponent::TabWidget;
         paneContext.element = StyleComponentElement::Root;
-        applyTransparency(paneContext, widget);
+        bindWidget(paneContext, widget);
         const BoxGeometryDefinition geometry = resolveBoxGeometry(paneContext);
         const QRect paneRect = QProxyStyle::subElementRect(SE_TabWidgetTabPane, option, widget);
         return geometry.contentRect(paneRect);
@@ -2938,7 +2939,7 @@ void FreeCADStyle::drawTabWidgetFrame(
     StyleContext paneContext;
     paneContext.component = StyleComponent::TabWidget;
     paneContext.element = StyleComponentElement::Root;
-    applyTransparency(paneContext, widget);
+    bindWidget(paneContext, widget);
     drawBoxBackground(painter, option->rect, resolveBoxStyle(paneContext));
 
     // Draw the shadow strip at the attachment edge.
@@ -2949,7 +2950,7 @@ void FreeCADStyle::drawTabWidgetFrame(
     stripContext.element = StyleComponentElement::Base;
     stripContext.variant.set(VariantSlot::Position, position);
     const auto* tabWidget = qobject_cast<const QTabWidget*>(widget);
-    applyTransparency(stripContext, tabWidget != nullptr ? tabWidget->tabBar() : nullptr);
+    bindWidget(stripContext, tabWidget != nullptr ? tabWidget->tabBar() : nullptr);
 
     const int stripHeight = resolve<int>(stripContext, StyleProperty::Height).value_or(0);
     if (stripHeight == 0) {
@@ -3716,8 +3717,10 @@ bool FreeCADStyle::isTransparent(const QWidget* widget)
     return widget != nullptr && widget->property(transparencyProperty).toBool();
 }
 
-void FreeCADStyle::applyTransparency(StyleContext& context, const QWidget* widget)
+void FreeCADStyle::bindWidget(StyleContext& context, const QWidget* widget)
 {
+    context.widget = widget;
+
     if (isTransparent(widget)) {
         context.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
     }
@@ -4054,7 +4057,7 @@ StyleContext FreeCADStyle::contextOf(
     }
 
     // TransparencyMode — inherited down the widget tree by updateTransparency().
-    applyTransparency(context, widget);
+    bindWidget(context, widget);
 
     return context;
 }
@@ -4063,9 +4066,10 @@ StyleContext FreeCADStyle::contextOf(
 
 std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StyleProperty property) const
 {
+    const uint32_t bin = overrideSetOf(context.widget);
     const uint64_t key = context.cacheKey(property);
 
-    if (const auto* cached = tokenCache.find(key)) {
+    if (const auto* cached = tokenCache.find(bin, key)) {
         return *cached;
     }
 
@@ -4079,7 +4083,10 @@ std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StylePro
         // walk, so name-based chain synthesis must not run here.
         result = manager->resolve(
             prefix + propertySuffix,
-            StyleParameters::ParameterManager::ResolveContext {}
+            StyleParameters::ParameterManager::ResolveContext {
+                .visited = {},
+                .overrides = bin,
+            }
         );
         if (!result) {
             continue;
@@ -4091,15 +4098,16 @@ std::optional<Value> FreeCADStyle::resolve(const StyleContext& context, StylePro
         break;
     }
 
-    tokenCache.store(key, result);
+    tokenCache.store(bin, key, result);
     return result;
 }
 
 FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContext& context) const
 {
+    const uint32_t bin = overrideSetOf(context.widget);
     const uint64_t key = context.cacheKey();
 
-    if (const auto* cached = boxStyleCache.find(key)) {
+    if (const auto* cached = boxStyleCache.find(bin, key)) {
         return *cached;
     }
 
@@ -4144,15 +4152,16 @@ FreeCADStyle::BoxStyleDefinition FreeCADStyle::resolveBoxStyle(const StyleContex
         }
     }
 
-    boxStyleCache.store(key, result);
+    boxStyleCache.store(bin, key, result);
     return result;
 }
 
 FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const StyleContext& context) const
 {
+    const uint32_t bin = overrideSetOf(context.widget);
     const uint64_t key = context.cacheKey();
 
-    if (const auto* cached = boxGeometryCache.find(key)) {
+    if (const auto* cached = boxGeometryCache.find(bin, key)) {
         return *cached;
     }
 
@@ -4198,7 +4207,7 @@ FreeCADStyle::BoxGeometryDefinition FreeCADStyle::resolveBoxGeometry(const Style
         result.spacing = static_cast<int>(*resolvedSpacing);
     }
 
-    boxGeometryCache.store(key, result);
+    boxGeometryCache.store(bin, key, result);
     return result;
 }
 
@@ -4233,6 +4242,22 @@ void FreeCADStyle::clearTokenCache()
     boxStyleCache.clear();
     boxGeometryCache.clear();
     StyleContext::Intern::global().clear();
+}
+
+uint32_t FreeCADStyle::overrideSetOf(const QWidget* widget) const
+{
+    if (widget == nullptr) {
+        return StyleParameters::OverrideRegistry::emptyId;
+    }
+
+    if (overrideMemoWidget.data() == widget) {
+        return overrideMemoSet;
+    }
+
+    overrideMemoWidget = const_cast<QWidget*>(widget);
+    overrideMemoSet = widget->property(overrideSetProperty).toUInt();
+
+    return overrideMemoSet;
 }
 
 StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)

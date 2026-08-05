@@ -32,6 +32,8 @@
 #include <Base/Bitmask.h>
 #include <FCGlobal.h>
 
+class QWidget;
+
 namespace Gui::StyleParameters
 {
 
@@ -318,6 +320,15 @@ struct GuiExport StyleContext
      */
     std::string componentOverride;
 
+    /**
+     * @brief The widget this context describes, when there is one.
+     *
+     * Carried so token resolution can find the style overrides declared on the widget or
+     * inherited from its ancestors. Which overrides those are, and how they are identified, is
+     * internal to FreeCADStyle and ParameterManager.
+     */
+    const QWidget* widget = nullptr;
+
     bool operator==(const StyleContext&) const = default;
 
     /**
@@ -340,7 +351,12 @@ struct GuiExport StyleContext
         uint8_t nextId = 1;
     };
 
-    /// Returns a 64-bit context-only cache key (property bits left zero).
+    /**
+     * @brief Returns a 64-bit context-only cache key (property bits left zero).
+     *
+     * The key does not cover `widget`. It identifies an entry *within* one override-set cache
+     * bin; the bin itself is chosen by the caller from the widget.
+     */
     uint64_t cacheKey() const;
 
     /// Returns a full 64-bit cache key including the property dimension.

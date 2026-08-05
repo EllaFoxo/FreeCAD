@@ -37,6 +37,7 @@
 #include <QMarginsF>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 #include <QProxyStyle>
 #include <QAbstractScrollArea>
 #include <QComboBox>
@@ -383,6 +384,18 @@ public:
         const StyleParameters::StyleComponentElement& element
         = StyleParameters::StyleComponentElement::Root
     );
+
+    // Dynamic widget property names that drive style overrides.
+    // clang-format off
+    /// Prefix of a property declaring an override, e.g. "fcStyleCurrentPaneBackground"
+    /// overrides the CurrentPaneBackground token.
+    static constexpr const char* overridePropertyPrefix = "fcStyle";
+
+    /// Where the resolved override-set id is cached on the widget. Deliberately outside
+    /// overridePropertyPrefix: under it, the collection walk would read this back as an
+    /// override named "OverrideSet".
+    static constexpr const char* overrideSetProperty    = "fcOverrideSet";
+    // clang-format on
 
     /**
      * @brief Recomputes the inherited transparency of @p widget and everything below it.
@@ -915,6 +928,9 @@ private:
     /** @brief Clears the token resolution cache; called from the ThemeReloadEvent handler. */
     void clearTokenCache();
 
+    /** @brief The override set in effect for @p widget, or 0 when it has none. */
+    uint32_t overrideSetOf(const QWidget* widget) const;
+
     // Dynamic widget property names used to tag combo box internals.
     // Defined here so both FreeCADStyle.cpp and its helpers can share them.
     // clang-format off
@@ -975,12 +991,13 @@ private:
     bool transparencyBelow(const QWidget* widget) const;
 
     /**
-     * @brief Applies @p widget's transparency to a context that was not built by contextOf().
+     * @brief Attaches @p widget to a context that was not built by contextOf().
      *
-     * Hand-built contexts must call this or they resolve the opaque tokens regardless of where
-     * the widget is painted.
+     * Carries the widget for override lookup and applies its transparency tag. Call this from
+     * every site that assembles a StyleContext by hand, or that context resolves as if it
+     * belonged to no widget at all.
      */
-    static void applyTransparency(StyleParameters::StyleContext& context, const QWidget* widget);
+    static void bindWidget(StyleParameters::StyleContext& context, const QWidget* widget);
 
     /**
      * @brief Tags @p widget itself with @p surface and notifies it, without touching children.
@@ -1062,29 +1079,37 @@ private:
 
     // ── Cache helpers ─────────────────────────────────────────────────────────
     //
-    // StyleContextCache<T> wraps an unordered_map<uint64_t, T> so all three caches
-    // (token, box-style, box-geometry) share the same find/store/clear API.
+    // StyleContextCache<T> holds one map per override-set id, so two widgets with different
+    // overrides never read each other's entries while widgets sharing a set share a bin.
+    // Bin 0 is "no overrides" and holds what the single flat map used to.
     // All operations are const-qualified so they can be used from const draw methods.
     template<typename T>
     class StyleContextCache
     {
-        mutable std::unordered_map<uint64_t, T> entries;
+        using Bin = std::unordered_map<uint64_t, T>;
+
+        mutable std::unordered_map<uint32_t, Bin> bins;
 
     public:
-        const T* find(uint64_t key) const
+        const T* find(uint32_t bin, uint64_t key) const
         {
-            const auto found = entries.find(key);
-            return found != entries.end() ? &found->second : nullptr;
+            const auto foundBin = bins.find(bin);
+            if (foundBin == bins.end()) {
+                return nullptr;
+            }
+
+            const auto found = foundBin->second.find(key);
+            return found != foundBin->second.end() ? &found->second : nullptr;
         }
 
-        void store(uint64_t key, T value) const
+        void store(uint32_t bin, uint64_t key, T value) const
         {
-            entries.emplace(key, std::move(value));
+            bins[bin].emplace(key, std::move(value));
         }
 
         void clear()
         {
-            entries.clear();
+            bins.clear();
         }
     };
 
@@ -1096,6 +1121,13 @@ private:
     // Keyed by context-only uint64_t (property bits left zero).
     mutable StyleContextCache<BoxStyleDefinition> boxStyleCache;
     mutable StyleContextCache<BoxGeometryDefinition> boxGeometryCache;
+
+    // Single-entry memo for overrideSetOf(). resolveBoxStyle() and resolveBoxGeometry() each
+    // resolve a dozen tokens from one context, and QObject::property() scans the widget class's
+    // static property table on every call. QPointer clears itself when the widget dies, so a
+    // recycled address cannot be mistaken for a hit.
+    mutable QPointer<QWidget> overrideMemoWidget;
+    mutable uint32_t overrideMemoSet = 0;
 };
 
 }  // namespace Gui
