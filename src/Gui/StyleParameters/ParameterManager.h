@@ -365,14 +365,8 @@ private:
 /**
  * @brief Resolution context threaded through parameter lookups.
  *
- * Tracks recursion (to detect circular references) and, optionally, which per-widget override
- * set is in effect.
- *
- * Declared at namespace scope rather than nested in ParameterManager: a nested aggregate whose
- * own member has a default member initializer cannot be used as a default argument value
- * (`ResolveContext context = {}`) elsewhere in that same enclosing class. ParameterManager
- * exposes it under its original name via a member alias, so `ParameterManager::ResolveContext`
- * keeps working everywhere it is already used.
+ * Tracks which names are currently mid-resolution, to catch circular references, and optionally
+ * names the override set in effect.
  */
 struct ResolveContext
 {
@@ -412,6 +406,11 @@ class GuiExport ParameterManager
     mutable std::map<uint32_t, std::map<std::string, std::optional<Value>>> _overrideResolved;
 
 public:
+    // ResolveContext is declared at namespace scope, not nested here, and re-exposed under its
+    // original name via this alias: a nested aggregate whose own member has a default member
+    // initializer cannot be used as a default argument value (`ResolveContext context = {}`)
+    // elsewhere in this same enclosing class — several such defaults already exist below — so
+    // nesting it would break them. Do not move the struct back in here.
     using ResolveContext = Gui::StyleParameters::ResolveContext;
 
 private:

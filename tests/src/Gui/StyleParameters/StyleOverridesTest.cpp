@@ -238,7 +238,26 @@ TEST_F(OverriddenResolutionTest, ASelfReferentialOverrideTerminates)
     EXPECT_NO_FATAL_FAILURE(manager.resolve("PaneBackground", context));
 }
 
-TEST_F(OverriddenResolutionTest, ReloadDropsCachedOverriddenValues)
+// PanelBorderColor is not itself overridden by this context, so resolving it through the
+// overridden path falls through to the theme and caches that fallen-through value in
+// _overrideResolved. If reload() only cleared the plain _resolved cache, this stale value would
+// survive a theme change for as long as the widget's override set stayed alive.
+TEST_F(OverriddenResolutionTest, ReloadDropsCachedValuesThatFellThroughToTheSource)
+{
+    const ResolveContext context {
+        .visited = {},
+        .overrides = setOf("PaneBackground", "#445566"),
+    };
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBorderColor", context)), "#AABBCC");
+
+    source->define({"PanelBorderColor", "#ffffff"});
+    manager.reload();
+
+    EXPECT_EQ(colorOf(manager.resolve("PanelBorderColor", context)), "#FFFFFF");
+}
+
+TEST_F(OverriddenResolutionTest, ReloadPreservesTheOverrideSetId)
 {
     const ResolveContext context {
         .visited = {},

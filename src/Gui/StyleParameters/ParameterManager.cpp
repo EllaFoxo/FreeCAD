@@ -611,9 +611,9 @@ std::optional<Value> ParameterManager::resolveOverridden(
         return cached->second;
     }
 
-    const OverrideSet& overrides = _overrideRegistry.get(context.overrides);
-    const auto declared = overrides.find(name);
-    const bool overridden = declared != overrides.end();
+    const OverrideSet& overrideSet = _overrideRegistry.get(context.overrides);
+    const auto declared = overrideSet.find(name);
+    const bool overridden = declared != overrideSet.end();
 
     std::optional<std::string> source;
     if (overridden) {
