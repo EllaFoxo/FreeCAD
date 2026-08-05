@@ -394,7 +394,8 @@ public:
 
     /// Where the resolved override-set id is cached on the widget. Deliberately outside
     /// overridePropertyPrefix: under it, the collection walk would read this back as an
-    /// override named "OverrideSet".
+    /// override named "OverrideSet". Style-owned: storeOverrideSet() is its sole writer, and
+    /// overrideSetOf()'s memo is only sound because of that — never set it from outside.
     static constexpr const char* overrideSetProperty    = "fcOverrideSet";
     // clang-format on
 
@@ -941,7 +942,12 @@ private:
      */
     static uint32_t computeOverrideSet(const QWidget* widget);
 
-    /** @brief Records @p set on @p widget for later lookup by overrideSetOf(). */
+    /**
+     * @brief Records @p set on @p widget and keeps overrideSetOf()'s memo consistent with it.
+     *
+     * Every resolve() for @p widget after this call, including ones triggered synchronously
+     * from within this call, sees @p set.
+     */
     void storeOverrideSet(QWidget* widget, uint32_t set) const;
 
     // Dynamic widget property names used to tag combo box internals.

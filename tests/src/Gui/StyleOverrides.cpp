@@ -259,7 +259,7 @@ private Q_SLOTS:
         style()->polish(firstPanel);
         style()->polish(secondPanel);
 
-        QCOMPARE(manager()->overrideRegistry().size() - before, std::size_t(1));
+        QCOMPARE(manager()->overrideRegistry().size() - before, static_cast<std::size_t>(1));
         QCOMPARE(
             firstPanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt(),
             secondPanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt()
@@ -338,6 +338,47 @@ private Q_SLOTS:
         style()->polish(&panel);
 
         QCOMPARE(backgroundOf(&panel), QColor(0x44, 0x55, 0x66));
+    }
+
+    // A property literally named "fcStyle", with nothing after the prefix, names no token.
+    // declaredOverrides() must skip it rather than record an override under an empty name —
+    // otherwise this widget would merge a spurious {"", "#445566"} entry that an otherwise
+    // identical, undecorated widget does not, and the two would land in different registry
+    // bins for no visible reason.
+    void test_aBarePrefixPropertyContributesNoOverride()  // NOLINT
+    {
+        QWidget root;
+        QWidget* plainPanel = makePanel(&root);
+        QWidget* barePanel = makePanel(&root);
+        barePanel->setProperty("fcStyle", "#445566");
+
+        style()->polish(plainPanel);
+        style()->polish(barePanel);
+
+        QCOMPARE(
+            barePanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt(),
+            plainPanel->property(Gui::FreeCADStyle::overrideSetProperty).toUInt()
+        );
+        QCOMPARE(backgroundOf(barePanel), QColor(0x11, 0x22, 0x33));
+    }
+
+    // Re-polishing after an ancestor's declaration is withdrawn must drop the override, not
+    // just leave the old id in place — storeOverrideSet() has to clear a real id back to none,
+    // the empty-set direction test_aWidgetWithNoOverridesCarriesNoProperty never exercises.
+    void test_removingAnAncestorsDeclarationClearsTheOverride()  // NOLINT
+    {
+        QWidget root;
+        root.setProperty("fcStyleTestPaneBackground", "#445566");
+        QWidget* panel = makePanel(&root);
+
+        style()->polish(panel);
+        QCOMPARE(backgroundOf(panel), QColor(0x44, 0x55, 0x66));
+
+        root.setProperty("fcStyleTestPaneBackground", QVariant());
+        style()->polish(panel);
+
+        QCOMPARE(backgroundOf(panel), QColor(0x11, 0x22, 0x33));
+        QVERIFY(!panel->property(Gui::FreeCADStyle::overrideSetProperty).isValid());
     }
 };
 

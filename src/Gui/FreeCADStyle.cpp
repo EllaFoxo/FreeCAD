@@ -3170,6 +3170,20 @@ void FreeCADStyle::polish(QWidget* widget)
         return;
     }
 
+    // Overrides are inherited down the widget tree. computeOverrideSet() walks up from this
+    // widget rather than seeding from the parent's stored id, so a widget polished before its
+    // parent still lands on the right set. Only this widget is tagged here: QWidget::
+    // ensurePolished() already walks descendants and polishes each in turn.
+    //
+    // This must run before tagWidgetTransparency() below: that call can synchronously dispatch
+    // QEvent::StyleChange to this widget, and a handler reacting to it (QTabBar::changeEvent,
+    // for one) resolves tokens for this same widget before polish() returns. The override id
+    // has to already be in place when that happens, or the handler runs under the id this
+    // widget had before this polish — stale metrics until the next style event. Nothing in the
+    // transparency block below depends on this widget's own override id: it resolves only
+    // against widget->parentWidget().
+    storeOverrideSet(widget, computeOverrideSet(widget));
+
     // Transparency is inherited down the widget tree. Seeding from the parent here covers
     // widgets built after their parent's subtree was propagated — lazily created editors,
     // popups and the like — without an extra event filter. QWidget::ensurePolished() already
@@ -3180,12 +3194,6 @@ void FreeCADStyle::polish(QWidget* widget)
     const bool inherited = canInheritTransparency(widget)
         && transparencyBelow(widget->parentWidget());
     tagWidgetTransparency(widget, ownSurface(widget, inherited));
-
-    // Overrides are inherited down the widget tree. computeOverrideSet() walks up from this
-    // widget rather than seeding from the parent's stored id, so a widget polished before its
-    // parent still lands on the right set. As with transparency above, only this widget is
-    // tagged: QWidget::ensurePolished() already walks descendants and polishes each in turn.
-    storeOverrideSet(widget, computeOverrideSet(widget));
 
     if (qobject_cast<QTabBar*>(widget)) {
         widget->setMouseTracking(true);
@@ -4297,6 +4305,14 @@ StyleParameters::OverrideSet FreeCADStyle::declaredOverrides(const QWidget* widg
 
 uint32_t FreeCADStyle::computeOverrideSet(const QWidget* widget)
 {
+    // Before this walk existed, polishing a top-level widget never reached the manager:
+    // canInheritTransparency() short-circuited the rest of polish()'s style-token work for it.
+    // Now every polish does, including ones that can run without a Gui::Application behind them
+    // (a bare QApplication::setStyle() in a test, or an embedding) — fail soft instead.
+    if (Application::Instance == nullptr) {
+        return StyleParameters::OverrideRegistry::emptyId;
+    }
+
     StyleParameters::OverrideSet merged;
 
     for (const QWidget* ancestor = widget; ancestor != nullptr; ancestor = ancestor->parentWidget()) {
@@ -4318,15 +4334,23 @@ uint32_t FreeCADStyle::computeOverrideSet(const QWidget* widget)
 
 void FreeCADStyle::storeOverrideSet(QWidget* widget, uint32_t set) const
 {
-    // An invalid QVariant removes the property. Storing a zero instead would put a dynamic
-    // property on every widget in the application and slow every later collection walk.
-    widget->setProperty(
-        overrideSetProperty,
-        set == StyleParameters::OverrideRegistry::emptyId ? QVariant {} : QVariant {set}
-    );
+    // QObject::setProperty() allocates the object's dynamic-property storage on first use, even
+    // when it is only clearing a property that was never set — so only write when there is
+    // something to record or an existing property to clear, or every widget with no overrides
+    // would pay that allocation anyway. An invalid QVariant removes the property.
+    const bool hasStoredSet = widget->dynamicPropertyNames().contains(overrideSetProperty);
+    if (set != StyleParameters::OverrideRegistry::emptyId || hasStoredSet) {
+        widget->setProperty(
+            overrideSetProperty,
+            set == StyleParameters::OverrideRegistry::emptyId ? QVariant {} : QVariant {set}
+        );
+    }
 
-    overrideMemoWidget = nullptr;
-    overrideMemoSet = StyleParameters::OverrideRegistry::emptyId;
+    // Seeded rather than cleared: this function already knows the correct (widget, set) pair,
+    // so priming the memo with it directly saves the very next overrideSetOf() call the
+    // QObject::property() lookup the memo exists to avoid.
+    overrideMemoWidget = widget;
+    overrideMemoSet = set;
 }
 
 StyleContext FreeCADStyle::withNorthPosition(const StyleContext& context)
