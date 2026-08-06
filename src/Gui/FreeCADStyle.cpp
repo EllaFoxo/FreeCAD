@@ -64,6 +64,8 @@
 #include <QCursor>
 #include <QMenuBar>
 #include <QMainWindow>
+#include <QMdiArea>
+#include <QMdiSubWindow>
 #include <QStatusBar>
 #include <QTabBar>
 #include <QTabWidget>
@@ -3214,6 +3216,14 @@ void FreeCADStyle::polish(QWidget* widget)
         widget->setAutoFillBackground(false);
     }
 
+    if (qobject_cast<QMdiSubWindow*>(widget)) {
+        // The subwindow is the surface its view is painted on, and a view paints only its own
+        // chrome — the start page, for one, leaves the area around its lists bare. An opaque
+        // fill here is what lets the backing store clip the subwindows stacked underneath;
+        // without it their last paint stays visible through every such gap.
+        widget->setAutoFillBackground(true);
+    }
+
     if (auto* itemView = qobject_cast<QAbstractItemView*>(widget)) {
         itemView->setAttribute(Qt::WA_MouseTracking);
     }
@@ -3222,6 +3232,13 @@ void FreeCADStyle::polish(QWidget* widget)
         auto viewport = scrollArea->viewport();
 
         if (!viewport) {
+            return;
+        }
+
+        // A QMdiArea is a scroll area whose viewport children are the subwindows themselves.
+        // Stripping their backgrounds the way we strip a viewport's would leave every view in
+        // the workspace see-through, and the style paints no panel here to take their place.
+        if (qobject_cast<QMdiArea*>(scrollArea)) {
             return;
         }
 

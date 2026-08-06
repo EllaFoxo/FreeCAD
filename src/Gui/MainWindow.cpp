@@ -447,7 +447,6 @@ MainWindow::MainWindow(QWidget* parent, Qt::WindowFlags f)
 #ifndef HAS_QTBUG_129596
     d->mdiArea->setActivationOrder(QMdiArea::ActivationHistoryOrder);
 #endif
-    d->mdiArea->setBackground(QBrush(QColor(160, 160, 160)));
     setCentralWidget(d->mdiArea);
 
     statusBar()->setObjectName(QStringLiteral("statusBar"));

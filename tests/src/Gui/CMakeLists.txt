@@ -34,6 +34,7 @@ setup_qt_test(TreeBranch)
 setup_qt_test(ExpressionButtonLayout)
 setup_qt_test(GroupBoxFrame)
 setup_qt_test(StyleOverrides)
+setup_qt_test(MdiSurface)
 
 target_link_libraries(Gui_tests_run PRIVATE
     GTest::gmock_main

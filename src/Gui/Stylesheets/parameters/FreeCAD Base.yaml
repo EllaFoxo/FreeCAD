@@ -36,8 +36,8 @@ BaseHoveredBorderColorEffect: "effect(darken: 0.08)"
 
 FormControlInternalHeight: 22px
 FormControlSmallHeight: 24px
-FormControlHeight: 28px
-FormControlBigHeight: 32px
+FormControlHeight: 26px
+FormControlBigHeight: 30px
 
 FormControlInternalFontSize: 6px
 
