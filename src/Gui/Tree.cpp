@@ -6352,16 +6352,27 @@ void DocumentObjectItem::generateIcon(int currentStatus, QIcon::Mode mode, QIcon
 
     QPixmap pxOn, pxOff;
 
+    // Rasterise at the screen's pixel ratio: the plain QIcon::pixmap(int, int) overload renders
+    // at ratio 1 whatever the display is, and the tree then hands Qt a pixmap it can only stretch.
+    const qreal pixelRatio = getTree()->devicePixelRatioF();
+    const QSize iconSize(w, w);
+
     // if needed show small pixmap inside
     if (!px.isNull()) {
-        pxOff = BitmapFactory()
-                    .merge(icon_org.pixmap(w, w, mode, QIcon::Off), px, BitmapFactoryInst::TopRight);
-        pxOn = BitmapFactory()
-                   .merge(icon_org.pixmap(w, w, mode, QIcon::On), px, BitmapFactoryInst::TopRight);
+        pxOff = BitmapFactory().merge(
+            icon_org.pixmap(iconSize, pixelRatio, mode, QIcon::Off),
+            px,
+            BitmapFactoryInst::TopRight
+        );
+        pxOn = BitmapFactory().merge(
+            icon_org.pixmap(iconSize, pixelRatio, mode, QIcon::On),
+            px,
+            BitmapFactoryInst::TopRight
+        );
     }
     else {
-        pxOff = icon_org.pixmap(w, w, mode, QIcon::Off);
-        pxOn = icon_org.pixmap(w, w, mode, QIcon::On);
+        pxOff = icon_org.pixmap(iconSize, pixelRatio, mode, QIcon::Off);
+        pxOn = icon_org.pixmap(iconSize, pixelRatio, mode, QIcon::On);
     }
 
     setIconOverlays(currentStatus, pxOff);
@@ -6386,10 +6397,18 @@ QIcon DocumentObjectItem::getVisibilityIcon(int currentStatus, QIcon& original_i
     QIcon new_icon;
     auto style = this->getTree()->style();
     int const spacing = style->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
-    for (auto state : {QIcon::On, QIcon::Off}) {
-        QPixmap px_org = original_icon.pixmap(0xFFFF, 0xFFFF, QIcon::Normal, state);
+    // Everything below is laid out in logical pixels and rasterised at the screen's ratio. Sizing
+    // the composite from the source pixmap's device dimensions instead would make it twice its
+    // intended size on a scaled display, and leave it a ratio-1 image for Qt to resample.
+    const qreal pixelRatio = this->getTree()->devicePixelRatioF();
 
-        QPixmap px(2 * px_org.width() + spacing, px_org.height());
+    for (auto state : {QIcon::On, QIcon::Off}) {
+        const QSize sourceSize = original_icon.actualSize(QSize(0xFFFF, 0xFFFF), QIcon::Normal, state);
+        const QPixmap px_org = original_icon.pixmap(sourceSize, pixelRatio, QIcon::Normal, state);
+
+        const QSize compositeSize(2 * sourceSize.width() + spacing, sourceSize.height());
+        QPixmap px(compositeSize * pixelRatio);
+        px.setDevicePixelRatio(pixelRatio);
         px.fill(Qt::transparent);
 
         QPainter pt;
@@ -6397,9 +6416,9 @@ QIcon DocumentObjectItem::getVisibilityIcon(int currentStatus, QIcon& original_i
         pt.setPen(Qt::NoPen);
         if (object()->canToggleVisibility()) {
             const QIcon& visibility = (currentStatus & Status::Visible) ? visible : invisible;
-            pt.drawPixmap(0, 0, px_org.width(), px_org.height(), visibility.pixmap(px_org.size()));
+            pt.drawPixmap(QRect(QPoint(), sourceSize), visibility.pixmap(sourceSize, pixelRatio));
         }
-        pt.drawPixmap(px_org.width() + spacing, 0, px_org.width(), px_org.height(), px_org);
+        pt.drawPixmap(QRect(QPoint(sourceSize.width() + spacing, 0), sourceSize), px_org);
         pt.end();
 
         new_icon.addPixmap(px, QIcon::Normal, state);
