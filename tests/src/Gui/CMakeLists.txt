@@ -35,6 +35,7 @@ setup_qt_test(ExpressionButtonLayout)
 setup_qt_test(GroupBoxFrame)
 setup_qt_test(StyleOverrides)
 setup_qt_test(MdiSurface)
+setup_qt_test(FormControlSizing)
 
 target_link_libraries(Gui_tests_run PRIVATE
     GTest::gmock_main

@@ -191,10 +191,11 @@ public:
      *   3. max* clamps lower the result.
      *
      * Usage guidance:
-     *   - Use sizeFromContents(contentSize) for components that own their size computation
-     *     (PushButton, ToolButton, ItemViewItem): adds padding then constrains.
-     *   - Use constrain(result) for components that delegate to the parent style first
-     *     (ComboBox, LineEdit, SpinBox): only applies constraints to the delegated size.
+     *   - Use sizeFromContents(contentSize) for a size hint, whether the content size was
+     *     computed here (PushButton, ToolButton, ItemViewItem) or delegated to the parent style
+     *     first (ComboBox, LineEdit, SpinBox). The parent reserves only its own frame, so a hint
+     *     that skips the padding promises room that contentRect() then takes away.
+     *   - Use constrain(rect) to fit an existing rect to the same limits without adding padding.
      */
     struct BoxGeometryDefinition
     {
@@ -273,9 +274,10 @@ public:
         }
 
         /** @brief Computes outer widget size: adds padding to content size, then constrains.
-         *  Use for components that own their size computation (PushButton, ToolButton,
-         * ItemViewItem). Use constrain(result) for components that delegate to the parent style
-         * first (ComboBox, LineEdit). */
+         *  Every component's size hint goes through here, including the ones that ask the parent
+         *  style first: the parent reserves only its own frame, while contentRect() takes the
+         *  full padding back out, so a hint that skips this step promises room it will not have.
+         */
         [[nodiscard]] QSize sizeFromContents(QSize contentSize) const
         {
             return constrain(contentSize.grownBy(padding.toMargins()));

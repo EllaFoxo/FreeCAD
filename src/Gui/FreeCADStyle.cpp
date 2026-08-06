@@ -1682,7 +1682,7 @@ QSize FreeCADStyle::sizeFromContents(
         if (comboOption && !comboOption->currentIcon.isNull()) {
             result.rwidth() += geometry.iconGapDelta();
         }
-        return geometry.constrain(result);
+        return geometry.sizeFromContents(result);
     }
 
     if (type == CT_MenuBarItem) {
@@ -1699,7 +1699,7 @@ QSize FreeCADStyle::sizeFromContents(
 
     if (type == CT_LineEdit || type == CT_SpinBox) {
         const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(widget, option));
-        return geometry.constrain(QProxyStyle::sizeFromContents(type, option, size, widget));
+        return geometry.sizeFromContents(QProxyStyle::sizeFromContents(type, option, size, widget));
     }
 
     if (type == CT_ToolButton) {
