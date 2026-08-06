@@ -48,6 +48,7 @@
 
 #include "Thumbnail.h"
 #include "BitmapFactory.h"
+#include "Camera.h"
 #include "View3DInventorViewer.h"
 
 
@@ -74,9 +75,16 @@ std::array<SbVec3f, 8> cornersOf(const SbBox3f& box)
 
 Thumbnail::Thumbnail(int s)
     : size(s)
-{}
+    , camera(new SoOrthographicCamera)
+{
+    camera->ref();
+    camera->orientation.setValue(Camera::rotation(Camera::Isometric));
+}
 
-Thumbnail::~Thumbnail() = default;
+Thumbnail::~Thumbnail()
+{
+    camera->unref();
+}
 
 void Thumbnail::setViewer(View3DInventorViewer* v)
 {
@@ -157,11 +165,23 @@ void Thumbnail::SaveDocFile(Base::Writer& writer) const
             qWarning("Cannot create a thumbnail from non-GUI thread");
         }
         else {
-            View3DInventorViewer::RenderImageOptions options;
-            options.width = this->size;
-            options.height = this->size;
-            options.samples = 4;
-            options.intent = View3DInventorViewer::RenderIntent::RasterCapture;
+            // An empty document leaves the box empty and fitToBox no-ops, so it yields a fully
+            // transparent thumbnail rather than falling back to a stale one of geometry that
+            // has since been deleted.
+            SbBox3f box;
+            this->viewer->getSceneBoundBox(box);
+            fitToBox(*this->camera, box, 1.0F);
+
+            const View3DInventorViewer::RenderImageOptions options {
+                .width = this->size,
+                .height = this->size,
+                .samples = 4,
+                .background = QColor(0, 0, 0, 0),
+                .intent = View3DInventorViewer::RenderIntent::RasterCapture,
+                .includeViewerLighting = true,
+                .camera = this->camera,
+                .trueAlpha = true,
+            };
             img = this->viewer->renderToImage(options);
             created = !img.isNull();
         }

@@ -45,6 +45,8 @@ public:
     Thumbnail(int s = 128);
     ~Thumbnail() override;
 
+    FC_DISABLE_COPY_MOVE(Thumbnail)
+
     /** Position and size @p camera so @p box fills a frame of the given aspect ratio, seen
      * from the camera's current orientation. Leaves the camera untouched for an empty box, or
      * for one that projects to a single point.
@@ -73,6 +75,7 @@ private:
     QUrl uri;
     View3DInventorViewer* viewer {nullptr};
     int size;
+    SoOrthographicCamera* camera {nullptr};
 };
 
 }  // namespace Gui
