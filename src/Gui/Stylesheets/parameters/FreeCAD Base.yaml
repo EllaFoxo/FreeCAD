@@ -492,3 +492,13 @@ MenuBarItemDisabledTextColor: "@BaseDisabledTextColor"
 
 ReportOutputBackground: "reset()"
 ReportOutputBorderColor: "reset()"
+
+# ── Search Highlight ─────────────────────────────────────────────────────────
+# The halo Gui::SearchHighlightOverlay paints around a matched control. The background is a
+# tint rather than a fill so the control's own text and indicator stay legible beneath it, and
+# SearchHighlightMargin is how far the halo stands off the control.
+SearchHighlightBackground: "opacity(@Accent.500, 12%)"
+SearchHighlightBorderColor: "@Accent.500"
+SearchHighlightBorderThickness: 2px
+SearchHighlightBorderRadius: "@BaseRadius.medium"
+SearchHighlightMargin: "@Spacing.100"
