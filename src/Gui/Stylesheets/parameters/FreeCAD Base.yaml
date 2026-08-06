@@ -109,6 +109,13 @@ ToolButtonMinWidth: "@ButtonHeight"
 ToolButtonSmallMinWidth: "@ButtonSmallHeight"
 ToolButtonInternalMinWidth: "reset()"
 
+# ── PanelButton (dock panel title bar) ────────────────────────────────────────
+# A component override set on OverlayToolButton, so it resolves ahead of the
+# ToolButton chain. The title bar is a thin strip and its buttons are secondary
+# to the panel content, so they carry a smaller icon than a tool button elsewhere.
+
+PanelButtonIconSize: 12px
+
 # ── ToolButton – Link variant (auto-raise / toolbar buttons) ──────────────────
 # These tokens define the visual appearance of QToolButton with autoRaise=true,
 # which covers all standard toolbar buttons. The padding is uniform so that
