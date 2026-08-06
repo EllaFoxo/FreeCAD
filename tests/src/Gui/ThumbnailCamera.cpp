@@ -55,6 +55,21 @@ float largestNormalizedExtent(const SoOrthographicCamera& camera, const SbBox3f&
     return largest;
 }
 
+/// How far the furthest corner of @p box reaches towards the near or far clipping plane, in
+/// normalized device coordinates where either plane is exactly 1.
+float largestNormalizedDepth(const SoOrthographicCamera& camera, const SbBox3f& box, float aspect)
+{
+    const SbMatrix toNormalized = camera.getViewVolume(aspect).getMatrix();
+
+    float largest = 0.0F;
+    for (const SbVec3f& corner : cornersOf(box)) {
+        SbVec3f normalized;
+        toNormalized.multVecMatrix(corner, normalized);
+        largest = std::max(largest, std::abs(normalized[2]));
+    }
+    return largest;
+}
+
 class ThumbnailCameraTest: public ::testing::Test
 {
 protected:
@@ -111,6 +126,19 @@ TEST_F(ThumbnailCameraTest, noCornerIsClipped)
     Thumbnail::fitToBox(*camera, box, 1.6F);
 
     EXPECT_LE(largestNormalizedExtent(*camera, box, 1.6F), 1.0F);
+}
+
+TEST_F(ThumbnailCameraTest, theClippingPlanesClearTheScene)
+{
+    // The isometric view direction runs parallel to a cube's body diagonal, so a cubic box puts
+    // its nearest and farthest corners hard against tangent clipping planes. They need headroom,
+    // because geometry excluded from the bounding box is still rendered and still depth-clipped.
+    camera->orientation.setValue(Gui::Camera::rotation(Gui::Camera::Isometric));
+    const SbBox3f box(-1.0F, -1.0F, -1.0F, 1.0F, 1.0F, 1.0F);
+
+    Thumbnail::fitToBox(*camera, box, 1.0F);
+
+    EXPECT_LT(largestNormalizedDepth(*camera, box, 1.0F), 1.0F);
 }
 
 TEST_F(ThumbnailCameraTest, theContentReachesTheMargin)

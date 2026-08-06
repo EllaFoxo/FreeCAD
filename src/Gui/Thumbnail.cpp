@@ -131,7 +131,12 @@ void Thumbnail::fitToBox(SoOrthographicCamera& camera, const SbBox3f& box, float
 
     // Coin aims the camera and sets the clipping planes correctly, but sizes the frame from
     // the circumscribing sphere, which leaves a lot of the image empty.
-    camera.viewBoundingBox(box, aspect, 1.0F);
+    //
+    // Coin puts the clipping planes exactly tangent to the bounding sphere at a slack of 1,
+    // which leaves no room for geometry that is rendered but excluded from the bounding box —
+    // a sketch's edit-mode cross axes, for one. A slack of 2 clears the sphere by its own
+    // radius on both sides. Orthographic projection is happy with a negative near distance.
+    camera.viewBoundingBox(box, aspect, 2.0F);
     camera.height = 2.0F * halfExtent * fitMargin;
 }
 
