@@ -24,7 +24,6 @@
 #pragma once
 
 #include <optional>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -155,10 +154,6 @@ public:
      * Returns nullopt if the name is unrecognised or the chain is exhausted.
      */
     std::optional<Value> resolve(const std::string& name, const ParameterManager* manager) const override;
-
-private:
-    // Thread-local guard against re-entrant synthesis of the same name.
-    static thread_local std::set<std::string> _beingSynthesized;
 };
 
 }  // namespace Gui::StyleParameters

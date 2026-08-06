@@ -23,6 +23,9 @@
 
 #include "StyleParameterResolver.h"
 
+#include <set>
+#include <string>
+
 #include <Base/ScopeExit.h>
 
 #include "ParameterManager.h"
@@ -94,7 +97,13 @@ void CachingParameterResolver::refresh()
 
 // ─── InheritingParameterResolver ─────────────────────────────────────────────
 
-thread_local std::set<std::string> InheritingParameterResolver::_beingSynthesized;
+namespace
+{
+// Guard against re-entrant synthesis of the same name. Kept here rather than as a static member
+// because MSVC rejects thread-local data members on a dll-exported class (C2492); nothing outside
+// this file needs it anyway.
+thread_local std::set<std::string> beingSynthesized;
+}  // namespace
 
 std::optional<Value> InheritingParameterResolver::resolve(
     const std::string& name,
@@ -104,7 +113,7 @@ std::optional<Value> InheritingParameterResolver::resolve(
     // Re-entrancy guard: if we're already synthesizing this name, the chain
     // walker has looped back to the same virtual token — return nullopt so the
     // outer call can advance to the next prefix.
-    if (_beingSynthesized.contains(name)) {
+    if (beingSynthesized.contains(name)) {
         return std::nullopt;
     }
 
@@ -117,8 +126,8 @@ std::optional<Value> InheritingParameterResolver::resolve(
         *parsed
     );
 
-    _beingSynthesized.insert(name);
-    Base::ScopeExit cleanup([&] { _beingSynthesized.erase(name); });
+    beingSynthesized.insert(name);
+    Base::ScopeExit cleanup([&] { beingSynthesized.erase(name); });
 
     for (const std::string& prefix : prefixes) {
         auto result = manager->resolve(prefix + parsed->property);
