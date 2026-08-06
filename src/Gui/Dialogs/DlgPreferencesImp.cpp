@@ -1932,7 +1932,11 @@ void PreferencesSearchController::showHighlight(QWidget* widget)
     QMetaObject::invokeMethod(
         this,
         [this, target = QPointer<QWidget>(widget)] {
-            if (target) {
+            // A matched widget can be hidden (findChildren applies no visibility filter, so a
+            // widget on an inactive stacked page still matches). The overlay then paints no
+            // halo for it, so the scroll has to skip it too rather than jumping to a spot with
+            // nothing marked.
+            if (target && target->isVisible()) {
                 m_parentDialog->ui->scrollArea->ensureWidgetVisible(target);
             }
         },
