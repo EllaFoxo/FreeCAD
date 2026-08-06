@@ -3062,7 +3062,11 @@ QImage View3DInventorViewer::renderToImage(const RenderImageOptions& options)
     // is to use a certain background color using GL_RGB as texture
     // format and in the output image search for the above color and
     // replaces it with the color requested by the user.
-    fboFormat.setInternalTextureFormat(getInternalTextureFormat());
+    // The InternalTextureFormat preference cannot express "must carry alpha", so a true-alpha
+    // capture picks the format itself.
+    fboFormat.setInternalTextureFormat(
+        options.trueAlpha ? static_cast<GLenum>(GL_RGBA8) : getInternalTextureFormat()
+    );
 
     QOpenGLFramebufferObject fbo(width, height, fboFormat);
     if (!fbo.isValid()) {
@@ -3091,9 +3095,9 @@ QImage View3DInventorViewer::renderToImage(const RenderImageOptions& options)
     );
 
     if (overrideBackground) {
-        // force an opaque background color
         alpha = opaqueBackground.alpha();
-        if (alpha < maxAlpha) {
+        if (alpha < maxAlpha && !options.trueAlpha) {
+            // force an opaque background color for the keying pass to match against
             opaqueBackground.setRgb(maxAlpha, maxAlpha, maxAlpha);
         }
         setBackgroundColor(opaqueBackground);
@@ -3107,6 +3111,12 @@ QImage View3DInventorViewer::renderToImage(const RenderImageOptions& options)
     if (img.isNull()) {
         Base::Console().warning("renderToImage failed to read the framebuffer\n");
         return {};
+    }
+
+    if (options.trueAlpha) {
+        // The framebuffer already carries per-pixel alpha, so neither the colour-keying pass
+        // nor the flatten-onto-black pass applies.
+        return img;
     }
 
     // if background color isn't opaque manipulate the image

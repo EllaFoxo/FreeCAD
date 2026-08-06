@@ -246,6 +246,9 @@ public:
         /// Render through this camera rather than the viewer's own. The caller keeps ownership,
         /// and the viewer's camera is neither read nor modified.
         SoCamera* camera = nullptr;
+        /// Carry real per-pixel alpha in the result instead of colour-keying an opaque render.
+        /// Cleaner edges, at the cost of the sorted-transparency workaround the keying path uses.
+        bool trueAlpha = false;
     };
 
     /** Render the scene into a new image using the requested capture policy. */
