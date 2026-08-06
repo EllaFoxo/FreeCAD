@@ -31,7 +31,10 @@ protected:
     {
         tests::initApplication();
         // A view provider builds Coin nodes in its constructor, FreeCAD's own among them.
-        Gui::SoFCDB::init();
+        // SoFCDB::init() is not idempotent, and this binary now has a second Coin-using suite.
+        if (!Gui::SoFCDB::isInitialized()) {
+            Gui::SoFCDB::init();
+        }
     }
 };
 }  // namespace

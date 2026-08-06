@@ -23,6 +23,7 @@ add_executable(Gui_tests_run
         GeometrySelectionTest.cpp
         GeometryHighlighterTest.cpp
         TemporaryVisibilityTest.cpp
+        ThumbnailCamera.cpp
 )
 
 # Qt tests
