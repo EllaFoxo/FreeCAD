@@ -243,6 +243,9 @@ public:
         QColor background;
         RenderIntent intent = RenderIntent::RasterCapture;
         bool includeViewerLighting = true;
+        /// Render through this camera rather than the viewer's own. The caller keeps ownership,
+        /// and the viewer's camera is neither read nor modified.
+        SoCamera* camera = nullptr;
     };
 
     /** Render the scene into a new image using the requested capture policy. */
@@ -645,7 +648,8 @@ private:
     void recoverFromRenderMemoryException();
     void renderDelayedAnnotations(SoGLRenderAction* glra);
     void renderGLActionScene(const QColor& backgroundColor, SoGLRenderAction* glra);
-    bool renderToFramebuffer(QOpenGLFramebufferObject*, bool includeViewerLighting = true);
+    bool renderToFramebuffer(QOpenGLFramebufferObject*, const RenderImageOptions& options);
+    SoSeparator* buildCaptureRoot(const RenderImageOptions& options) const;
     void setCursorRepresentation(int mode);
     void aboutToDestroyGLContext();
     void createStandardCursors();

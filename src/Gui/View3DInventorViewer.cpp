@@ -2979,7 +2979,7 @@ void View3DInventorViewer::setRenderType(RenderType type)
                 fboFormat.setAttachment(QOpenGLFramebufferObject::Depth);
                 auto fbo = new QOpenGLFramebufferObject(width, height, fboFormat);
                 if (fbo->format().samples() > 0 && hasFramebufferBlitSupport()) {
-                    if (!renderToFramebuffer(fbo)) {
+                    if (!renderToFramebuffer(fbo, RenderImageOptions {})) {
                         delete fbo;
                         break;
                     }
@@ -2999,7 +2999,7 @@ void View3DInventorViewer::setRenderType(RenderType type)
                         fallbackFormat.setAttachment(QOpenGLFramebufferObject::Depth);
                         fbo = new QOpenGLFramebufferObject(width, height, fallbackFormat);
                     }
-                    if (!renderToFramebuffer(fbo)) {
+                    if (!renderToFramebuffer(fbo, RenderImageOptions {})) {
                         delete fbo;
                         break;
                     }
@@ -3100,7 +3100,7 @@ QImage View3DInventorViewer::renderToImage(const RenderImageOptions& options)
         setGradientBackground(Background::NoGradient);
     }
 
-    if (!renderToFramebuffer(&fbo, options.includeViewerLighting)) {
+    if (!renderToFramebuffer(&fbo, options)) {
         return {};
     }
     img = fbo.toImage();
@@ -3137,7 +3137,30 @@ QImage View3DInventorViewer::renderToImage(const RenderImageOptions& options)
     return img;
 }
 
-bool View3DInventorViewer::renderToFramebuffer(QOpenGLFramebufferObject* fbo, bool includeViewerLighting)
+SoSeparator* View3DInventorViewer::buildCaptureRoot(const RenderImageOptions& options) const
+{
+    // Taking pcViewProviderRoot rather than the render manager's scene graph leaves the
+    // placement indicator and the rotation center out of the capture along with the camera
+    // the user is looking through.
+    auto root = new SoSeparator;
+
+    if (options.includeViewerLighting) {
+        root->addChild(getHeadlight());
+        root->addChild(getBacklight());
+        root->addChild(getFillLight());
+        root->addChild(environment);
+    }
+
+    root->addChild(options.camera);
+    root->addChild(pcViewProviderRoot);
+
+    return root;
+}
+
+bool View3DInventorViewer::renderToFramebuffer(
+    QOpenGLFramebufferObject* fbo,
+    const RenderImageOptions& options
+)
 {
     static_cast<QOpenGLWidget*>(this->viewport())->makeCurrent();  // NOLINT
     if (!fbo->bind()) {
@@ -3173,7 +3196,13 @@ bool View3DInventorViewer::renderToFramebuffer(QOpenGLFramebufferObject* fbo, bo
     // while creating a new render action has it set to GL_LEQUAL. So, in order to get
     // the exact same result set it explicitly to GL_LESS.
     glDepthFunc(GL_LESS);
-    if (includeViewerLighting) {
+    if (options.camera) {
+        SoSeparator* captureRoot = buildCaptureRoot(options);
+        captureRoot->ref();
+        auto releaseCaptureRoot = qScopeGuard([captureRoot]() { captureRoot->unref(); });
+        gl.apply(captureRoot);
+    }
+    else if (options.includeViewerLighting) {
         gl.apply(this->getSoRenderManager()->getSceneGraph());
     }
     else {
