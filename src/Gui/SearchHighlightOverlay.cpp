@@ -116,7 +116,9 @@ void SearchHighlightOverlay::paintEvent(QPaintEvent* /*event*/)
     const StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
     const QMarginsF margin = style->resolveBoxGeometry(context).margin;
 
-    const QRect rect = highlightRect(_target, parentWidget(), margin.toMargins());
+    // paintBox insets the rect it is handed by this same Margin, so grow by twice it to land the
+    // border box one margin outside the target.
+    const QRect rect = highlightRect(_target, parentWidget(), margin.toMargins() * 2);
     if (rect.isNull()) {
         return;
     }

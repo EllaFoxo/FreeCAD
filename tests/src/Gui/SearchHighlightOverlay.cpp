@@ -232,6 +232,41 @@ private Q_SLOTS:
 
         QCOMPARE(style()->resolveBoxGeometry(context).margin, QMarginsF(6, 6, 6, 6));
     }
+
+    // highlightRect() and the token resolution are each tested on their own above, but nothing
+    // exercises the line in paintEvent() that combines them. That line once fed paintBox() a rect
+    // already grown by the margin, and paintBox() insets by that same margin again before it
+    // draws — the two cancel out, so the border painted right on the target's own edge instead of
+    // standing off it. This renders the real overlay and pins the border ring's position, so it
+    // fails against that regression and passes once the rect is grown by twice the margin.
+    void theHaloBorderStandsOneMarginOutsideTheTarget()
+    {
+        ScrollFixture fixture;
+
+        auto* target = new QWidget(fixture.content);
+        target->setGeometry(20, 30, 80, 24);
+
+        auto* overlay = new Gui::SearchHighlightOverlay(&fixture.area);
+
+        fixture.area.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&fixture.area));
+
+        overlay->setTarget(target);
+
+        const QImage canvas = fixture.area.viewport()->grab().toImage();
+        const QPoint topEdgeCenter
+            = target->mapTo(fixture.area.viewport(), QPoint(target->width() / 2, 0));
+
+        constexpr QColor borderColor(0x44, 0x55, 0x66);
+
+        // One row into the 2px ring the fixed code paints 6px (the token's margin) above the
+        // target's top edge.
+        QCOMPARE(canvas.pixelColor(topEdgeCenter.x(), topEdgeCenter.y() - 5), borderColor);
+
+        // Twice the margin above the edge is clear past the halo entirely, so no border ink
+        // belongs here — guards against a fix that grows the rect by more than it should.
+        QVERIFY(canvas.pixelColor(topEdgeCenter.x(), topEdgeCenter.y() - 12) != borderColor);
+    }
 };
 
 QTEST_MAIN(TestSearchHighlightOverlay)
