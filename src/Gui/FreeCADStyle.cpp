@@ -1380,7 +1380,7 @@ void FreeCADStyle::drawPrimitive(
     }
 
     if (element == PE_Frame) {
-        if (const auto* frameOption = qstyleoption_cast<const QStyleOptionFrame*>(option)) {
+        if (qstyleoption_cast<const QStyleOptionFrame*>(option)) {
             drawComponent(painter, option->rect, widget, option);
             return;
         }

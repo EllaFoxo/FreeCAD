@@ -43,7 +43,7 @@ FormControlInternalFontSize: 6px
 
 FormControlIconSpacing: "@Spacing.150"
 
-FormControlPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
+FormControlPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.075)"
 FormControlBorderThickness: 1px
 FormControlBorderRadius: "@BaseRadius.medium"
 FormControlBorderColor: "@BaseBorderColor"
