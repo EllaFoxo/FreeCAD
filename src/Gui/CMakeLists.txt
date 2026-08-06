@@ -1189,7 +1189,7 @@ SET(Widget_CPP_SRCS
     GeometrySelectionGate.cpp
     GeometrySelectorWidget.cpp
     GeometrySelectorPopup.cpp
-    SearchHighlightOverlay.cpp
+    HighlightOverlay.cpp
 )
 if(WIN32)
     SET(Widget_CPP_SRCS
@@ -1229,7 +1229,7 @@ SET(Widget_HPP_SRCS
     GeometrySelectionGate.h
     GeometrySelectorWidget.h
     GeometrySelectorPopup.h
-    SearchHighlightOverlay.h
+    HighlightOverlay.h
 )
 SET(Widget_SRCS
     ${Widget_CPP_SRCS}

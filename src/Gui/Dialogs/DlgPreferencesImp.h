@@ -42,7 +42,7 @@ class QMouseEvent;
 
 namespace Gui
 {
-class SearchHighlightOverlay;
+class HighlightOverlay;
 }
 
 namespace Gui::Dialog
@@ -174,7 +174,7 @@ private:
     // Search state
     QList<SearchResult> m_searchResults;
     QString m_lastSearchText;
-    SearchHighlightOverlay* m_highlightOverlay;
+    HighlightOverlay* m_highlightOverlay;
 };
 
 class PreferencesPageItem: public QStandardItem

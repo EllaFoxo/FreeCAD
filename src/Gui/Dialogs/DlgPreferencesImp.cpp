@@ -64,7 +64,7 @@
 #include <Base/Console.h>
 #include <Base/Exception.h>
 #include <Base/Tools.h>
-#include <Gui/SearchHighlightOverlay.h>
+#include <Gui/HighlightOverlay.h>
 
 #include "Dialogs/DlgPreferencesImp.h"
 #include "ui_DlgPreferences.h"
@@ -1276,7 +1276,7 @@ PreferencesSearchController::PreferencesSearchController(DlgPreferencesImp* pare
     // Get reference to search box from parent dialog's UI
     m_searchBox = m_parentDialog->ui->searchBox;
 
-    m_highlightOverlay = new SearchHighlightOverlay(m_parentDialog->ui->scrollArea);
+    m_highlightOverlay = new HighlightOverlay(m_parentDialog->ui->scrollArea);
 
     // Create the search results popup list
     m_searchResultsList = new QListWidget(m_parentDialog);
