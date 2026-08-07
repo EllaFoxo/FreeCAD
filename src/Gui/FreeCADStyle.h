@@ -622,6 +622,37 @@ protected:
         const QWidget* widget
     ) const;
 
+public:
+    /**
+     * @brief Placement of the parts of a menu item: check indicator, icon, label, accelerator
+     *        and submenu arrow.
+     *
+     * Parts that the item does not have are left as null rects.
+     */
+    struct MenuItemLayout
+    {
+        QRect indicator;
+        QRect icon;
+        QRect text;
+        QRect shortcut;
+        QRect arrow;
+    };
+
+    /**
+     * @brief Lays out the parts of a menu item from the Item token geometry.
+     *
+     * The outer inset comes from Padding and every gap between parts from IconSpacing, so
+     * menus space their columns on the same scale as the rest of the design system.
+     *
+     * Returns nullopt for anything this style does not describe — a widget that is not a
+     * menu, and the scroller and tear-off rows, which keep Qt's own layout.
+     */
+    std::optional<MenuItemLayout> menuItemLayout(
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget
+    ) const;
+
+protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:

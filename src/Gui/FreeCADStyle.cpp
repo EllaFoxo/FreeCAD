@@ -3119,6 +3119,74 @@ QSize FreeCADStyle::menuItemSizeFromContents(
     return size;
 }
 
+std::optional<FreeCADStyle::MenuItemLayout> FreeCADStyle::menuItemLayout(
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    if (!ownsMenuItem(option, widget) || option->menuItemType == QStyleOptionMenuItem::Separator) {
+        return {};
+    }
+
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+    const MenuItemColumns columns = menuItemColumns(option, widget);
+
+    const QRect content = geometry.contentRect(menuItemBoxRect(option->rect, geometry));
+
+    const auto centredAt = [&content](int left, const QSize& size) {
+        const int top = content.top() + ((content.height() - size.height()) / 2);
+        return QRect(QPoint(left, top), size);
+    };
+
+    MenuItemLayout layout;
+    int left = content.left();
+    int right = content.right();
+
+    if (columns.indicator > 0) {
+        const QSize size(
+            proxy()->pixelMetric(PM_IndicatorWidth, option, widget),
+            proxy()->pixelMetric(PM_IndicatorHeight, option, widget)
+        );
+        layout.indicator = centredAt(left, size);
+        left += columns.indicator;
+    }
+
+    if (columns.icon > 0) {
+        const int extent = menuIconSize(widget, option);
+        layout.icon = centredAt(left, {extent, extent});
+        left += columns.icon;
+    }
+
+    if (columns.arrow > 0) {
+        const int extent = columns.arrow - geometry.iconSpacing;
+        layout.arrow = centredAt(right + 1 - extent, {extent, extent});
+        right -= columns.arrow;
+    }
+
+    // Qt reports the accelerator column width it measured menu-wide; a style can neither
+    // change that measurement nor move the column, only put a gap in front of it.
+    if (option->reservedShortcutWidth > 0) {
+        layout.shortcut = QRect(
+            QPoint(right + 1 - option->reservedShortcutWidth, content.top()),
+            QPoint(right, content.bottom())
+        );
+        right -= option->reservedShortcutWidth + columns.shortcutGap;
+    }
+
+    layout.text = QRect(QPoint(left, content.top()), QPoint(right, content.bottom()));
+
+    if (option->direction == Qt::RightToLeft) {
+        layout.indicator = visualRect(option->direction, content, layout.indicator);
+        layout.icon = visualRect(option->direction, content, layout.icon);
+        layout.text = visualRect(option->direction, content, layout.text);
+        layout.shortcut = visualRect(option->direction, content, layout.shortcut);
+        layout.arrow = visualRect(option->direction, content, layout.arrow);
+    }
+
+    return layout;
+}
+
 void FreeCADStyle::drawHeaderSection(
     QPainter* painter,
     const QStyleOptionHeader* option,

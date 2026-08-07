@@ -316,6 +316,103 @@ private Q_SLOTS:
             separatorHeight
         );
     }
+
+    // The guard against the whole class of bug where the size hint and the paint code drift
+    // apart: give the item exactly the width the hint asked for, then check every column
+    // still fits, in order, without overlapping its neighbour.
+    void test_layoutFitsInsideTheWidthTheSizeHintAsked()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::SubMenu;
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        option.maxIconWidth = 20;
+        option.text = QStringLiteral("Export as\tCtrl+Shift+E");
+        option.reservedShortcutWidth = 77;
+
+        const QSize hint = style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu);
+
+        // QMenuPrivate::updateActionRects() widens every row to max_column_width and then
+        // adds tabWidth once, globally. Reproduce that here or the shortcut has no room.
+        option.rect = QRect(0, 0, hint.width() + option.reservedShortcutWidth, hint.height());
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+
+        QVERIFY(!layout->indicator.isNull());
+        QVERIFY(!layout->icon.isNull());
+        QVERIFY(!layout->shortcut.isNull());
+        QVERIFY(!layout->arrow.isNull());
+
+        QVERIFY(layout->indicator.right() < layout->icon.left());
+        QVERIFY(layout->icon.right() < layout->text.left());
+        QVERIFY(layout->text.right() < layout->shortcut.left());
+        QVERIFY(layout->shortcut.right() < layout->arrow.left());
+
+        QVERIFY(option.rect.contains(layout->indicator));
+        QVERIFY(option.rect.contains(layout->arrow));
+
+        // The label keeps at least the width it was measured at, so nothing elides that the
+        // size hint claimed would fit.
+        const QFontMetrics metrics(option.font);
+        const int measured
+            = metrics.boundingRect(QRect(), Qt::TextShowMnemonic, QStringLiteral("Export as")).width();
+        QVERIFY2(
+            layout->text.width() >= measured,
+            qPrintable(
+                QStringLiteral("text rect %1px, label needs %2px").arg(layout->text.width()).arg(measured)
+            )
+        );
+    }
+
+    // Columns a plain item does not have leave null rects, so the caller can test for them
+    // rather than reasoning about zero-width geometry.
+    void test_plainItemReservesNothingButItsLabel()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+        QVERIFY(layout->indicator.isNull());
+        QVERIFY(layout->icon.isNull());
+        QVERIFY(layout->shortcut.isNull());
+        QVERIFY(layout->arrow.isNull());
+        QVERIFY(!layout->text.isNull());
+    }
+
+    // The walk is written left-to-right and mirrored as a block, so right-to-left has to put
+    // the leading column on the right without any per-part special casing.
+    void test_rightToLeftMirrorsTheWholeWalk()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        option.maxIconWidth = 20;
+        option.direction = Qt::RightToLeft;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+
+        // Leading column is now on the right, and the order reverses.
+        QVERIFY(layout->indicator.left() > layout->icon.left());
+        QVERIFY(layout->icon.left() > layout->text.left());
+    }
 };
 
 QTEST_MAIN(TestMenuGeometry)
