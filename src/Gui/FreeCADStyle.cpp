@@ -1743,6 +1743,12 @@ QSize FreeCADStyle::sizeFromContents(
         return geometry.marginBox(size);
     }
 
+    if (type == CT_MenuItem) {
+        if (const auto* menuOption = qstyleoption_cast<const QStyleOptionMenuItem*>(option)) {
+            return menuItemSizeFromContents(menuOption, size, widget);
+        }
+    }
+
     if (type == CT_TabBarTab) {
         return tabBarTabSizeFromContents(option, size, widget);
     }
@@ -2963,6 +2969,154 @@ void FreeCADStyle::drawMenuBarItem(
     painter->drawText(contentRect, textFlags, option->text);
 
     painter->restore();
+}
+
+QString FreeCADStyle::menuItemLabel(const QString& text)
+{
+    const qsizetype separator = text.indexOf(u'\t');
+    return separator >= 0 ? text.left(separator) : text;
+}
+
+QString FreeCADStyle::menuItemShortcut(const QString& text)
+{
+    const qsizetype separator = text.indexOf(u'\t');
+    return separator >= 0 ? text.mid(separator + 1) : QString();
+}
+
+QRect FreeCADStyle::menuItemBoxRect(const QRect& rect, const BoxGeometryDefinition& geometry)
+{
+    // Split so an odd spacing still removes exactly what CT_MenuItem added.
+    const int above = geometry.spacing / 2;
+    return rect.adjusted(0, above, 0, -(geometry.spacing - above));
+}
+
+int FreeCADStyle::menuIconSize(const QWidget* widget, const QStyleOption* option) const
+{
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Root);
+    return resolve<int>(context, StyleProperty::IconSize).value_or(0);
+}
+
+bool FreeCADStyle::ownsMenuItem(const QStyleOptionMenuItem* option, const QWidget* widget) const
+{
+    if (option == nullptr) {
+        return false;
+    }
+    if (contextOf(widget, option, StyleComponentElement::Item).component != StyleComponent::Menu) {
+        return false;
+    }
+
+    switch (option->menuItemType) {
+        case QStyleOptionMenuItem::Normal:
+        case QStyleOptionMenuItem::DefaultItem:
+        case QStyleOptionMenuItem::SubMenu:
+        case QStyleOptionMenuItem::Separator:
+            return true;
+        default:
+            // Scrollers and tear-off handles keep Qt's own painting. Neither is reachable in
+            // FreeCAD today: nothing enables tear-off, and SH_Menu_Scrollable is false, so an
+            // over-tall menu wraps into columns rather than scrolling.
+            return false;
+    }
+}
+
+FreeCADStyle::MenuItemColumns FreeCADStyle::menuItemColumns(
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    const int gap = resolveBoxGeometry(itemContext).iconSpacing;
+
+    MenuItemColumns columns;
+
+    // menuHasCheckableItems is menu-wide: Qt sets it when any visible action is checkable, so
+    // the column is reserved on every row or on none. That is Qt's constraint, not a choice.
+    if (option->menuHasCheckableItems) {
+        columns.indicator = proxy()->pixelMetric(PM_IndicatorWidth, option, widget) + gap;
+    }
+
+    // maxIconWidth is Qt's hardcoded PM_SmallIconSize + 4, so only its zero / non-zero answer
+    // is used — "does this menu have icons". The column itself is MenuIconSize.
+    if (option->maxIconWidth > 0) {
+        columns.icon = menuIconSize(widget, option) + gap;
+    }
+
+    // Reserved per item rather than menu-wide: labels are left-aligned, so the arrow column
+    // only moves the right edge and alignment holds either way, and most FreeCAD context
+    // menus have no submenus at all.
+    if (option->menuItemType == QStyleOptionMenuItem::SubMenu) {
+        const StyleContext arrowContext = contextOf(widget, option, StyleComponentElement::Arrow);
+        columns.arrow = resolve<int>(arrowContext, StyleProperty::Width).value_or(0) + gap;
+    }
+
+    // Only the gap. Qt adds reservedShortcutWidth to max_column_width itself once every item
+    // has been sized; adding it here as well would double-count it.
+    if (option->text.contains(u'\t')) {
+        const StyleContext shortcutContext = contextOf(widget, option, StyleComponentElement::Shortcut);
+        columns.shortcutGap = resolve<int>(shortcutContext, StyleProperty::Spacing).value_or(0);
+    }
+
+    return columns;
+}
+
+QSize FreeCADStyle::menuSeparatorSizeFromContents(
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+
+    // A plain rule contributes no width of its own, so it never widens the menu.
+    if (option->text.isEmpty()) {
+        const int height = resolve<int>(context, StyleProperty::Height).value_or(0);
+        const QSize margins = geometry.marginBox({0, 0});
+        return {margins.width(), qMax(margins.height(), height)};
+    }
+
+    const QFontMetrics metrics(option->font);
+    return geometry.marginBox({metrics.horizontalAdvance(option->text), metrics.height()});
+}
+
+QSize FreeCADStyle::menuItemSizeFromContents(
+    const QStyleOptionMenuItem* option,
+    const QSize& contentsSize,
+    const QWidget* widget
+) const
+{
+    if (!ownsMenuItem(option, widget)) {
+        return contentsSize;
+    }
+
+    if (option->menuItemType == QStyleOptionMenuItem::Separator) {
+        return menuSeparatorSizeFromContents(option, widget);
+    }
+
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+    const MenuItemColumns columns = menuItemColumns(option, widget);
+
+    // Qt measured the label with the menu's own font and Qt::TextShowMnemonic, which is wrong
+    // for an action carrying its own font and for the mnemonic setting actually in force.
+    // Remeasuring here with the font and flags the label is drawn with keeps the hint and the
+    // paint in agreement.
+    const QFontMetrics metrics(option->font);
+    const int textWidth
+        = metrics
+              .boundingRect(QRect(), mnemonicTextFlags(option, widget), menuItemLabel(option->text))
+              .width();
+
+    int contentHeight = metrics.height();
+    if (option->maxIconWidth > 0) {
+        contentHeight = qMax(contentHeight, menuIconSize(widget, option));
+    }
+    if (option->menuHasCheckableItems) {
+        contentHeight = qMax(contentHeight, proxy()->pixelMetric(PM_IndicatorHeight, option, widget));
+    }
+
+    QSize size = geometry.marginBox({textWidth + columns.total(), contentHeight});
+    size.rheight() += geometry.spacing;
+    return size;
 }
 
 void FreeCADStyle::drawHeaderSection(

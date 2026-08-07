@@ -936,6 +936,51 @@ private:
         const QWidget* widget
     ) const;
 
+    /**
+     * @brief Widths of the fixed columns of a menu item, each including its trailing gap.
+     *
+     * A column is zero when the item does not reserve it. The size hint sums these and the
+     * layout places them, so the two can never disagree about how much room a column takes.
+     */
+    struct MenuItemColumns
+    {
+        int indicator = 0;
+        int icon = 0;
+        int arrow = 0;
+        int shortcutGap = 0;
+
+        int total() const
+        {
+            return indicator + icon + arrow + shortcutGap;
+        }
+    };
+
+    MenuItemColumns menuItemColumns(const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
+    /** @brief Whether @p option describes a menu item this style paints and sizes. */
+    bool ownsMenuItem(const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
+    int menuIconSize(const QWidget* widget, const QStyleOption* option) const;
+
+    /** @brief The label of a menu item, without the accelerator Qt appends after a tab. */
+    static QString menuItemLabel(const QString& text);
+
+    /** @brief The accelerator of a menu item, empty when it has none. */
+    static QString menuItemShortcut(const QString& text);
+
+    /**
+     * @brief The rect a menu item's box occupies, with the reserved inter-item gap removed.
+     */
+    static QRect menuItemBoxRect(const QRect& rect, const BoxGeometryDefinition& geometry);
+
+    QSize menuItemSizeFromContents(
+        const QStyleOptionMenuItem* option,
+        const QSize& contentsSize,
+        const QWidget* widget
+    ) const;
+
+    QSize menuSeparatorSizeFromContents(const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
     /** @brief Whether @p option describes a cell laid out by itemViewLayout(). */
     bool ownsItemViewLayout(const QStyleOptionViewItem* option, const QWidget* widget) const;
 

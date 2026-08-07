@@ -221,6 +221,101 @@ private Q_SLOTS:
 
         QCOMPARE(canvas.pixelColor(60, 30), QColor(Qt::magenta));
     }
+
+    // Each column is reserved only under its own condition, and costs exactly its width plus
+    // one MenuItemIconSpacing gap. Deltas keep this independent of the test font.
+    void test_eachColumnCostsItsWidthPlusOneGap()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        const QStyleOptionMenuItem plain = plainItem(menu);
+        const auto widthOf = [&style, &menu](const QStyleOptionMenuItem& option) {
+            return style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu).width();
+        };
+        const int base = widthOf(plain);
+
+        QStyleOptionMenuItem checkable = plain;
+        checkable.menuHasCheckableItems = true;
+        QCOMPARE(widthOf(checkable) - base, indicatorSize + iconSpacing);
+
+        // maxIconWidth is Qt's hardcoded PM_SmallIconSize + 4; only its non-zero answer is
+        // used, and the column itself comes from MenuIconSize.
+        QStyleOptionMenuItem withIcon = plain;
+        withIcon.maxIconWidth = 20;
+        QCOMPARE(widthOf(withIcon) - base, iconSize + iconSpacing);
+
+        QStyleOptionMenuItem submenu = plain;
+        submenu.menuItemType = QStyleOptionMenuItem::SubMenu;
+        QCOMPARE(widthOf(submenu) - base, arrowWidth + iconSpacing);
+    }
+
+    // Qt adds reservedShortcutWidth to max_column_width itself, after sizing every item.
+    // Adding it here too is what makes stock Fusion menus so wide; only the gap is ours.
+    void test_shortcutContributesItsGapButNotItsWidth()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem plain = plainItem(menu);
+        const int base = style.sizeFromContents(QStyle::CT_MenuItem, &plain, QSize(), &menu).width();
+
+        QStyleOptionMenuItem withShortcut = plain;
+        withShortcut.text = QStringLiteral("Open\tCtrl+O");
+        withShortcut.reservedShortcutWidth = 77;
+        const int shortcutWidth
+            = style.sizeFromContents(QStyle::CT_MenuItem, &withShortcut, QSize(), &menu).width();
+
+        // The label is the same in both, so the whole delta is the gap — never the 77px.
+        QCOMPARE(shortcutWidth - base, shortcutSpacing);
+    }
+
+    // Qt stacks action rects with a bare y += height() and has no spacing metric, so the gap
+    // has to be built into the row height. It is split half above and half below because
+    // CT_MenuItem runs before Qt positions anything and cannot tell a first row from any other.
+    void test_itemSpacingAddsToTheRowHeight()  // NOLINT
+    {
+        QMenu menu;
+        QStyleOptionMenuItem option = plainItem(menu);
+
+        const int tight = [&] {
+            Gui::FreeCADStyle freecadStyle;
+            QStyle& style = freecadStyle;
+            return style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu).height();
+        }();
+
+        const auto guard = overrideToken("MenuItemSpacing", "6px");
+
+        // A fresh style: FreeCADStyle caches resolved box geometry per instance, and only
+        // clearTokenCache() drops it — which fires from eventFilter() on ThemeReloadEvent,
+        // an event a bare style instance like this one never receives. Reusing the instance
+        // above would measure the pre-override geometry straight out of its cache.
+        Gui::FreeCADStyle spacedFreecadStyle;
+        QStyle& spacedStyle = spacedFreecadStyle;
+        const int spaced
+            = spacedStyle.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu).height();
+
+        QCOMPARE(spaced - tight, 6);
+    }
+
+    void test_plainSeparatorUsesItsOwnHeight()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::Separator;
+        option.text = QString();
+
+        // Qt seeds separators at {2,2}; the style replaces that outright.
+        QCOMPARE(
+            style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(2, 2), &menu).height(),
+            separatorHeight
+        );
+    }
 };
 
 QTEST_MAIN(TestMenuGeometry)
