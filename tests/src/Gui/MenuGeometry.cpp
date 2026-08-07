@@ -30,11 +30,13 @@ constexpr int arrowWidth = 10;
 constexpr int shortcutSpacing = 20;
 constexpr int separatorHeight = 9;
 
-// menuItemLayout is protected on FreeCADStyle; a using-declaration republishes it so the
-// column walk can be exercised without going through a live menu.
+// menuItemLayout and menuItemDrawnLabel are protected on FreeCADStyle; using-declarations
+// republish them so the column walk and the label-eliding decision can be exercised without
+// going through a live menu or painting into an image.
 class ProbeStyle: public Gui::FreeCADStyle
 {
 public:
+    using Gui::FreeCADStyle::menuItemDrawnLabel;
     using Gui::FreeCADStyle::menuItemLayout;
 };
 
@@ -79,6 +81,10 @@ public:
                     {.name = "MenuSeparatorPadding",
                      .value = "padding(horizontal: 4px, vertical: 2px)"},
                     {.name = "MenuSeparatorTextColor", .value = "#c0c0c0"},
+                    // Deliberately not 4px, the hardcoded fallback BoxGeometryDefinition uses
+                    // when this token fails to resolve — so a regression back to the silent
+                    // fallback would show up as a wrong gap rather than an accidental match.
+                    {.name = "MenuSeparatorIconSpacing", .value = "6px"},
 
                     {.name = "MenuArrowWidth", .value = "10px"},
                     {.name = "MenuArrowIconColor", .value = "#ffffff"},
@@ -375,6 +381,42 @@ private Q_SLOTS:
         );
     }
 
+    // Two-measurement trap regression guard: menuItemSizeFromContents() measures a label with
+    // mnemonicTextFlags(), which does not count '&' as a glyph. If drawMenuItemText() measured
+    // eliding differently, the widest item in a mnemonic-heavy menu — exactly the one
+    // CT_MenuItem sized to fit the label with no slack to spare — would get a spurious
+    // ellipsis. Reproduces the width CT_MenuItem actually granted (via menuItemLayout(), not a
+    // hand-picked rect) and asserts the label survives untouched.
+    void test_mnemonicLabelIsNotElidedWhenItFitsTheSizeHint()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        const QString text = QStringLiteral("&Open Recent");
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.text = text;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+
+        // mnemonicTextFlags() is private; reproduced here from the public styleHint() API so
+        // the test measures with the same flags the real draw call uses, without needing to
+        // expose it.
+        int textFlags = Qt::TextShowMnemonic;
+        if (!style.styleHint(QStyle::SH_UnderlineShortcut, &option, &menu)) {
+            textFlags |= Qt::TextHideMnemonic;
+        }
+
+        const QFontMetrics metrics(option.font);
+        const QString drawnLabel
+            = ProbeStyle::menuItemDrawnLabel(metrics, textFlags, text, layout->text.width());
+
+        QCOMPARE(drawnLabel, text);
+    }
+
     // Columns a plain item does not have leave null rects, so the caller can test for them
     // rather than reasoning about zero-width geometry.
     void test_plainItemReservesNothingButItsLabel()  // NOLINT
@@ -420,11 +462,13 @@ private Q_SLOTS:
         QVERIFY(layout->icon.left() > layout->text.left());
     }
 
-    // The hovered background is the one state the fixture can see without a font: paint an
-    // item into an image and sample the middle of its box. The label is blanked out — with
-    // "Open" left in place, CT_MenuItem sizes the box exactly to the text, so the label fills
-    // almost the whole row and the sampled centre pixel lands on glyph ink rather than the
-    // background, making the outcome depend on the platform's default font.
+    // The hovered background is the one state the fixture can see without a font: paint a real
+    // "Open" item into an image and sample the far left of the box, inside the padding, before
+    // the label starts — the same pixel and rationale as test_restingItemPaintsNoBackground, so
+    // the two differ only in State_Selected and isolate that one axis. Sampling behind a real
+    // label (rather than blanking the text) also exercises the stronger claim that the
+    // highlight spans the whole row, including the padding, not just wherever layout->text
+    // happens to land.
     void test_hoveredItemPaintsItsStateBackground()  // NOLINT
     {
         Gui::FreeCADStyle freecadStyle;
@@ -432,7 +476,6 @@ private Q_SLOTS:
         QMenu menu;
 
         QStyleOptionMenuItem option = plainItem(menu);
-        option.text = QString();
         option.rect
             = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
         // QMenu marks the row under the cursor with State_Selected, not State_MouseOver.
@@ -445,7 +488,7 @@ private Q_SLOTS:
         style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
         painter.end();
 
-        QCOMPARE(canvas.pixelColor(option.rect.center()), QColor(QStringLiteral("#ff0000")));
+        QCOMPARE(canvas.pixelColor(1, option.rect.center().y()), QColor(QStringLiteral("#ff0000")));
     }
 
     // At rest no background token resolves, so the row must stay transparent and let the

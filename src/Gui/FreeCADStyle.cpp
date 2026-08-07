@@ -3007,6 +3007,23 @@ void FreeCADStyle::drawMenuItemIndicator(
     proxy()->drawPrimitive(primitive, &indicatorOption, painter, widget);
 }
 
+QString FreeCADStyle::menuItemDrawnLabel(
+    const QFontMetrics& metrics,
+    int textFlags,
+    const QString& label,
+    int availableWidth
+)
+{
+    // Two-measurement trap: menuItemSizeFromContents() measures the label with these same
+    // mnemonic flags, which do not count the '&' as a glyph. elidedText() takes no flags and
+    // would count it, eliding a label CT_MenuItem already sized to fit exactly. Elide only
+    // when the mnemonic-aware measurement itself overflows the available width.
+    if (metrics.boundingRect(QRect(), textFlags, label).width() <= availableWidth) {
+        return label;
+    }
+    return metrics.elidedText(label, Qt::ElideRight, availableWidth);
+}
+
 void FreeCADStyle::drawMenuItemText(
     QPainter* painter,
     const QStyleOptionMenuItem* option,
@@ -3027,11 +3044,13 @@ void FreeCADStyle::drawMenuItemText(
         else {
             painter->setPen(option->palette.text().color());
         }
+        const int textFlags = mnemonicTextFlags(option, widget);
         const QFontMetrics metrics(option->font);
+        const QString drawnLabel = menuItemDrawnLabel(metrics, textFlags, label, layout.text.width());
         painter->drawText(
             layout.text,
-            Qt::AlignLeft | Qt::AlignVCenter | mnemonicTextFlags(option, widget),
-            metrics.elidedText(label, Qt::ElideRight, layout.text.width())
+            visualAlignment(option->direction, Qt::AlignLeft) | Qt::AlignVCenter | textFlags,
+            drawnLabel
         );
     }
 
@@ -3042,7 +3061,11 @@ void FreeCADStyle::drawMenuItemText(
             painter->setPen(color->asValue<QColor>());
         }
         // The accelerator is literal text; mnemonic markers do not apply to it.
-        painter->drawText(layout.shortcut, Qt::AlignRight | Qt::AlignVCenter, shortcut);
+        painter->drawText(
+            layout.shortcut,
+            visualAlignment(option->direction, Qt::AlignRight) | Qt::AlignVCenter,
+            shortcut
+        );
     }
 
     painter->restore();

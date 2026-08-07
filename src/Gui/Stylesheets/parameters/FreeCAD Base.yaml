@@ -529,14 +529,16 @@ MenuShortcutTextColor: "@BaseDisabledTextColor"
 
 # ── Menu Separator / Section ─────────────────────────────────────────────────
 # One element covers both a plain rule and an addSection() header; the header additionally
-# uses MenuSeparatorPadding and MenuSeparatorTextColor. Set MenuSeparatorBorderThickness to
-# reset() to drop the rule entirely.
+# uses MenuSeparatorPadding, MenuSeparatorTextColor and MenuSeparatorIconSpacing (the gap
+# between the section label and the rule that fills the rest of the row). Set
+# MenuSeparatorBorderThickness to reset() to drop the rule entirely.
 MenuSeparatorHeight: "@Spacing.200"
 MenuSeparatorMargin: "padding(horizontal: @Spacing.100)"
 MenuSeparatorBorderColor: "@SeparatorColor"
 MenuSeparatorBorderThickness: "@SeparatorThickness"
 MenuSeparatorPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
 MenuSeparatorTextColor: "@BaseDisabledTextColor"
+MenuSeparatorIconSpacing: "@Spacing.100"
 
 # ── Submenu Arrow ────────────────────────────────────────────────────────────
 MenuArrowWidth: 8px

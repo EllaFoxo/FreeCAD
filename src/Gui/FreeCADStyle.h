@@ -651,6 +651,21 @@ protected:
         const QWidget* widget
     ) const;
 
+    /**
+     * @brief The exact label string CE_MenuItem draws for a menu item.
+     *
+     * Sizing (menuItemSizeFromContents()) and this method must measure @p label the same
+     * way — both take @p textFlags — or a label CT_MenuItem already sized to fit gets elided
+     * anyway because elidedText() has no flags parameter of its own and would count a
+     * mnemonic '&' as a glyph that the flagged measurement does not.
+     */
+    static QString menuItemDrawnLabel(
+        const QFontMetrics& metrics,
+        int textFlags,
+        const QString& label,
+        int availableWidth
+    );
+
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
