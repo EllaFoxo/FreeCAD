@@ -285,7 +285,7 @@ GeometrySelectorItemSpacing: "@Spacing.050"
 GeometrySelectorItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.050)"
 
 # ── List Item ──────────────────────────────────────────────────────────────
-ListItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
+ListItemPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
 ListItemIconSpacing: "@Spacing.150"
 
 # ── List Row ───────────────────────────────────────────────────────────────
