@@ -1403,6 +1403,16 @@ void FreeCADStyle::drawPrimitive(
         return;
     }
 
+    if (element == PE_PanelMenu) {
+        // A menu embedded in another widget rather than shown as its own popup window has no
+        // surface of its own; painting one would put an opaque slab inside its host.
+        if (widget && !widget->isWindow()) {
+            return;
+        }
+        drawComponent(painter, option->rect, widget, option);
+        return;
+    }
+
     if (element == PE_PanelLineEdit) {
         // Qt sets lineWidth = 0 on the inner QLineEdit embedded inside QAbstractSpinBox
         // (via setFrame(false)). Respect that: the spinbox outer frame is drawn separately
@@ -2473,6 +2483,11 @@ void FreeCADStyle::drawControl(
     if (element == CE_ToolBar) {
         const StyleContext context = contextOf(widget, option);
         drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
+        return;
+    }
+
+    if (element == CE_MenuEmptyArea) {
+        // PE_PanelMenu already painted the whole popup surface, this region included.
         return;
     }
 

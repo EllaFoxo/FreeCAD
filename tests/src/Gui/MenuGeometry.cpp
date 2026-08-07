@@ -171,6 +171,56 @@ private Q_SLOTS:
             fusion->pixelMetric(QStyle::PM_MenuVMargin, nullptr, &plain)
         );
     }
+
+    // PE_PanelMenu is drawn first, over the whole widget rect and unclipped, so it is where
+    // the surface belongs. CE_MenuEmptyArea then runs last over whatever region the items
+    // left and must not repaint anything.
+    void test_panelMenuPaintsTheWholePopupSurface()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+        menu.resize(120, 60);
+
+        QImage canvas(menu.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QStyleOption option;
+        option.initFrom(&menu);
+        option.rect = QRect(QPoint(), menu.size());
+
+        QPainter painter(&canvas);
+        style.drawPrimitive(QStyle::PE_PanelMenu, &option, &painter, &menu);
+        painter.end();
+
+        // Centre is the background token; the outermost pixel is the border token.
+        QCOMPARE(canvas.pixelColor(60, 30), QColor(QStringLiteral("#202020")));
+        QCOMPARE(canvas.pixelColor(0, 0), QColor(QStringLiteral("#000000")));
+    }
+
+    // REGRESSION GUARD, not a red-first test: Fusion's CE_MenuEmptyArea is already a no-op,
+    // so this passes before the handler exists and cannot be made to fail first. It is here
+    // to lock in that the empty area never paints over the surface PE_PanelMenu now owns.
+    void test_emptyAreaLeavesThePanelUntouched()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+        menu.resize(120, 60);
+
+        QImage canvas(menu.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::EmptyArea;
+        option.rect = QRect(QPoint(), menu.size());
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuEmptyArea, &option, &painter, &menu);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(60, 30), QColor(Qt::magenta));
+    }
 };
 
 QTEST_MAIN(TestMenuGeometry)
