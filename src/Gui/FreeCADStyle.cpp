@@ -2514,6 +2514,15 @@ void FreeCADStyle::drawControl(
         }
     }
 
+    if (element == CE_MenuItem) {
+        if (const auto* menuOption = qstyleoption_cast<const QStyleOptionMenuItem*>(option)) {
+            if (ownsMenuItem(menuOption, widget)) {
+                drawMenuItem(painter, menuOption, widget);
+                return;
+            }
+        }
+    }
+
     if (element == CE_ItemViewItem) {
         if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
             // Patch HighlightedText so QCommonStyle uses the token-defined text color for
@@ -2969,6 +2978,183 @@ void FreeCADStyle::drawMenuBarItem(
     painter->drawText(contentRect, textFlags, option->text);
 
     painter->restore();
+}
+
+void FreeCADStyle::drawMenuItemIndicator(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget,
+    const QRect& rect
+) const
+{
+    if (option->checkType == QStyleOptionMenuItem::NotCheckable) {
+        return;
+    }
+
+    // Going through drawPrimitive rather than painting a bespoke glyph means a checkable menu
+    // item resolves against the same CheckBox and RadioButton tokens as every other one.
+    QStyleOptionButton indicatorOption;
+    indicatorOption.rect = rect;
+    indicatorOption.palette = option->palette;
+    indicatorOption.direction = option->direction;
+    indicatorOption.state = option->state & ~(State_On | State_Off | State_Sunken);
+    indicatorOption.state |= option->checked ? State_On : State_Off;
+
+    const PrimitiveElement primitive = option->checkType == QStyleOptionMenuItem::Exclusive
+        ? PE_IndicatorRadioButton
+        : PE_IndicatorCheckBox;
+
+    proxy()->drawPrimitive(primitive, &indicatorOption, painter, widget);
+}
+
+void FreeCADStyle::drawMenuItemText(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget,
+    const MenuItemLayout& layout
+) const
+{
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+
+    painter->save();
+    painter->setFont(option->font);
+
+    const QString label = menuItemLabel(option->text);
+    if (!label.isEmpty()) {
+        if (const auto color = resolve<Base::Color>(itemContext, StyleProperty::TextColor)) {
+            painter->setPen(color->asValue<QColor>());
+        }
+        else {
+            painter->setPen(option->palette.text().color());
+        }
+        const QFontMetrics metrics(option->font);
+        painter->drawText(
+            layout.text,
+            Qt::AlignLeft | Qt::AlignVCenter | mnemonicTextFlags(option, widget),
+            metrics.elidedText(label, Qt::ElideRight, layout.text.width())
+        );
+    }
+
+    const QString shortcut = menuItemShortcut(option->text);
+    if (!shortcut.isEmpty() && !layout.shortcut.isNull()) {
+        const StyleContext shortcutContext = contextOf(widget, option, StyleComponentElement::Shortcut);
+        if (const auto color = resolve<Base::Color>(shortcutContext, StyleProperty::TextColor)) {
+            painter->setPen(color->asValue<QColor>());
+        }
+        // The accelerator is literal text; mnemonic markers do not apply to it.
+        painter->drawText(layout.shortcut, Qt::AlignRight | Qt::AlignVCenter, shortcut);
+    }
+
+    painter->restore();
+}
+
+void FreeCADStyle::drawMenuItem(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    if (option->menuItemType == QStyleOptionMenuItem::Separator) {
+        drawMenuSeparator(painter, option, widget);
+        return;
+    }
+
+    const auto layout = menuItemLayout(option, widget);
+    if (!layout) {
+        return;
+    }
+
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(itemContext);
+
+    paintBox(painter, menuItemBoxRect(option->rect, geometry), itemContext);
+
+    if (!layout->indicator.isNull()) {
+        drawMenuItemIndicator(painter, option, widget, layout->indicator);
+    }
+
+    if (!layout->icon.isNull() && !option->icon.isNull()) {
+        const QPixmap pixmap
+            = renderStyledIcon(painter, option->icon, layout->icon.size(), option, itemContext);
+        drawItemPixmap(painter, layout->icon, Qt::AlignCenter, pixmap);
+    }
+
+    drawMenuItemText(painter, option, widget, *layout);
+
+    if (!layout->arrow.isNull()) {
+        const StyleContext arrowContext = contextOf(widget, option, StyleComponentElement::Arrow);
+        const Qt::ArrowType direction = option->direction == Qt::RightToLeft ? Qt::LeftArrow
+                                                                             : Qt::RightArrow;
+        drawChevronArrow(
+            painter,
+            layout->arrow,
+            direction,
+            resolveIconColor(arrowContext, option->palette)
+        );
+    }
+}
+
+QRect FreeCADStyle::drawMenuSectionLabel(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget,
+    const QRect& ruleRect
+) const
+{
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+    const QRect content = geometry.contentRect(option->rect);
+
+    painter->save();
+    painter->setFont(option->font);
+    if (const auto color = resolve<Base::Color>(context, StyleProperty::TextColor)) {
+        painter->setPen(color->asValue<QColor>());
+    }
+    painter->drawText(
+        content,
+        visualAlignment(option->direction, Qt::AlignLeft) | Qt::AlignVCenter | Qt::TextSingleLine,
+        option->text
+    );
+    painter->restore();
+
+    // The rule takes what the label leaves, so a section reads as a titled divider.
+    const QFontMetrics metrics(option->font);
+    const int labelWidth = metrics.horizontalAdvance(option->text) + geometry.iconSpacing;
+
+    QRect remaining = ruleRect;
+    if (option->direction == Qt::RightToLeft) {
+        remaining.setRight(content.right() - labelWidth);
+    }
+    else {
+        remaining.setLeft(content.left() + labelWidth);
+    }
+    return remaining;
+}
+
+void FreeCADStyle::drawMenuSeparator(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
+    const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+    const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
+
+    QRect ruleRect = geometry.borderRect(option->rect);
+
+    if (!option->text.isEmpty()) {
+        ruleRect = drawMenuSectionLabel(painter, option, widget, ruleRect);
+    }
+
+    const int thickness = static_cast<int>(boxStyle.borderThickness.value_or(QMarginsF()).top());
+    const auto color = resolve<Base::Color>(context, StyleProperty::BorderColor);
+    if (thickness <= 0 || !color || ruleRect.width() <= 0) {
+        return;
+    }
+
+    const QRect line(ruleRect.left(), ruleRect.center().y() - (thickness / 2), ruleRect.width(), thickness);
+    painter->fillRect(line, color->asValue<QColor>());
 }
 
 QString FreeCADStyle::menuItemLabel(const QString& text)

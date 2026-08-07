@@ -769,6 +769,38 @@ private:
 
     void drawMenuBarItem(QPainter* painter, const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
+    void drawMenuItem(QPainter* painter, const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
+    void drawMenuItemIndicator(
+        QPainter* painter,
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget,
+        const QRect& rect
+    ) const;
+
+    void drawMenuItemText(
+        QPainter* painter,
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget,
+        const MenuItemLayout& layout
+    ) const;
+
+    void drawMenuSeparator(
+        QPainter* painter,
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget
+    ) const;
+
+    /**
+     * @brief Draws the label of an addSection() header and returns the rect the rule may use.
+     */
+    QRect drawMenuSectionLabel(
+        QPainter* painter,
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget,
+        const QRect& ruleRect
+    ) const;
+
     void drawHeaderSection(QPainter* painter, const QStyleOptionHeader* option, const QWidget* widget) const;
 
     void drawTabCloseButton(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;

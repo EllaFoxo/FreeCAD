@@ -23,8 +23,6 @@
 // collide — a wrong column therefore fails loudly instead of coincidentally matching.
 constexpr int menuBorder = 1;
 constexpr int menuPadding = 4;
-constexpr int itemPaddingH = 6;
-constexpr int itemPaddingV = 3;
 constexpr int iconSpacing = 8;
 constexpr int iconSize = 16;
 constexpr int indicatorSize = 14;
@@ -420,6 +418,111 @@ private Q_SLOTS:
         // Leading column is now on the right, and the order reverses.
         QVERIFY(layout->indicator.left() > layout->icon.left());
         QVERIFY(layout->icon.left() > layout->text.left());
+    }
+
+    // The hovered background is the one state the fixture can see without a font: paint an
+    // item into an image and sample the middle of its box. The label is blanked out — with
+    // "Open" left in place, CT_MenuItem sizes the box exactly to the text, so the label fills
+    // almost the whole row and the sampled centre pixel lands on glyph ink rather than the
+    // background, making the outcome depend on the platform's default font.
+    void test_hoveredItemPaintsItsStateBackground()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.text = QString();
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+        // QMenu marks the row under the cursor with State_Selected, not State_MouseOver.
+        option.state |= QStyle::State_Selected;
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(option.rect.center()), QColor(QStringLiteral("#ff0000")));
+    }
+
+    // At rest no background token resolves, so the row must stay transparent and let the
+    // popup surface through.
+    void test_restingItemPaintsNoBackground()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        // The far left of the box is inside the padding, before the label starts.
+        QCOMPARE(canvas.pixelColor(1, option.rect.center().y()), QColor(Qt::magenta));
+    }
+
+    void test_plainSeparatorPaintsItsRule()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::Separator;
+        option.text = QString();
+        option.rect = QRect(0, 0, 120, separatorHeight);
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        // The rule sits on the vertical centre, inset horizontally by MenuSeparatorMargin.
+        QCOMPARE(canvas.pixelColor(60, separatorHeight / 2), QColor(QStringLiteral("#00ff00")));
+        // Outside the margin it stays clear.
+        QCOMPARE(canvas.pixelColor(0, separatorHeight / 2), QColor(Qt::magenta));
+    }
+
+    // A section is a separator carrying text. The rule fills what the label leaves, so the row
+    // reads as a titled divider rather than a label floating on its own.
+    void test_sectionHeaderKeepsItsLabelClearOfTheRule()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::Separator;
+        option.text = QStringLiteral("Visibility");
+
+        const QSize hint = style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(2, 2), &menu);
+        // Wider than the hint, so there is room left over for the rule.
+        option.rect = QRect(0, 0, hint.width() + 80, hint.height());
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        // Far right is past the label, so the rule is there.
+        QCOMPARE(
+            canvas.pixelColor(option.rect.width() - 6, option.rect.height() / 2),
+            QColor(QStringLiteral("#00ff00"))
+        );
     }
 };
 
