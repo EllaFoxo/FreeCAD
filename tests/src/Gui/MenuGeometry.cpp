@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <memory>
 #include <string>
 
 #include <QApplication>
@@ -8,6 +9,7 @@
 #include <QPainter>
 #include <QScopeGuard>
 #include <QStyle>
+#include <QStyleFactory>
 #include <QStyleOptionMenuItem>
 #include <QTest>
 
@@ -154,9 +156,19 @@ private Q_SLOTS:
         QStyle& style = freecadStyle;
         QWidget plain;
 
+        // FreeCADStyle proxies Fusion, so Fusion is the baseline a non-menu widget must
+        // still see — not QApplication::style(), which a platform theme plugin (qt5ct,
+        // qt6ct) replaces, making the comparison depend on the developer's environment.
+        const std::unique_ptr<QStyle> fusion(QStyleFactory::create(QStringLiteral("Fusion")));
+        QVERIFY(fusion != nullptr);
+
         QCOMPARE(
             style.pixelMetric(QStyle::PM_MenuHMargin, nullptr, &plain),
-            QApplication::style()->pixelMetric(QStyle::PM_MenuHMargin, nullptr, &plain)
+            fusion->pixelMetric(QStyle::PM_MenuHMargin, nullptr, &plain)
+        );
+        QCOMPARE(
+            style.pixelMetric(QStyle::PM_MenuVMargin, nullptr, &plain),
+            fusion->pixelMetric(QStyle::PM_MenuVMargin, nullptr, &plain)
         );
     }
 };
