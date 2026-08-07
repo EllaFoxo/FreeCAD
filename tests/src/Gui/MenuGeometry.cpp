@@ -32,6 +32,14 @@ constexpr int arrowWidth = 10;
 constexpr int shortcutSpacing = 20;
 constexpr int separatorHeight = 9;
 
+// menuItemLayout is protected on FreeCADStyle; a using-declaration republishes it so the
+// column walk can be exercised without going through a live menu.
+class ProbeStyle: public Gui::FreeCADStyle
+{
+public:
+    using Gui::FreeCADStyle::menuItemLayout;
+};
+
 class TestMenuGeometry: public QObject
 {
     Q_OBJECT
@@ -322,7 +330,7 @@ private Q_SLOTS:
     // still fits, in order, without overlapping its neighbour.
     void test_layoutFitsInsideTheWidthTheSizeHintAsked()  // NOLINT
     {
-        Gui::FreeCADStyle freecadStyle;
+        ProbeStyle freecadStyle;
         QStyle& style = freecadStyle;
         QMenu menu;
 
@@ -373,7 +381,7 @@ private Q_SLOTS:
     // rather than reasoning about zero-width geometry.
     void test_plainItemReservesNothingButItsLabel()  // NOLINT
     {
-        Gui::FreeCADStyle freecadStyle;
+        ProbeStyle freecadStyle;
         QStyle& style = freecadStyle;
         QMenu menu;
 
@@ -394,7 +402,7 @@ private Q_SLOTS:
     // the leading column on the right without any per-part special casing.
     void test_rightToLeftMirrorsTheWholeWalk()  // NOLINT
     {
-        Gui::FreeCADStyle freecadStyle;
+        ProbeStyle freecadStyle;
         QStyle& style = freecadStyle;
         QMenu menu;
 

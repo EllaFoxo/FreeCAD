@@ -622,7 +622,6 @@ protected:
         const QWidget* widget
     ) const;
 
-public:
     /**
      * @brief Placement of the parts of a menu item: check indicator, icon, label, accelerator
      *        and submenu arrow.
@@ -652,7 +651,6 @@ public:
         const QWidget* widget
     ) const;
 
-protected:
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
