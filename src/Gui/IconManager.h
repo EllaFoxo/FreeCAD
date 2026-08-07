@@ -33,6 +33,8 @@
 #include <QSize>
 #include <QString>
 
+#include <FCGlobal.h>
+
 
 class QDomElement;
 namespace Gui
@@ -54,7 +56,7 @@ struct IconRenderCacheKey
     }
 };
 
-class IconManager
+class GuiExport IconManager
 {
 public:
     struct IconMeta
