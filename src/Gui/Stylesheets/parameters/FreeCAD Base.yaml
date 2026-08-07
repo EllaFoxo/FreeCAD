@@ -490,6 +490,58 @@ MenuBarItemPressedTextColor: "@BaseTextColor"
 
 MenuBarItemDisabledTextColor: "@BaseDisabledTextColor"
 
+# ── Menu ─────────────────────────────────────────────────────────────────────
+# The popup is a top-level window, so it stays square: a painted radius would leave the
+# window's own square corners showing through. Rounding it later needs only
+# WA_TranslucentBackground in polish(), since PE_PanelMenu already owns the whole surface.
+# MenuPadding is the pill inset — with MenuBorderThickness it drives PM_MenuHMargin and
+# PM_MenuVMargin, which is the only way Qt lets a style inset menu items: QMenu::paintEvent
+# clips every CE_MenuItem call to that item's own action rect.
+MenuBackground: "@ListBackground"
+MenuBorderColor: "@ListBorderColor"
+MenuBorderThickness: "@ListBorderThickness"
+MenuBorderRadius: 0px
+MenuPadding: "padding(@Spacing.100)"
+MenuIconSize: 16px
+MenuOverlap: 0px
+
+# ── Menu Item ────────────────────────────────────────────────────────────────
+# MenuItemIconSpacing is every inter-column gap (indicator↔icon, icon↔text, text↔arrow),
+# matching how ListItemIconSpacing is used by itemViewLayout().
+# MenuItemSpacing is the gap between consecutive items; MenuItemMargin insets the highlight
+# box beyond what MenuPadding already does. The two are independent knobs.
+# There are deliberately no MenuIndicator* tokens: contextOf() routes the Indicator element
+# to the CheckBox component, so the check column resolves against CheckBox*/RadioButton*.
+MenuItemPadding: "@ListItemPadding"
+MenuItemIconSpacing: "@ListItemIconSpacing"
+MenuItemSpacing: "@Spacing.000"
+MenuItemMargin: "padding(0px)"
+MenuItemTextColor: "@BaseTextColor"
+MenuItemHoveredBackground: "@ListRowHoveredBackground"
+MenuItemPressedBackground: "@ListRowPressedBackground"
+MenuItemDisabledTextColor: "@ListDisabledTextColor"
+
+# ── Menu Shortcut ────────────────────────────────────────────────────────────
+# Only the gap is ours: Qt measures the accelerator column itself and adds its width to
+# every row after sizing them, reported back as QStyleOptionMenuItem::reservedShortcutWidth.
+MenuShortcutSpacing: "@Spacing.400"
+MenuShortcutTextColor: "@BaseDisabledTextColor"
+
+# ── Menu Separator / Section ─────────────────────────────────────────────────
+# One element covers both a plain rule and an addSection() header; the header additionally
+# uses MenuSeparatorPadding and MenuSeparatorTextColor. Set MenuSeparatorBorderThickness to
+# reset() to drop the rule entirely.
+MenuSeparatorHeight: "@Spacing.200"
+MenuSeparatorMargin: "padding(horizontal: @Spacing.100)"
+MenuSeparatorBorderColor: "@SeparatorColor"
+MenuSeparatorBorderThickness: "@SeparatorThickness"
+MenuSeparatorPadding: "padding(horizontal: @Spacing.100, vertical: @Spacing.050)"
+MenuSeparatorTextColor: "@BaseDisabledTextColor"
+
+# ── Submenu Arrow ────────────────────────────────────────────────────────────
+MenuArrowWidth: 8px
+MenuArrowIconColor: "@BaseTextColor"
+
 ReportOutputBackground: "reset()"
 ReportOutputBorderColor: "reset()"
 

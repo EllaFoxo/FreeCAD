@@ -66,6 +66,7 @@ enum class StyleComponent : uint8_t
     InternalButton,    // Flat action button painted inside custom composite widgets
     GeometrySelector,  // Gui::GeometrySelectorWidget composite field, inherits List
     GroupBox,          // QGroupBox frame and title
+    Menu,              // QMenu popup: context menus, menu bar and tool button dropdowns
     // Add new components before COUNT
     COUNT
 };
@@ -75,6 +76,9 @@ enum class StyleComponent : uint8_t
  *
  * Add new components before COUNT. These do not directly correspond to any component, rather allow
  * to specify part of the component that we are interested in, like Item of List.
+ *
+ * The cache key gives this enum 4 bits (16 values). Adding a 17th requires repacking
+ * StyleContext::cacheKey(); the key is 64-bit and has room, but it is not automatic.
  */
 enum class StyleComponentElement : uint8_t
 {
@@ -88,6 +92,9 @@ enum class StyleComponentElement : uint8_t
     CloseButton,  // Tab close button (QAbstractButton child of QTabBar)
     Branch,       // Connector lines in the indent column of a tree view
     Title,        // Title of a framed container, drawn on its top edge
+    Separator,    // Separator rule, and the label of an addSection() header, inside a menu
+    Arrow,        // Submenu arrow of a menu item
+    Shortcut,     // Accelerator column of a menu item
     // Add new components before COUNT
     COUNT,
 };

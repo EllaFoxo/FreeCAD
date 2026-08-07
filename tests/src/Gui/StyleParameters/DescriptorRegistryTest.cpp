@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -79,4 +80,39 @@ TEST(DescriptorRegistryTest, BranchElementNamesPrefixesAlongTheChain)
 
     const std::vector<std::string> expected {"TreeBranch", "ListBranch"};
     EXPECT_EQ(registry.buildPrefixes(context), expected);
+}
+
+TEST(DescriptorRegistryTest, MenuComponentBuildsItsTokenPrefixes)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    StyleContext context;
+    context.component = StyleComponent::Menu;
+    context.element = StyleComponentElement::Item;
+    context.state |= StyleState::Hovered;
+
+    const auto prefixes = registry.buildPrefixes(context);
+
+    // Most specific first, and standalone: nothing falls back to List.
+    ASSERT_FALSE(prefixes.empty());
+    EXPECT_EQ(prefixes.front(), "MenuItemHovered");
+    EXPECT_NE(std::ranges::find(prefixes, "MenuItem"), prefixes.end());
+    EXPECT_EQ(std::ranges::find(prefixes, "ListItem"), prefixes.end());
+}
+
+TEST(DescriptorRegistryTest, MenuSubElementsNameTheirOwnPrefixes)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    const auto prefixFor = [&registry](StyleComponentElement element) {
+        StyleContext context;
+        context.component = StyleComponent::Menu;
+        context.element = element;
+        return registry.buildPrefixes(context).front();
+    };
+
+    EXPECT_EQ(prefixFor(StyleComponentElement::Root), "Menu");
+    EXPECT_EQ(prefixFor(StyleComponentElement::Separator), "MenuSeparator");
+    EXPECT_EQ(prefixFor(StyleComponentElement::Arrow), "MenuArrow");
+    EXPECT_EQ(prefixFor(StyleComponentElement::Shortcut), "MenuShortcut");
 }
