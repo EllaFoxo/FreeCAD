@@ -62,6 +62,7 @@
 #include <QScrollBar>
 #include <QScreen>
 #include <QCursor>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMainWindow>
 #include <QMdiArea>
@@ -739,6 +740,40 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
                 return 1;
             }
 
+            return {};
+
+        // QMenuPrivate::updateActionRects() reads these directly and lays the popup out from
+        // them. Panel width stays 0 so QMenu::paintEvent skips its PE_FrameMenu pass — the
+        // border painted by PE_PanelMenu is then the only one, and nothing can paint over the
+        // items afterwards.
+        case PM_MenuPanelWidth:
+            if (qobject_cast<const QMenu*>(widget)) {
+                return 0;
+            }
+            return {};
+
+        // A scalar metric per axis, so horizontal-vs-vertical asymmetry works but left/right
+        // and top/bottom collapse to the leading edge. Both the border and the padding are
+        // added here because the panel width is 0, so this one number carries the whole
+        // border + padding inset of the box model.
+        case PM_MenuHMargin:
+        case PM_MenuVMargin: {
+            if (!qobject_cast<const QMenu*>(widget)) {
+                return {};
+            }
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
+            const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
+            const QMarginsF borderThickness = boxStyle.borderThickness.value_or(QMarginsF());
+            const bool horizontal = metric == PM_MenuHMargin;
+            const qreal border = horizontal ? borderThickness.left() : borderThickness.top();
+            const qreal padding = horizontal ? geometry.padding.left() : geometry.padding.top();
+            return static_cast<int>(border + padding);
+        }
+
+        case PM_SubMenuOverlap:
+            if (qobject_cast<const QMenu*>(widget)) {
+                return resolve<int>(context, Overlap);
+            }
             return {};
 
         default: {
@@ -3931,6 +3966,25 @@ StyleContext FreeCADStyle::contextOf(
         }
         if (option && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
+        }
+    }
+    else if (qobject_cast<const QMenu*>(widget)) {
+        context.component = StyleComponent::Menu;
+        context.element = element;
+        // QMenu marks the row under the cursor with State_Selected and adds State_Sunken
+        // while the mouse is held on it — the MenuBar convention, not the item-view one,
+        // where State_Selected means a persistent selection. QMenu never sets State_On, so
+        // a checkable item's Checked state has to come from the option.
+        if (option && (option->state & QStyle::State_Selected)) {
+            context.state |= StyleState::Hovered;
+        }
+        if (option && (option->state & QStyle::State_Sunken)) {
+            context.state |= StyleState::Pressed;
+        }
+        if (const auto* menuOption = qstyleoption_cast<const QStyleOptionMenuItem*>(option)) {
+            if (menuOption->checked) {
+                context.state |= StyleState::Checked;
+            }
         }
     }
     else if (
