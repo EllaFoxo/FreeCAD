@@ -3992,6 +3992,44 @@ void FreeCADStyle::restoreComboDropdownDefaults(QComboBox* comboBox)
     }
 }
 
+FreeCADStyle::ComboPopupPlacement FreeCADStyle::resolveComboPopupPlacement(const QWidget* container) const
+{
+    const StyleContext context = contextOf(container, nullptr, StyleComponentElement::Root);
+
+    ComboPopupPlacement placement;
+    placement.offset = resolve<int>(context, StyleProperty::PlacementOffset).value_or(0);
+
+    const auto mode = resolve<std::string>(context, StyleProperty::Placement);
+    if (mode && *mode == "below") {
+        placement.mode = ComboPopupPlacementMode::Below;
+    }
+
+    return placement;
+}
+
+void FreeCADStyle::widenComboPopupForScrollBar(QWidget* container)
+{
+    for (auto* child : container->findChildren<QListView*>()) {
+        if (!child->property(comboDropdownProperty).toBool()) {
+            continue;
+        }
+        const auto* verticalBar = child->verticalScrollBar();
+        if (verticalBar && verticalBar->isVisible()) {
+            container->resize(container->width() + verticalBar->width(), container->height());
+        }
+        break;
+    }
+}
+
+int FreeCADStyle::comboPopupCurrentRowOffset(const QWidget* container)
+{
+    auto* view = container->findChild<QListView*>();
+    if (!view || !view->currentIndex().isValid()) {
+        return 0;
+    }
+    return container->contentsMargins().top() + view->visualRect(view->currentIndex()).top();
+}
+
 void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
 {
     QWidget* comboBox = container->parentWidget();
@@ -3999,44 +4037,28 @@ void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
         return;
     }
 
-    // Widen by the scrollbar width if the scrollbar appeared after Qt calculated the width.
-    for (auto* child : container->findChildren<QListView*>()) {
-        if (!child->property(comboDropdownProperty).toBool()) {
-            continue;
-        }
-        const auto* vbar = child->verticalScrollBar();
-        if (vbar && vbar->isVisible()) {
-            container->resize(container->width() + vbar->width(), container->height());
-        }
-        break;
+    widenComboPopupForScrollBar(container);
+
+    const ComboPopupPlacement placement = resolveComboPopupPlacement(container);
+    const QPoint comboTopLeft = comboBox->mapToGlobal(QPoint {});
+
+    int targetTop = placement.mode == ComboPopupPlacementMode::Below
+        ? comboTopLeft.y() + comboBox->height()
+        : comboTopLeft.y() - comboPopupCurrentRowOffset(container);
+    targetTop += placement.offset;
+
+    // The clamp outranks the placement: a popup that cannot both align and stay on screen stays
+    // on screen. Qt's own menu-style path makes the same trade.
+    const QScreen* screen = QGuiApplication::screenAt(comboTopLeft);
+    if (screen) {
+        const QRect available = screen->availableGeometry();
+        targetTop = std::min(targetTop, available.bottom() + 1 - container->height());
+        targetTop = std::max(targetTop, available.top());
     }
 
-    const QPoint comboScreenPos = comboBox->mapToGlobal(QPoint {});
-    const int comboTopScreenY = comboScreenPos.y();
-    const int comboBottomScreenY = comboTopScreenY + comboBox->height();
-    const int containerTopScreenY = container->mapToGlobal(QPoint {}).y();
-    const int containerHeight = container->height();
-
-    if (containerTopScreenY >= comboTopScreenY) {
-        return;  // popup is below — no correction needed
-    }
-
-    // Qt placed the popup above because the unconstrained sizeHint didn't fit below.
-    // Check whether the constrained height actually fits below.
-    const QScreen* screen = QGuiApplication::screenAt(comboScreenPos);
-    const int screenBottom = screen ? screen->availableGeometry().bottom() : INT_MAX;
-
-    if (comboBottomScreenY + containerHeight <= screenBottom) {
-        const int delta = comboBottomScreenY - containerTopScreenY;
+    const int delta = targetTop - container->mapToGlobal(QPoint {}).y();
+    if (delta != 0) {
         container->move(container->pos() + QPoint(0, delta));
-    }
-    else {
-        // Genuinely doesn't fit below — close the gap above.
-        const int containerBottomScreenY = containerTopScreenY + containerHeight;
-        if (containerBottomScreenY < comboTopScreenY) {
-            const int delta = comboTopScreenY - containerBottomScreenY;
-            container->move(container->pos() + QPoint(0, delta));
-        }
     }
 }
 

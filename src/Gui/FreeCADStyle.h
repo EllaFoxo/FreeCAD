@@ -1192,6 +1192,43 @@ private:
     void restoreComboDropdownDefaults(QComboBox* comboBox);
     static void hideScrollerButtons(QWidget* container);
     static void restoreScrollerButtons(QWidget* container);
+
+    /// Where a dropdown popup sits relative to the combo box it belongs to.
+    enum class ComboPopupPlacementMode : std::uint8_t
+    {
+        /// The current row lands on the combo box, the way a menu opens over its button.
+        OverCurrent,
+        /// The popup's top edge meets the combo box's bottom edge.
+        Below,
+    };
+
+    struct ComboPopupPlacement
+    {
+        ComboPopupPlacementMode mode = ComboPopupPlacementMode::OverCurrent;
+        /// Applied after the mode has been honoured; positive moves the popup down.
+        int offset = 0;
+    };
+
+    /**
+     * @brief The placement the theme asks for, for the popup @p container holds.
+     *
+     * An unrecognised or absent mode means OverCurrent, so a theme that says nothing about
+     * placement still gets the menu-style behaviour the dropdowns are designed around.
+     */
+    ComboPopupPlacement resolveComboPopupPlacement(const QWidget* container) const;
+
+    /** @brief Widens the popup when a scrollbar appeared after Qt had settled its width. */
+    static void widenComboPopupForScrollBar(QWidget* container);
+
+    /** @brief Distance from the popup's top edge to the top of its current row. */
+    static int comboPopupCurrentRowOffset(const QWidget* container);
+
+    /**
+     * @brief Moves a shown popup to where the theme places it, without leaving the screen.
+     *
+     * Qt has already placed and clamped the popup by the time this runs, so it is a correction
+     * rather than the placement itself.
+     */
     void correctComboPopupPlacement(QWidget* container);
 
     // ── eventFilter helpers ────────────────────────────────────────────────

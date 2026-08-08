@@ -5,10 +5,12 @@
 
 #include <QAbstractItemModel>
 #include <QComboBox>
+#include <QGuiApplication>
 #include <QImage>
 #include <QListView>
 #include <QPainter>
 #include <QScopeGuard>
+#include <QScreen>
 #include <QStyleFactory>
 #include <QStyleOptionComboBox>
 #include <QStyleOptionMenuItem>
@@ -556,6 +558,105 @@ private Q_SLOTS:
         // The fixture states 5px vertical padding; the override states 11px, so each row grows
         // by twice the 6px difference.
         QCOMPARE(pitchAfter - pitchBefore, 12);
+    }
+
+    // The selected row lands on the combo box, which is how a menu-style popup behaves and what
+    // Qt did before this branch declined SH_ComboBox_Popup.
+    void test_placementOverCurrentPutsTheSelectedRowOnTheComboBox()  // NOLINT
+    {
+        const auto tokenGuard = overrideToken("DropdownListPlacement", "current");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        box.setCurrentIndex(1);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();  // the correction is deferred by a zero timer
+
+        QWidget* container = popupOf(box)->parentWidget();
+        const int rowTopGlobal = container->mapToGlobal(QPoint {}).y()
+            + container->contentsMargins().top()
+            + popupOf(box)->visualRect(box.model()->index(1, 0)).top();
+
+        QCOMPARE(rowTopGlobal, box.mapToGlobal(QPoint {}).y());
+    }
+
+    // The popup's top edge meets the combo box's bottom edge exactly — no 1px bite out of the
+    // combo's own border, which is what Qt's uncorrected list placement produces.
+    void test_placementBelowMeetsTheComboBoxEdge()  // NOLINT
+    {
+        const auto tokenGuard = overrideToken("DropdownListPlacement", "below");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();
+
+        QWidget* container = popupOf(box)->parentWidget();
+        const QPoint comboTopLeft = box.mapToGlobal(QPoint {});
+
+        QCOMPARE(container->mapToGlobal(QPoint {}).y(), comboTopLeft.y() + box.height());
+    }
+
+    // The offset applies on top of whichever mode is in force, so a gap or an overlap can be
+    // dialled in without a rebuild.
+    void test_placementOffsetShiftsThePopup()  // NOLINT
+    {
+        const auto modeGuard = overrideToken("DropdownListPlacement", "below");
+        const auto offsetGuard = overrideToken("DropdownListPlacementOffset", "6px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();
+
+        QWidget* container = popupOf(box)->parentWidget();
+        QCOMPARE(
+            container->mapToGlobal(QPoint {}).y(),
+            box.mapToGlobal(QPoint {}).y() + box.height() + 6
+        );
+    }
+
+    // No mode may push the popup off the screen: the clamp outranks the placement.
+    void test_placementNeverLeavesTheScreen()  // NOLINT
+    {
+        const auto tokenGuard = overrideToken("DropdownListPlacement", "current");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        box.setCurrentIndex(2);
+        style.polish(&box);
+
+        const QRect available = QGuiApplication::primaryScreen()->availableGeometry();
+        box.move(available.left() + 40, available.bottom() - box.sizeHint().height());
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();
+
+        QWidget* container = popupOf(box)->parentWidget();
+        const int top = container->mapToGlobal(QPoint {}).y();
+        QVERIFY(top >= available.top());
+        QVERIFY(top + container->height() <= available.bottom() + 1);
     }
 };
 

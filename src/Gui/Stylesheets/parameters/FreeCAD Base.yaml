@@ -311,6 +311,15 @@ ListRowPressedBackground: "@Background.200"
 DropdownListMaxHeight: "250px"
 WorkbenchSelectorDropdownMaxHeight: "reset()"
 
+# Where a dropdown sits relative to its combo box.
+#   current — the selected row lands on the combo box (menu-style)
+#   below   — the popup's top edge meets the combo box's bottom edge
+# An unrecognised value falls back to current. The screen-edge clamp outranks both: a long popup
+# near the bottom of the screen stays on screen rather than staying aligned.
+DropdownListPlacement: "current"
+# Applied after placement, in either mode. Positive moves the popup down.
+DropdownListPlacementOffset: 0px
+
 # A dropdown is meant to look like a menu, so it aliases the Menu tokens rather than repeating
 # their values — retuning a menu retunes every dropdown with it. It is a different painting path
 # though (SH_ComboBox_Popup is declined, so the popup is an ordinary item view), and the two
