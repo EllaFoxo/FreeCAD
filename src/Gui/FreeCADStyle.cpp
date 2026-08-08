@@ -767,7 +767,25 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
             const bool horizontal = metric == PM_MenuHMargin;
             const qreal border = horizontal ? borderThickness.left() : borderThickness.top();
             const qreal padding = horizontal ? geometry.padding.left() : geometry.padding.top();
-            return static_cast<int>(border + padding);
+            const int margin = static_cast<int>(border + padding);
+
+            if (horizontal) {
+                return margin;
+            }
+
+            // Every item carries half of MenuItemSpacing above it and half below, so between
+            // two items the halves merge into the gap the token asks for. The first item's
+            // top half and the last item's bottom half have no neighbour to merge with and
+            // would otherwise pile onto the popup's inset, making it read taller than the
+            // horizontal one. Deduct that orphaned half, never below the border.
+            //
+            // Qt exposes one metric for both ends of the popup while the split is floor above
+            // and ceil below, so an odd MenuItemSpacing leaves 1px more at the bottom than at
+            // the top. The spacing scale only emits even values, so that does not bite.
+            const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(
+                element(StyleComponentElement::Item)
+            );
+            return std::max(static_cast<int>(border), margin - (itemGeometry.spacing / 2));
         }
 
         case PM_SubMenuOverlap:
@@ -3096,7 +3114,7 @@ void FreeCADStyle::drawMenuItem(
         drawMenuItemIndicator(painter, option, widget, layout->indicator);
     }
 
-    if (!layout->icon.isNull() && !option->icon.isNull()) {
+    if (!layout->icon.isNull()) {
         const QPixmap pixmap
             = renderStyledIcon(painter, option->icon, layout->icon.size(), option, itemContext);
         drawItemPixmap(painter, layout->icon, Qt::AlignCenter, pixmap);
@@ -3105,16 +3123,28 @@ void FreeCADStyle::drawMenuItem(
     drawMenuItemText(painter, option, widget, *layout);
 
     if (!layout->arrow.isNull()) {
-        const StyleContext arrowContext = contextOf(widget, option, StyleComponentElement::Arrow);
         const Qt::ArrowType direction = option->direction == Qt::RightToLeft ? Qt::LeftArrow
                                                                              : Qt::RightArrow;
-        drawChevronArrow(
-            painter,
-            layout->arrow,
-            direction,
-            resolveIconColor(arrowContext, option->palette)
-        );
+        drawChevronArrow(painter, layout->arrow, direction, menuArrowColor(option, widget));
     }
+}
+
+QColor FreeCADStyle::menuArrowColor(const QStyleOptionMenuItem* option, const QWidget* widget) const
+{
+    const StyleContext arrowContext = contextOf(widget, option, StyleComponentElement::Arrow);
+
+    if (const auto color = resolve<Base::Color>(arrowContext, StyleProperty::IconColor)) {
+        return color->asValue<QColor>();
+    }
+    if (const auto color = resolve<Base::Color>(arrowContext, StyleProperty::TextColor)) {
+        return color->asValue<QColor>();
+    }
+
+    // Elements do not chain, so an Arrow-element token cannot see the item's state. With no
+    // arrow-specific colour stated, follow the label instead of freezing at the palette
+    // colour — the arrow is part of the item's foreground.
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    return resolveIconColor(itemContext, option->palette);
 }
 
 QRect FreeCADStyle::drawMenuSectionLabel(
@@ -3238,16 +3268,24 @@ FreeCADStyle::MenuItemColumns FreeCADStyle::menuItemColumns(
 
     MenuItemColumns columns;
 
-    // menuHasCheckableItems is menu-wide: Qt sets it when any visible action is checkable, so
-    // the column is reserved on every row or on none. That is Qt's constraint, not a choice.
-    if (option->menuHasCheckableItems) {
-        columns.indicator = proxy()->pixelMetric(PM_IndicatorWidth, option, widget) + gap;
-    }
-
+    // The indicator and the icon share one leading slot: an item shows its icon when it has
+    // one and its check indicator otherwise, so reserving a column for each would indent
+    // every label past a slot that is empty on most rows. Both flags are menu-wide, so the
+    // column is as wide as the widest occupant any row can have and labels stay aligned.
+    //
     // maxIconWidth is Qt's hardcoded PM_SmallIconSize + 4, so only its zero / non-zero answer
     // is used — "does this menu have icons". The column itself is MenuIconSize.
+    // menuHasCheckableItems is menu-wide the same way: Qt sets it when any visible action is
+    // checkable. That is Qt's constraint, not a choice.
+    int leading = 0;
     if (option->maxIconWidth > 0) {
-        columns.icon = menuIconSize(widget, option) + gap;
+        leading = std::max(leading, menuIconSize(widget, option));
+    }
+    if (option->menuHasCheckableItems) {
+        leading = std::max(leading, proxy()->pixelMetric(PM_IndicatorWidth, option, widget));
+    }
+    if (leading > 0) {
+        columns.leading = leading + gap;
     }
 
     // Reserved per item rather than menu-wide: labels are left-aligned, so the arrow column
@@ -3343,33 +3381,47 @@ std::optional<FreeCADStyle::MenuItemLayout> FreeCADStyle::menuItemLayout(
 
     const QRect content = geometry.contentRect(menuItemBoxRect(option->rect, geometry));
 
-    const auto centredAt = [&content](int left, const QSize& size) {
-        const int top = content.top() + ((content.height() - size.height()) / 2);
-        return QRect(QPoint(left, top), size);
+    // A column spans the full content height, so its occupant can be centred both ways in it.
+    const auto columnAt = [&content](int left, int width) {
+        return QRect(QPoint(left, content.top()), QSize(width, content.height()));
+    };
+    const auto centredIn = [](const QRect& column, const QSize& size) {
+        return QRect(
+            QPoint(
+                column.left() + ((column.width() - size.width()) / 2),
+                column.top() + ((column.height() - size.height()) / 2)
+            ),
+            size
+        );
     };
 
     MenuItemLayout layout;
     int left = content.left();
     int right = content.right();
 
-    if (columns.indicator > 0) {
-        const QSize size(
-            proxy()->pixelMetric(PM_IndicatorWidth, option, widget),
-            proxy()->pixelMetric(PM_IndicatorHeight, option, widget)
-        );
-        layout.indicator = centredAt(left, size);
-        left += columns.indicator;
-    }
+    if (columns.leading > 0) {
+        const QRect column = columnAt(left, columns.leading - geometry.iconSpacing);
 
-    if (columns.icon > 0) {
-        const int extent = menuIconSize(widget, option);
-        layout.icon = centredAt(left, {extent, extent});
-        left += columns.icon;
+        // One slot, one occupant. Deciding it here rather than in drawMenuItem keeps the
+        // painter from having to repeat the rule and drift from it.
+        if (!option->icon.isNull()) {
+            const int extent = menuIconSize(widget, option);
+            layout.icon = centredIn(column, {extent, extent});
+        }
+        else if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
+            const QSize size(
+                proxy()->pixelMetric(PM_IndicatorWidth, option, widget),
+                proxy()->pixelMetric(PM_IndicatorHeight, option, widget)
+            );
+            layout.indicator = centredIn(column, size);
+        }
+
+        left += columns.leading;
     }
 
     if (columns.arrow > 0) {
         const int extent = columns.arrow - geometry.iconSpacing;
-        layout.arrow = centredAt(right + 1 - extent, {extent, extent});
+        layout.arrow = centredIn(columnAt(right + 1 - extent, extent), {extent, extent});
         right -= columns.arrow;
     }
 

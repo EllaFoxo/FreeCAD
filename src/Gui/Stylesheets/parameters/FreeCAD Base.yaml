@@ -501,7 +501,7 @@ MenuBackground: "@ListBackground"
 MenuBorderColor: "@ListBorderColor"
 MenuBorderThickness: "@ListBorderThickness"
 MenuBorderRadius: 0px
-MenuPadding: "padding(@Spacing.100)"
+MenuPadding: "padding(@Spacing.050)"
 MenuIconSize: 16px
 MenuOverlap: 0px
 
@@ -512,14 +512,22 @@ MenuOverlap: 0px
 # box beyond what MenuPadding already does. The two are independent knobs.
 # There are deliberately no MenuIndicator* tokens: contextOf() routes the Indicator element
 # to the CheckBox component, so the check column resolves against CheckBox*/RadioButton*.
-MenuItemPadding: "@ListItemPadding"
+# The icon and the check indicator share one leading column, sized to the wider of MenuIconSize
+# and CheckBoxWidth: an item shows its icon when it has one and its indicator otherwise.
+MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100, right: @Spacing.300)"
 MenuItemIconSpacing: "@ListItemIconSpacing"
-MenuItemSpacing: "@Spacing.000"
+MenuItemSpacing: "@Spacing.050"
 MenuItemMargin: "padding(0px)"
+MenuItemBorderRadius: 4px
 MenuItemTextColor: "@BaseTextColor"
-MenuItemHoveredBackground: "@ListRowHoveredBackground"
+MenuItemHoveredBackground: "@Accent.500"
+MenuItemHoveredTextColor: "@Colors.white"
 MenuItemPressedBackground: "@ListRowPressedBackground"
 MenuItemDisabledTextColor: "@ListDisabledTextColor"
+MenuItemMinWidth: 240px
+# A checkable item that also has an icon shows the icon, so its checked state is carried by
+# the row instead of the shared leading slot.
+MenuItemCheckedBackground: "opacity(@Accent.500, 20%)"
 
 # ── Menu Shortcut ────────────────────────────────────────────────────────────
 # Only the gap is ours: Qt measures the accelerator column itself and adds its width to
@@ -541,8 +549,11 @@ MenuSeparatorTextColor: "@BaseDisabledTextColor"
 MenuSeparatorIconSpacing: "@Spacing.100"
 
 # ── Submenu Arrow ────────────────────────────────────────────────────────────
+# Left uncoloured on purpose: with no MenuArrowIconColor the arrow follows the item label
+# through every state. MenuArrowIconColor remains available for a theme that wants an arrow
+# colour distinct from the label, but stating it opts out of that state tracking — elements
+# do not chain, so an Arrow token never sees the item's Hovered/Disabled state.
 MenuArrowWidth: 8px
-MenuArrowIconColor: "@BaseTextColor"
 
 ReportOutputBackground: "reset()"
 ReportOutputBorderColor: "reset()"

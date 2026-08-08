@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
 #include <QApplication>
+#include <QIcon>
 #include <QImage>
 #include <QMenu>
 #include <QPainter>
+#include <QPixmap>
 #include <QScopeGuard>
 #include <QStyle>
 #include <QStyleFactory>
@@ -30,12 +33,13 @@ constexpr int arrowWidth = 10;
 constexpr int shortcutSpacing = 20;
 constexpr int separatorHeight = 9;
 
-// menuItemLayout and menuItemDrawnLabel are protected on FreeCADStyle; using-declarations
-// republish them so the column walk and the label-eliding decision can be exercised without
-// going through a live menu or painting into an image.
+// menuItemLayout, menuItemDrawnLabel and menuArrowColor are protected on FreeCADStyle;
+// using-declarations republish them so the column walk, the label-eliding decision and the
+// arrow colour can be exercised without going through a live menu or painting into an image.
 class ProbeStyle: public Gui::FreeCADStyle
 {
 public:
+    using Gui::FreeCADStyle::menuArrowColor;
     using Gui::FreeCADStyle::menuItemDrawnLabel;
     using Gui::FreeCADStyle::menuItemLayout;
 };
@@ -70,6 +74,8 @@ public:
                     {.name = "MenuItemMargin", .value = "padding(0px)"},
                     {.name = "MenuItemTextColor", .value = "#ffffff"},
                     {.name = "MenuItemHoveredBackground", .value = "#ff0000"},
+                    {.name = "MenuItemHoveredTextColor", .value = "#ffff00"},
+                    {.name = "MenuItemCheckedBackground", .value = "#0000ff"},
 
                     {.name = "MenuShortcutSpacing", .value = "20px"},
                     {.name = "MenuShortcutTextColor", .value = "#808080"},
@@ -86,8 +92,10 @@ public:
                     // fallback would show up as a wrong gap rather than an accidental match.
                     {.name = "MenuSeparatorIconSpacing", .value = "6px"},
 
+                    // MenuArrowIconColor is deliberately left undefined: the shipped theme does
+                    // not state it either, so the fixture exercises the same fall-through to
+                    // the item label colour that the arrow relies on to track item state.
                     {.name = "MenuArrowWidth", .value = "10px"},
-                    {.name = "MenuArrowIconColor", .value = "#ffffff"},
 
                     // PM_IndicatorWidth/Height resolve through the CheckBox component at the
                     // Root element — contextOf() routes the Indicator element there and does
@@ -142,6 +150,15 @@ private:
         return option;
     }
 
+    // A non-null QIcon that needs no file on disk, so the layout's "does this row carry an
+    // icon" decision can be exercised without a resource dependency.
+    static QIcon solidIcon()
+    {
+        QPixmap pixmap(iconSize, iconSize);
+        pixmap.fill(Qt::blue);
+        return QIcon(pixmap);
+    }
+
 private Q_SLOTS:
 
     // QMenu asks the style for these before it lays anything out, and QMenu::paintEvent then
@@ -158,6 +175,44 @@ private Q_SLOTS:
         QCOMPARE(style.pixelMetric(QStyle::PM_MenuHMargin, nullptr, &menu), menuBorder + menuPadding);
         QCOMPARE(style.pixelMetric(QStyle::PM_MenuVMargin, nullptr, &menu), menuBorder + menuPadding);
         QCOMPARE(style.pixelMetric(QStyle::PM_SubMenuOverlap, nullptr, &menu), 0);
+    }
+
+    // Every item reserves half of MenuItemSpacing above it and half below, and between two
+    // items those halves merge into the intended gap. The first item's top half and the last
+    // item's bottom half have no neighbour, so without compensation they pile onto the popup's
+    // vertical inset and the popup reads taller than it is wide. Only the vertical metric is
+    // adjusted, so the two axes agree again.
+    void test_itemSpacingDoesNotWidenTheVerticalPopupInset()  // NOLINT
+    {
+        const auto guard = overrideToken("MenuItemSpacing", "6px");
+
+        // A fresh style: box geometry is cached per instance and only clearTokenCache() drops
+        // it, which a bare instance never gets told to do.
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QCOMPARE(style.pixelMetric(QStyle::PM_MenuHMargin, nullptr, &menu), menuBorder + menuPadding);
+        QCOMPARE(
+            style.pixelMetric(QStyle::PM_MenuVMargin, nullptr, &menu),
+            menuBorder + menuPadding - (6 / 2)
+        );
+    }
+
+    // The deduction is clamped: a theme whose MenuPadding is smaller than half its
+    // MenuItemSpacing must not end up with a margin inside the border, or the items paint
+    // over the frame.
+    void test_verticalPopupInsetNeverFallsBelowTheBorder()  // NOLINT
+    {
+        // Far more than 2 * (menuBorder + menuPadding), so an unclamped deduction would go
+        // negative.
+        const auto guard = overrideToken("MenuItemSpacing", "40px");
+
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QCOMPARE(style.pixelMetric(QStyle::PM_MenuVMargin, nullptr, &menu), menuBorder);
     }
 
     // The metrics are menu-scoped: a widget that is not a QMenu must keep whatever the base
@@ -263,6 +318,141 @@ private Q_SLOTS:
         QCOMPARE(widthOf(submenu) - base, arrowWidth + iconSpacing);
     }
 
+    // The assertion that pins the shared leading column. A menu with both icons and checkable
+    // items — the toolbar-visibility menu is the real one — must reserve ONE slot, as wide as
+    // the widest thing that can land in it, not one slot each. Two slots would indent every
+    // label past a column that is empty on all but a handful of rows.
+    void test_iconAndIndicatorShareOneLeadingColumn()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        const QStyleOptionMenuItem plain = plainItem(menu);
+        const auto widthOf = [&style, &menu](const QStyleOptionMenuItem& option) {
+            return style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu).width();
+        };
+        const int base = widthOf(plain);
+
+        QStyleOptionMenuItem both = plain;
+        both.menuHasCheckableItems = true;
+        both.maxIconWidth = 20;
+
+        // Both flags are menu-wide, so this holds for every row of such a menu regardless of
+        // what the row itself carries.
+        QCOMPARE(widthOf(both) - base, std::max(iconSize, indicatorSize) + iconSpacing);
+    }
+
+    // One slot, one occupant, decided in the layout so the painter cannot diverge from it: a
+    // row with an icon shows the icon, a checkable row without one shows the indicator, and a
+    // checkable row that also has an icon shows the icon.
+    void test_theLeadingColumnHoldsTheIconWhenThereIsOne()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        const auto layoutOf = [&freecadStyle, &style, &menu](QStyleOptionMenuItem option) {
+            option.rect = QRect(
+                QPoint(),
+                style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu)
+            );
+            return freecadStyle.menuItemLayout(&option, &menu);
+        };
+
+        QStyleOptionMenuItem withIcon = plainItem(menu);
+        withIcon.maxIconWidth = 20;
+        withIcon.icon = solidIcon();
+
+        const auto iconLayout = layoutOf(withIcon);
+        QVERIFY(iconLayout.has_value());
+        QVERIFY(!iconLayout->icon.isNull());
+        QVERIFY(iconLayout->indicator.isNull());
+
+        QStyleOptionMenuItem checkableWithoutIcon = plainItem(menu);
+        checkableWithoutIcon.menuHasCheckableItems = true;
+        checkableWithoutIcon.checkType = QStyleOptionMenuItem::NonExclusive;
+
+        const auto indicatorLayout = layoutOf(checkableWithoutIcon);
+        QVERIFY(indicatorLayout.has_value());
+        QVERIFY(!indicatorLayout->indicator.isNull());
+        QVERIFY(indicatorLayout->icon.isNull());
+
+        QStyleOptionMenuItem checkableWithIcon = checkableWithoutIcon;
+        checkableWithIcon.maxIconWidth = 20;
+        checkableWithIcon.icon = solidIcon();
+
+        const auto sharedLayout = layoutOf(checkableWithIcon);
+        QVERIFY(sharedLayout.has_value());
+        QVERIFY(!sharedLayout->icon.isNull());
+        QVERIFY(sharedLayout->indicator.isNull());
+    }
+
+    // The icon took the slot, so the checked state has to be carried by the row itself. Same
+    // pixel and rationale as test_hoveredItemPaintsItsStateBackground: the far left of the box,
+    // inside the padding, before anything else is drawn.
+    void test_checkedItemWithAnIconShowsItsStateOnTheRow()  // NOLINT
+    {
+        Gui::FreeCADStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        option.maxIconWidth = 20;
+        option.icon = solidIcon();
+        option.checked = true;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        QCOMPARE(canvas.pixelColor(1, option.rect.center().y()), QColor(QStringLiteral("#0000ff")));
+    }
+
+    // Elements do not chain, so an Arrow-element token never sees the item's state. With no
+    // arrow colour stated the arrow follows the label instead of freezing at the resting colour
+    // — the defect that made hovered submenu rows keep a dark chevron on a white label. The
+    // resolved colour is asserted directly; sampling an antialiased chevron is not deterministic.
+    void test_arrowFollowsTheItemTextColourThroughItsStates()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::SubMenu;
+
+        QCOMPARE(freecadStyle.menuArrowColor(&option, &menu), QColor(QStringLiteral("#ffffff")));
+
+        // QMenu marks the row under the cursor with State_Selected, not State_MouseOver.
+        option.state |= QStyle::State_Selected;
+        QCOMPARE(freecadStyle.menuArrowColor(&option, &menu), QColor(QStringLiteral("#ffff00")));
+    }
+
+    // Stating MenuArrowIconColor is how a theme asks for an arrow colour distinct from the
+    // label; it then wins in every state, which is the documented cost of opting out.
+    void test_statedArrowColourWinsOverTheItemTextColour()  // NOLINT
+    {
+        const auto guard = overrideToken("MenuArrowIconColor", "#00ffff");
+
+        ProbeStyle freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::SubMenu;
+
+        QCOMPARE(freecadStyle.menuArrowColor(&option, &menu), QColor(QStringLiteral("#00ffff")));
+
+        option.state |= QStyle::State_Selected;
+        QCOMPARE(freecadStyle.menuArrowColor(&option, &menu), QColor(QStringLiteral("#00ffff")));
+    }
+
     // Qt adds reservedShortcutWidth to max_column_width itself, after sizing every item.
     // Adding it here too is what makes stock Fusion menus so wide; only the gap is ours.
     void test_shortcutContributesItsGapButNotItsWidth()  // NOLINT
@@ -343,6 +533,9 @@ private Q_SLOTS:
         option.menuHasCheckableItems = true;
         option.checkType = QStyleOptionMenuItem::NonExclusive;
         option.maxIconWidth = 20;
+        // The icon is the wider of the two things that can land in the leading column, so this
+        // is the tightest row the reservation has to accommodate.
+        option.icon = solidIcon();
         option.text = QStringLiteral("Export as\tCtrl+Shift+E");
         option.reservedShortcutWidth = 77;
 
@@ -355,17 +548,17 @@ private Q_SLOTS:
         const auto layout = freecadStyle.menuItemLayout(&option, &menu);
         QVERIFY(layout.has_value());
 
-        QVERIFY(!layout->indicator.isNull());
+        // The icon and the indicator share the leading column, and this row has an icon.
         QVERIFY(!layout->icon.isNull());
+        QVERIFY(layout->indicator.isNull());
         QVERIFY(!layout->shortcut.isNull());
         QVERIFY(!layout->arrow.isNull());
 
-        QVERIFY(layout->indicator.right() < layout->icon.left());
         QVERIFY(layout->icon.right() < layout->text.left());
         QVERIFY(layout->text.right() < layout->shortcut.left());
         QVERIFY(layout->shortcut.right() < layout->arrow.left());
 
-        QVERIFY(option.rect.contains(layout->indicator));
+        QVERIFY(option.rect.contains(layout->icon));
         QVERIFY(option.rect.contains(layout->arrow));
 
         // The label keeps at least the width it was measured at, so nothing elides that the
@@ -447,9 +640,11 @@ private Q_SLOTS:
         QMenu menu;
 
         QStyleOptionMenuItem option = plainItem(menu);
+        option.menuItemType = QStyleOptionMenuItem::SubMenu;
         option.menuHasCheckableItems = true;
         option.checkType = QStyleOptionMenuItem::NonExclusive;
         option.maxIconWidth = 20;
+        option.icon = solidIcon();
         option.direction = Qt::RightToLeft;
         option.rect
             = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
@@ -457,9 +652,10 @@ private Q_SLOTS:
         const auto layout = freecadStyle.menuItemLayout(&option, &menu);
         QVERIFY(layout.has_value());
 
-        // Leading column is now on the right, and the order reverses.
-        QVERIFY(layout->indicator.left() > layout->icon.left());
+        // Leading column is now on the right and the trailing arrow on the left: the whole
+        // order reverses, without any per-part special casing.
         QVERIFY(layout->icon.left() > layout->text.left());
+        QVERIFY(layout->text.left() > layout->arrow.left());
     }
 
     // The hovered background is the one state the fixture can see without a font: paint a real

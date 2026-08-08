@@ -666,6 +666,14 @@ protected:
         int availableWidth
     );
 
+    /**
+     * @brief The colour a menu item's submenu arrow is drawn in.
+     *
+     * An arrow-specific token wins when a theme states one; otherwise the arrow follows the
+     * item label, so it tracks hover, disabled and every other item state.
+     */
+    QColor menuArrowColor(const QStyleOptionMenuItem* option, const QWidget* widget) const;
+
     bool eventFilter(QObject* obj, QEvent* event) override;
 
 private:
@@ -1020,14 +1028,14 @@ private:
      */
     struct MenuItemColumns
     {
-        int indicator = 0;
-        int icon = 0;
+        /** @brief Icon or check indicator — they share one slot. */
+        int leading = 0;
         int arrow = 0;
         int shortcutGap = 0;
 
         int total() const
         {
-            return indicator + icon + arrow + shortcutGap;
+            return leading + arrow + shortcutGap;
         }
     };
 
