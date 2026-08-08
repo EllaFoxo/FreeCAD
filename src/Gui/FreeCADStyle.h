@@ -1154,6 +1154,26 @@ private:
     void constrainComboDropdown(QComboBox* comboBox);
 
     /**
+     * @brief Asks an item view to lay its items out again, once the event loop is free.
+     *
+     * A view caches the geometry of its rows, and nothing in Qt reconsiders that cache when the
+     * metrics behind it change — so a view whose component or theme changed after it was first
+     * laid out keeps rows at the old pitch while every fresh size hint reports the new one.
+     * Does nothing for a widget that is not an item view.
+     */
+    static void scheduleItemViewRelayout(QWidget* widget);
+
+    /**
+     * @brief Tells @p widget that the metrics it caches from the style are no longer valid.
+     *
+     * The signal Qt itself uses: QApplication::setStyle sends it to every widget after polishing
+     * it, and handlers recompute what they cached — an item view its row layout, a frame its
+     * frame width, a tab bar its tab sizes. Needed after tagging a widget with a property that
+     * changes what its tokens resolve to, and after creating one that missed that sweep.
+     */
+    static void notifyStyleChange(QWidget* widget);
+
+    /**
      * @brief Bounds a popup list, and the container holding it, to the resolved MaxHeight.
      *
      * With no MaxHeight the dropdown is left to Qt, which keeps it on screen and shows as many

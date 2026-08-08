@@ -19,6 +19,18 @@
 #include <Gui/Application.h>
 #include <Gui/FreeCADStyle.h>
 #include <Gui/StyleParameters/ParameterManager.h>
+#include <Gui/ThemeReloadEvent.h>
+
+// The style handles a theme reload in its event filter, which is protected. Delivering the event
+// the way Gui::Application does — sending it to qApp, where the style is installed as a filter —
+// is not open to a test either: every filter on qApp sees it, including Application's own, which
+// reapplies the stylesheet through a main window a headless test does not have. Widening the
+// access reaches the style's handler, which is the wiring under test, and nothing else.
+class ReloadableStyle: public Gui::FreeCADStyle
+{
+public:
+    using Gui::FreeCADStyle::eventFilter;
+};
 
 class TestComboDropdown: public QObject
 {
@@ -144,9 +156,9 @@ private:
     // only clearTokenCache() drops it, which an installed style is told to do on a theme reload
     // but not on the token overrides a test makes. QApplication takes ownership of the style it
     // is given and deletes the one it replaces, so successive calls clean up after each other.
-    static Gui::FreeCADStyle& installFreshApplicationStyle()
+    static ReloadableStyle& installFreshApplicationStyle()
     {
-        auto* style = new Gui::FreeCADStyle();
+        auto* style = new ReloadableStyle();
         QApplication::setStyle(style);
         return *style;
     }
@@ -468,6 +480,82 @@ private Q_SLOTS:
         const int middle = container->height() / 2;
         QCOMPARE(canvas.pixelColor(0, middle), QColor(0x00, 0xff, 0x00));
         QCOMPARE(canvas.pixelColor(1, middle), QColor(0x10, 0x10, 0x10));
+    }
+
+    // The property that actually broke: rows overlapped by 6px because the view's cached item
+    // layout used a row height resolved before the view became a DropdownList, while every
+    // fresh size-hint query returned the new one. No single function was wrong, so no test
+    // that asks a function for a number could see it. This asserts the layout is
+    // self-consistent instead.
+    void test_popupRowsAbutWithoutOverlapping()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+
+        // The ordering the running application was measured in: constrainComboDropdown() calls
+        // comboBox->view(), which creates the view, and only afterwards tags it as a dropdown.
+        // Asking the untagged view for a row rectangle lays its items out at the plain List
+        // pitch, which is the cache the tagging has to invalidate. Without this the view's first
+        // layout would happen after the tag, and the defect would be out of reach of the test.
+        box.view()->visualRect(box.model()->index(0, 0));
+
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QListView* view = popupOf(box);
+        QAbstractItemModel* model = box.model();
+
+        for (int row = 1; row < model->rowCount(); ++row) {
+            const QRect previous = view->visualRect(model->index(row - 1, 0));
+            const QRect current = view->visualRect(model->index(row, 0));
+            QCOMPARE(current.top(), previous.bottom() + 1);
+        }
+
+        const QRect last = view->visualRect(model->index(model->rowCount() - 1, 0));
+        QVERIFY2(
+            last.bottom() <= view->viewport()->rect().bottom(),
+            qPrintable(QStringLiteral("last row ends at %1, viewport at %2")
+                           .arg(last.bottom())
+                           .arg(view->viewport()->rect().bottom()))
+        );
+    }
+
+    // A theme reload drops the style's caches but nothing tells a view its rows changed size,
+    // so its layout would keep the pre-reload pitch. Same defect as the tagging one, reached
+    // by the route the owner actually uses while retuning tokens.
+    void test_rowPitchFollowsAThemeReload()  // NOLINT
+    {
+        ReloadableStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QListView* view = popupOf(box);
+        QAbstractItemModel* model = box.model();
+        const int pitchBefore = view->visualRect(model->index(1, 0)).top()
+            - view->visualRect(model->index(0, 0)).top();
+
+        const auto tokenGuard
+            = overrideToken("DropdownListItemPadding", "padding(horizontal: 7px, vertical: 11px)");
+
+        // qApp is the object Gui::Application sends the reload to, so it is the object the
+        // filter is handed here.
+        Gui::ThemeReloadEvent reloadEvent;
+        style.eventFilter(qApp, &reloadEvent);
+        QCoreApplication::processEvents();
+
+        const int pitchAfter = view->visualRect(model->index(1, 0)).top()
+            - view->visualRect(model->index(0, 0)).top();
+
+        // The fixture states 5px vertical padding; the override states 11px, so each row grows
+        // by twice the 6px difference.
+        QCOMPARE(pitchAfter - pitchBefore, 12);
     }
 };
 

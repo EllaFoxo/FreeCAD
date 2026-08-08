@@ -3868,13 +3868,40 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
         container->setProperty("component", component);
     }
 
-    applyComboDropdownMaxHeight(listView);
-
     // Guard against double-installation on re-polish (e.g. theme change).
     if (!container->property(comboContainerProperty).toBool()) {
         container->setProperty(comboContainerProperty, true);
         container->installEventFilter(this);
     }
+
+    // Both widgets were created by the comboBox->view() call above — during polish — so they
+    // missed the StyleChange QApplication::setStyle sends every widget it polishes, and both
+    // computed their style-derived metrics while they still resolved as plain widgets. The tags
+    // just applied change those metrics: the view lays its rows out at the DropdownList pitch,
+    // and the container insets its contents by the popup's own border and padding.
+    notifyStyleChange(listView);
+    notifyStyleChange(container);
+
+    applyComboDropdownMaxHeight(listView);
+}
+
+void FreeCADStyle::scheduleItemViewRelayout(QWidget* widget)
+{
+    auto* itemView = qobject_cast<QAbstractItemView*>(widget);
+    if (!itemView) {
+        return;
+    }
+
+    // scheduleDelayedItemsLayout() is protected, but doItemsLayout() is a public slot. Queue it
+    // rather than calling it: this runs from a theme reload, which can land mid-paint, and
+    // laying a view out again from inside its own paint is a re-entrancy hazard.
+    QMetaObject::invokeMethod(itemView, "doItemsLayout", Qt::QueuedConnection);
+}
+
+void FreeCADStyle::notifyStyleChange(QWidget* widget)
+{
+    QEvent styleChange(QEvent::StyleChange);
+    QCoreApplication::sendEvent(widget, &styleChange);
 }
 
 void FreeCADStyle::applyComboDropdownMaxHeight(QListView* listView) const
@@ -4033,6 +4060,9 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         }
 
         for (QWidget* widget : QApplication::allWidgets()) {
+            // A repaint does not reconsider row geometry, and the tokens a row is measured from
+            // may well have been what the reload changed.
+            scheduleItemViewRelayout(widget);
             widget->update();
         }
         return false;  // Let ThemeReloadHandler in Application also process the event
@@ -4380,8 +4410,7 @@ void FreeCADStyle::tagWidgetTransparency(QWidget* widget, bool surface) const
 
     // The tag changes padding, spacing and height tokens as well as colours, so a repaint
     // is not enough — QTabBar caches its tab sizes until the style changes.
-    QEvent styleChange(QEvent::StyleChange);
-    QCoreApplication::sendEvent(widget, &styleChange);
+    notifyStyleChange(widget);
 }
 
 bool FreeCADStyle::ownSurface(const QWidget* widget, bool inherited)
