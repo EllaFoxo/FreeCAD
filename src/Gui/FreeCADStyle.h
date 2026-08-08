@@ -1047,6 +1047,14 @@ private:
     /** @brief Whether @p option describes a menu item this style paints and sizes. */
     bool ownsMenuItem(const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
+    /**
+     * @brief Whether @p widget is a popup surface this style paints.
+     *
+     * Menu panels are asked for by more than menus — a combo box draws its dropdown container
+     * with one — and only a widget the Menu tokens describe is ours to paint.
+     */
+    bool ownsMenuSurface(const QWidget* widget, const QStyleOption* option) const;
+
     int menuIconSize(const QWidget* widget, const QStyleOption* option) const;
 
     /** @brief The label of a menu item, without the accelerator Qt appends after a tab. */
@@ -1060,11 +1068,13 @@ private:
      */
     static QRect menuItemBoxRect(const QRect& rect, const BoxGeometryDefinition& geometry);
 
-    QSize menuItemSizeFromContents(
-        const QStyleOptionMenuItem* option,
-        const QSize& contentsSize,
-        const QWidget* widget
-    ) const;
+    /**
+     * @brief The size a menu item needs, measured entirely from the Menu tokens.
+     *
+     * Qt's own contents size is not consulted, so callers must first establish that the item is
+     * one this style owns — ownsMenuItem(). Anything else has to keep the base style's answer.
+     */
+    QSize menuItemSizeFromContents(const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
     QSize menuSeparatorSizeFromContents(const QStyleOptionMenuItem* option, const QWidget* widget) const;
 

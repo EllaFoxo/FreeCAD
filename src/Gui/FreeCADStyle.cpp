@@ -1421,10 +1421,12 @@ void FreeCADStyle::drawPrimitive(
         return;
     }
 
-    if (element == PE_PanelMenu) {
+    // A combo box paints its dropdown container with a menu panel as well, and the Menu tokens
+    // do not describe that surface — a widget this style does not own keeps the base style's.
+    if (element == PE_PanelMenu && ownsMenuSurface(widget, option)) {
         // A menu embedded in another widget rather than shown as its own popup window has no
         // surface of its own; painting one would put an opaque slab inside its host.
-        if (widget && !widget->isWindow()) {
+        if (!widget->isWindow()) {
             return;
         }
         drawComponent(painter, option->rect, widget, option);
@@ -1761,9 +1763,15 @@ QSize FreeCADStyle::sizeFromContents(
         return geometry.marginBox(size);
     }
 
+    // QComboBox sizes the rows of a popup-style dropdown through a QComboMenuDelegate, which
+    // asks for CT_MenuItem passing the combo box as the widget and the whole viewport as the
+    // contents size. Only an owned item is answered here; anything else falls through to the
+    // base style rather than being handed a size this style did not compute.
     if (type == CT_MenuItem) {
         if (const auto* menuOption = qstyleoption_cast<const QStyleOptionMenuItem*>(option)) {
-            return menuItemSizeFromContents(menuOption, size, widget);
+            if (ownsMenuItem(menuOption, widget)) {
+                return menuItemSizeFromContents(menuOption, widget);
+            }
         }
     }
 
@@ -3258,6 +3266,13 @@ bool FreeCADStyle::ownsMenuItem(const QStyleOptionMenuItem* option, const QWidge
     }
 }
 
+bool FreeCADStyle::ownsMenuSurface(const QWidget* widget, const QStyleOption* option) const
+{
+    // The same test ownsMenuItem() makes, so a surface and the rows drawn on it can never
+    // disagree about whose popup this is.
+    return contextOf(widget, option, StyleComponentElement::Root).component == StyleComponent::Menu;
+}
+
 FreeCADStyle::MenuItemColumns FreeCADStyle::menuItemColumns(
     const QStyleOptionMenuItem* option,
     const QWidget* widget
@@ -3325,16 +3340,8 @@ QSize FreeCADStyle::menuSeparatorSizeFromContents(
     return geometry.marginBox({metrics.horizontalAdvance(option->text), metrics.height()});
 }
 
-QSize FreeCADStyle::menuItemSizeFromContents(
-    const QStyleOptionMenuItem* option,
-    const QSize& contentsSize,
-    const QWidget* widget
-) const
+QSize FreeCADStyle::menuItemSizeFromContents(const QStyleOptionMenuItem* option, const QWidget* widget) const
 {
-    if (!ownsMenuItem(option, widget)) {
-        return contentsSize;
-    }
-
     if (option->menuItemType == QStyleOptionMenuItem::Separator) {
         return menuSeparatorSizeFromContents(option, widget);
     }
