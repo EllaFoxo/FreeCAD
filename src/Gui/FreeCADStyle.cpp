@@ -4007,27 +4007,41 @@ FreeCADStyle::ComboPopupPlacement FreeCADStyle::resolveComboPopupPlacement(const
     return placement;
 }
 
+QListView* FreeCADStyle::comboPopupListView(const QWidget* container)
+{
+    for (auto* view : container->findChildren<QListView*>()) {
+        if (view->property(comboDropdownProperty).toBool()) {
+            return view;
+        }
+    }
+    return nullptr;
+}
+
 void FreeCADStyle::widenComboPopupForScrollBar(QWidget* container)
 {
-    for (auto* child : container->findChildren<QListView*>()) {
-        if (!child->property(comboDropdownProperty).toBool()) {
-            continue;
-        }
-        const auto* verticalBar = child->verticalScrollBar();
-        if (verticalBar && verticalBar->isVisible()) {
-            container->resize(container->width() + verticalBar->width(), container->height());
-        }
-        break;
+    const QListView* view = comboPopupListView(container);
+    if (!view) {
+        return;
+    }
+
+    const QScrollBar* verticalBar = view->verticalScrollBar();
+    if (verticalBar && verticalBar->isVisible()) {
+        container->resize(container->width() + verticalBar->width(), container->height());
     }
 }
 
 int FreeCADStyle::comboPopupCurrentRowOffset(const QWidget* container)
 {
-    auto* view = container->findChild<QListView*>();
+    const QListView* view = comboPopupListView(container);
     if (!view || !view->currentIndex().isValid()) {
         return 0;
     }
-    return container->contentsMargins().top() + view->visualRect(view->currentIndex()).top();
+
+    // Ask the widget hierarchy where the row is rather than reassembling the answer from the
+    // container's margins: anything Qt puts between the two — a scroller button above the view,
+    // a frame on the view itself — is then accounted for by construction.
+    const QPoint rowTopLeft = view->visualRect(view->currentIndex()).topLeft();
+    return view->viewport()->mapTo(container, rowTopLeft).y();
 }
 
 void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
@@ -4049,7 +4063,15 @@ void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
 
     // The clamp outranks the placement: a popup that cannot both align and stay on screen stays
     // on screen. Qt's own menu-style path makes the same trade.
+    //
+    // A combo box whose top-left lands in dead space — between monitors of unequal height, say —
+    // belongs to no screen, and leaving it unclamped is the one outcome worse than clamping it to
+    // the wrong one.
     const QScreen* screen = QGuiApplication::screenAt(comboTopLeft);
+    if (!screen) {
+        screen = QGuiApplication::primaryScreen();
+    }
+
     if (screen) {
         const QRect available = screen->availableGeometry();
         targetTop = std::min(targetTop, available.bottom() + 1 - container->height());

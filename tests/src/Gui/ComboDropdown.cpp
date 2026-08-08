@@ -578,10 +578,12 @@ private Q_SLOTS:
         const auto guard = qScopeGuard([&box] { box.hidePopup(); });
         QCoreApplication::processEvents();  // the correction is deferred by a zero timer
 
-        QWidget* container = popupOf(box)->parentWidget();
-        const int rowTopGlobal = container->mapToGlobal(QPoint {}).y()
-            + container->contentsMargins().top()
-            + popupOf(box)->visualRect(box.model()->index(1, 0)).top();
+        // Walk the real widget hierarchy to the row rather than adding up the container's margins:
+        // the claim is about where the row ends up on screen, not about the arithmetic that put
+        // it there.
+        QListView* view = popupOf(box);
+        const QPoint rowTopLeft = view->visualRect(box.model()->index(1, 0)).topLeft();
+        const int rowTopGlobal = view->viewport()->mapToGlobal(rowTopLeft).y();
 
         QCOMPARE(rowTopGlobal, box.mapToGlobal(QPoint {}).y());
     }
@@ -657,6 +659,68 @@ private Q_SLOTS:
         const int top = container->mapToGlobal(QPoint {}).y();
         QVERIFY(top >= available.top());
         QVERIFY(top + container->height() <= available.bottom() + 1);
+    }
+
+    // The other edge, and the one an uncapped dropdown reaches. OverCurrent subtracts the current
+    // row's offset from the combo box's position, so a long list scrolled to a late row asks for a
+    // top well above the desktop — and, the list being taller than the space below the combo box,
+    // the lower clamp has nothing to give back. Only the upper clamp stops the popup there, and
+    // without it the current row itself is what ends up off screen.
+    void test_placementClampsALongPopupToTheTopOfTheScreen()  // NOLINT
+    {
+        const auto modeGuard = overrideToken("DropdownListPlacement", "current");
+        // The shared cap would keep the popup short enough to place honestly; the workbench
+        // selector clears it the same way, which is what makes this shape a shipped one.
+        const auto capGuard = overrideToken("DropdownListMaxHeight", "reset()");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        const QRect available = QGuiApplication::primaryScreen()->availableGeometry();
+
+        QComboBox box;
+        // More rows than the desktop can show, with maxVisibleItems raised past them so nothing
+        // but the (cleared) cap and Qt's own screen fit bound the popup.
+        const int rowCount = available.height();
+        box.setMaxVisibleItems(rowCount);
+        for (int row = 0; row < rowCount; ++row) {
+            box.addItem(QStringLiteral("Item %1").arg(row));
+        }
+        box.setCurrentIndex(rowCount - 1);
+        style.polish(&box);
+
+        box.move(available.left() + 40, available.top());
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();
+
+        QListView* view = popupOf(box);
+        QWidget* container = view->parentWidget();
+        const int rowOffsetInPopup
+            = view->viewport()->mapTo(container, view->visualRect(view->currentIndex()).topLeft()).y();
+
+        // The precondition the clamp exists for, stated rather than assumed: aligning the current
+        // row with the combo box would have put the popup's top above the desktop.
+        QVERIFY2(
+            box.mapToGlobal(QPoint {}).y() - rowOffsetInPopup < available.top(),
+            qPrintable(QStringLiteral(
+                           "the current row sits %1px into the popup and the combo box %2px "
+                           "below the top of the desktop, so the placement stays on screen "
+                           "unaided and the clamp under test is never reached"
+            )
+                           .arg(rowOffsetInPopup)
+                           .arg(box.mapToGlobal(QPoint {}).y() - available.top()))
+        );
+
+        const int top = container->mapToGlobal(QPoint {}).y();
+        QVERIFY2(
+            top >= available.top(),
+            qPrintable(QStringLiteral(
+                           "the popup starts %1px above the desktop, so its first rows "
+                           "— the current one among them — are off screen"
+            )
+                           .arg(available.top() - top))
+        );
     }
 };
 

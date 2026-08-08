@@ -1217,6 +1217,9 @@ private:
      */
     ComboPopupPlacement resolveComboPopupPlacement(const QWidget* container) const;
 
+    /** @brief The tagged dropdown list inside a popup container, or nullptr if it holds none. */
+    static QListView* comboPopupListView(const QWidget* container);
+
     /** @brief Widens the popup when a scrollbar appeared after Qt had settled its width. */
     static void widenComboPopupForScrollBar(QWidget* container);
 
