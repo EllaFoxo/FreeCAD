@@ -9,6 +9,7 @@
 #include <QImage>
 #include <QListView>
 #include <QPainter>
+#include <QRegion>
 #include <QScopeGuard>
 #include <QScreen>
 #include <QStyleFactory>
@@ -417,6 +418,47 @@ private Q_SLOTS:
                            .arg(box.count())
                            .arg(secondRow)
                            .arg(view->maximumHeight()))
+        );
+    }
+
+    // A separator row is a 1px rule, and the item-view popup route has to keep it one. Qt sizes
+    // one as QSize(pm, pm) from PM_DefaultFrameWidth asked with the *combo box* as the widget, so
+    // the popup view's own inflated frame width must not be what answers — a separator three
+    // times too tall is what a metric leaking across those two widgets looks like.
+    void test_separatorRowsAreOnePixel()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        box.insertSeparator(1);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QCOMPARE(popupOf(box)->visualRect(box.model()->index(1, 0)).height(), 1);
+    }
+
+    // A rounded scroll area is clipped to its border radius so the compositor does not show the
+    // widget's square corners. A combo popup's radius belongs to the container that paints its
+    // edge, not to the list sitting inset inside it — masking the list would round a widget whose
+    // corners are nowhere near the popup's, and leave the visible edge square.
+    void test_aRoundedPopupDoesNotMaskItsList()  // NOLINT
+    {
+        const auto radiusGuard = overrideToken("DropdownListBorderRadius", "8px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QVERIFY2(
+            popupOf(box)->mask().isEmpty(),
+            qPrintable(QStringLiteral("the popup list was clipped to %1 rect(s)")
+                           .arg(popupOf(box)->mask().rectCount()))
         );
     }
 

@@ -3722,6 +3722,13 @@ void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
         return;
     }
 
+    // A combo popup's edge is painted by the container around the list, not by the list itself,
+    // which sits inset from it. Clipping the list would round a widget whose corners are not the
+    // popup's, and leave the visible edge square.
+    if (scrollArea->property(comboDropdownProperty).toBool()) {
+        return;
+    }
+
     const StyleContext context = contextOf(scrollArea, nullptr);
     const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
 
@@ -3914,36 +3921,10 @@ void FreeCADStyle::applyComboDropdownMaxHeight(QListView* listView) const
     const BoxGeometryDefinition geometry = resolveBoxGeometry(contextOf(listView));
 
     // An absent MaxHeight — including one a theme cleared with reset() — means the dropdown is
-    // bounded only by Qt, which keeps it on screen and honours maxVisibleItems. Qt's own
-    // scroller buttons take over there, so they go back into service with it.
+    // bounded only by Qt, which keeps it on screen and honours maxVisibleItems.
     const int maxHeight = geometry.maxHeight.value_or(QWIDGETSIZE_MAX);
     listView->setMaximumHeight(maxHeight);
     container->setMaximumHeight(maxHeight);
-
-    if (geometry.maxHeight) {
-        hideScrollerButtons(container);
-    }
-    else {
-        restoreScrollerButtons(container);
-    }
-}
-
-void FreeCADStyle::hideScrollerButtons(QWidget* container)
-{
-    for (auto* child : container->findChildren<QWidget*>(Qt::FindDirectChildrenOnly)) {
-        if (strcmp(child->metaObject()->className(), "QComboBoxPrivateScroller") == 0) {
-            child->setMaximumHeight(0);
-        }
-    }
-}
-
-void FreeCADStyle::restoreScrollerButtons(QWidget* container)
-{
-    for (auto* child : container->findChildren<QWidget*>(Qt::FindDirectChildrenOnly)) {
-        if (strcmp(child->metaObject()->className(), "QComboBoxPrivateScroller") == 0) {
-            child->setMaximumHeight(QWIDGETSIZE_MAX);
-        }
-    }
 }
 
 void FreeCADStyle::unpolish(QWidget* widget)
@@ -3987,7 +3968,6 @@ void FreeCADStyle::restoreComboDropdownDefaults(QComboBox* comboBox)
             continue;
         }
         container->setMaximumHeight(QWIDGETSIZE_MAX);
-        restoreScrollerButtons(container);
         container->removeEventFilter(this);
     }
 }

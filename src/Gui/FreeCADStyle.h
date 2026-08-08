@@ -1190,8 +1190,6 @@ private:
     std::optional<QRect> comboPopupContentsRect(const QStyleOption* option, const QWidget* widget) const;
 
     void restoreComboDropdownDefaults(QComboBox* comboBox);
-    static void hideScrollerButtons(QWidget* container);
-    static void restoreScrollerButtons(QWidget* container);
 
     /// Where a dropdown popup sits relative to the combo box it belongs to.
     enum class ComboPopupPlacementMode : std::uint8_t
