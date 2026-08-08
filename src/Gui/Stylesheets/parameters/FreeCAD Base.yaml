@@ -311,6 +311,37 @@ ListRowPressedBackground: "@Background.200"
 DropdownListMaxHeight: "250px"
 WorkbenchSelectorDropdownMaxHeight: "reset()"
 
+# A dropdown is meant to look like a menu, so it aliases the Menu tokens rather than repeating
+# their values — retuning a menu retunes every dropdown with it. It is a different painting path
+# though (SH_ComboBox_Popup is declined, so the popup is an ordinary item view), and the two
+# paths divide the work differently: an item view keeps its interaction fills on the Row element
+# and its padding and label colour on Item, where a menu puts everything on the item. The names
+# below follow the item-view path; aliasing the Menu names verbatim would define tokens nothing
+# ever resolves.
+#
+# The surface: the container around the list is a QFrame, and its frame is the popup's edge.
+DropdownListBackground: "@MenuBackground"
+DropdownListBorderColor: "@MenuBorderColor"
+DropdownListBorderThickness: "@MenuBorderThickness"
+DropdownListBorderRadius: "@MenuBorderRadius"
+DropdownListPadding: "@MenuPadding"
+
+# The rows. No DropdownListItemTextColor or DropdownListItemDisabledTextColor: the item-view path
+# only overrides the label colour of the highlighted row, and a resting or disabled dropdown label
+# already takes the same palette colour a menu's does.
+DropdownListItemPadding: "@MenuItemPadding"
+DropdownListItemIconSpacing: "@MenuItemIconSpacing"
+DropdownListItemSpacing: "@MenuItemSpacing"
+DropdownListItemHoveredTextColor: "@MenuItemHoveredTextColor"
+DropdownListItemCheckedTextColor: "@MenuItemHoveredTextColor"
+
+# The highlight. Moving the pointer over a dropdown row makes it the current row, so hover and
+# selection are the same thing here and share the menu's one highlight.
+DropdownListRowBorderRadius: "@MenuItemBorderRadius"
+DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
+DropdownListRowCheckedBackground: "@MenuItemHoveredBackground"
+DropdownListRowPressedBackground: "@MenuItemPressedBackground"
+
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 

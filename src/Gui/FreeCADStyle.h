@@ -1161,6 +1161,14 @@ private:
      */
     void applyComboDropdownMaxHeight(QListView* listView) const;
 
+    /**
+     * @brief The contents rect of a combo popup container, or nothing for any other widget.
+     *
+     * The container's frame is the popup's surface, so what it leaves for the list inside is
+     * the surface's own border and padding.
+     */
+    std::optional<QRect> comboPopupContentsRect(const QStyleOption* option, const QWidget* widget) const;
+
     void restoreComboDropdownDefaults(QComboBox* comboBox);
     static void hideScrollerButtons(QWidget* container);
     static void restoreScrollerButtons(QWidget* container);

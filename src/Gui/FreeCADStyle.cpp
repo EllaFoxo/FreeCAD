@@ -847,6 +847,14 @@ int FreeCADStyle::styleHint(
         return 0;
     }
 
+    if (hint == SH_ComboBox_Popup) {
+        // Qt's menu-style popup sizes and paints every row through CT_MenuItem / CE_MenuItem
+        // with the combo box as the widget — a different code path from the item-view theming
+        // the DropdownList component already describes. Declining the hint leaves the popup on
+        // the item-view route, so one set of tokens owns its whole appearance.
+        return 0;
+    }
+
     if (hint == SH_GroupBox_TextLabelVerticalAlignment) {
         // Fusion answers AlignTop, which places the frame's top edge below the whole title band.
         // Our group box puts the title *on* that edge so the border can be notched out from
@@ -1812,6 +1820,25 @@ QSize FreeCADStyle::sizeFromContents(
     return QProxyStyle::sizeFromContents(type, option, size, widget);
 }
 
+std::optional<QRect> FreeCADStyle::comboPopupContentsRect(
+    const QStyleOption* option,
+    const QWidget* widget
+) const
+{
+    if (option == nullptr || widget == nullptr || !widget->property(comboContainerProperty).toBool()) {
+        return {};
+    }
+
+    // QFrame turns this rect into the container's contents margins, which is the only inset
+    // between the popup edge and the list inside it. Deriving it from the surface's own border
+    // and padding is what gives the popup the same breathing room a menu has.
+    const StyleContext context = contextOf(widget, option);
+    const QMarginsF border = resolveBoxStyle(context).borderThickness.value_or(QMarginsF());
+    const QMarginsF inset = border + resolveBoxGeometry(context).padding;
+
+    return option->rect.marginsRemoved(inset.toMargins());
+}
+
 QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* option, const QWidget* widget) const
 {
     // QProxyStyle sets baseStyle->proxy = this, so the base style's drawControl(CE_ItemViewItem)
@@ -1843,6 +1870,12 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
         const BoxGeometryDefinition geometry = resolveBoxGeometry(paneContext);
         const QRect paneRect = QProxyStyle::subElementRect(SE_TabWidgetTabPane, option, widget);
         return geometry.contentRect(paneRect);
+    }
+
+    if (element == SE_ShapedFrameContents) {
+        if (const auto contents = comboPopupContentsRect(option, widget)) {
+            return *contents;
+        }
     }
 
     if (element == SE_LineEditContents) {
@@ -3819,13 +3852,20 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
     // The popup list belongs to Qt, so a caller that needs its own dropdown metrics names the
     // component on the combo box and it is carried over here. The list then resolves against
     // that prefix ahead of DropdownList, which is how one dropdown takes a height of its own.
-    if (const QVariant component = comboBox->property("dropdownComponent"); component.isValid()) {
+    const QVariant component = comboBox->property("dropdownComponent");
+    if (component.isValid()) {
         listView->setProperty("component", component);
     }
 
     QWidget* container = listView->parentWidget();
     if (!container) {
         return;
+    }
+
+    // The surface and edge belong to the container, so it answers to the same name as the list
+    // it holds — otherwise a named dropdown could restyle its rows but not the popup around them.
+    if (component.isValid()) {
+        container->setProperty("component", component);
     }
 
     applyComboDropdownMaxHeight(listView);
@@ -4429,6 +4469,13 @@ StyleContext FreeCADStyle::contextOf(
         // which can change when the popup container is reparented at show time.
         const bool isDropdown = widget->property(FreeCADStyle::comboDropdownProperty).toBool();
         context.component = isDropdown ? StyleComponent::DropdownList : StyleComponent::List;
+        context.element = element;
+    }
+    else if (widget != nullptr && widget->property(FreeCADStyle::comboContainerProperty).toBool()) {
+        // The popup container is a plain QFrame around the list, and it is the widget that
+        // paints the popup's surface and edge. It resolves as the dropdown it holds so one
+        // block of tokens describes the whole popup.
+        context.component = StyleComponent::DropdownList;
         context.element = element;
     }
     else if (qobject_cast<const QHeaderView*>(widget)) {
