@@ -343,10 +343,11 @@ private Q_SLOTS:
         QCOMPARE(widthOf(both) - base, std::max(iconSize, indicatorSize) + iconSpacing);
     }
 
-    // One slot, one occupant, decided in the layout so the painter cannot diverge from it: a
-    // row with an icon shows the icon, a checkable row without one shows the indicator, and a
-    // checkable row that also has an icon shows the icon.
-    void test_theLeadingColumnHoldsTheIconWhenThereIsOne()  // NOLINT
+    // One slot, one occupant, decided in the layout so the painter cannot diverge from it. The
+    // checkable row's state takes the slot: the label already identifies the action, so the one
+    // thing the row cannot say any other way is whether it is on. A non-checkable row shows its
+    // icon instead.
+    void test_theLeadingColumnHoldsTheIndicatorOnCheckableRows()  // NOLINT
     {
         ProbeStyle freecadStyle;
         QStyle& style = freecadStyle;
@@ -378,20 +379,53 @@ private Q_SLOTS:
         QVERIFY(!indicatorLayout->indicator.isNull());
         QVERIFY(indicatorLayout->icon.isNull());
 
+        // Sketcher's "Toggle grid" is exactly this shape: checkable and carrying an icon. The
+        // indicator wins, so hovering it still shows whether it is on — a row tint would be
+        // overpainted by the opaque hover fill, because each active state resolves separately
+        // and Hovered outranks Checked.
         QStyleOptionMenuItem checkableWithIcon = checkableWithoutIcon;
         checkableWithIcon.maxIconWidth = 20;
         checkableWithIcon.icon = solidIcon();
 
         const auto sharedLayout = layoutOf(checkableWithIcon);
         QVERIFY(sharedLayout.has_value());
-        QVERIFY(!sharedLayout->icon.isNull());
-        QVERIFY(sharedLayout->indicator.isNull());
+        QVERIFY(!sharedLayout->indicator.isNull());
+        QVERIFY(sharedLayout->icon.isNull());
     }
 
-    // The icon took the slot, so the checked state has to be carried by the row itself. Same
-    // pixel and rationale as test_hoveredItemPaintsItsStateBackground: the far left of the box,
-    // inside the padding, before anything else is drawn.
-    void test_checkedItemWithAnIconShowsItsStateOnTheRow()  // NOLINT
+    // The column is as wide as the widest occupant any row can have, so a narrower occupant has
+    // to be centred in it rather than pinned to the leading edge — otherwise a 14px indicator in
+    // a 16px column sits 1px off the icons above and below it.
+    void test_aNarrowOccupantIsCentredInTheSharedColumn()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        // Icons present too, so the column is iconSize wide while the occupant is indicatorSize.
+        option.maxIconWidth = 20;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+        QVERIFY(!layout->indicator.isNull());
+        QCOMPARE(layout->indicator.width(), indicatorSize);
+
+        // Column starts at the content edge: border is not part of the item rect, so it is just
+        // the item's own left padding.
+        constexpr int itemPaddingLeft = 6;
+        QCOMPARE(layout->indicator.left(), itemPaddingLeft + ((iconSize - indicatorSize) / 2));
+        QVERIFY(option.rect.contains(layout->indicator));
+    }
+
+    // MenuItemCheckedBackground is not stated by the shipped theme — the indicator carries the
+    // state — but contextOf() does map QStyleOptionMenuItem::checked to StyleState::Checked, so a
+    // theme that states it gets a row tint. This pins that mapping.
+    void test_checkedItemResolvesItsRowBackground()  // NOLINT
     {
         Gui::FreeCADStyle freecadStyle;
         QStyle& style = freecadStyle;
@@ -400,8 +434,6 @@ private Q_SLOTS:
         QStyleOptionMenuItem option = plainItem(menu);
         option.menuHasCheckableItems = true;
         option.checkType = QStyleOptionMenuItem::NonExclusive;
-        option.maxIconWidth = 20;
-        option.icon = solidIcon();
         option.checked = true;
         option.rect
             = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
@@ -413,6 +445,8 @@ private Q_SLOTS:
         style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
         painter.end();
 
+        // Same pixel and rationale as test_hoveredItemPaintsItsStateBackground: the far left of
+        // the box, inside the padding, before anything else is drawn.
         QCOMPARE(canvas.pixelColor(1, option.rect.center().y()), QColor(QStringLiteral("#0000ff")));
     }
 
@@ -530,11 +564,11 @@ private Q_SLOTS:
 
         QStyleOptionMenuItem option = plainItem(menu);
         option.menuItemType = QStyleOptionMenuItem::SubMenu;
+        // A non-checkable row in a menu that has checkable items — the "Customize" row of the
+        // toolbar-visibility menu. It carries an icon, the wider of the two things that can land
+        // in the leading column, so it is the tightest row the reservation has to accommodate.
         option.menuHasCheckableItems = true;
-        option.checkType = QStyleOptionMenuItem::NonExclusive;
         option.maxIconWidth = 20;
-        // The icon is the wider of the two things that can land in the leading column, so this
-        // is the tightest row the reservation has to accommodate.
         option.icon = solidIcon();
         option.text = QStringLiteral("Export as\tCtrl+Shift+E");
         option.reservedShortcutWidth = 77;
@@ -644,7 +678,6 @@ private Q_SLOTS:
         option.menuHasCheckableItems = true;
         option.checkType = QStyleOptionMenuItem::NonExclusive;
         option.maxIconWidth = 20;
-        option.icon = solidIcon();
         option.direction = Qt::RightToLeft;
         option.rect
             = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
@@ -654,7 +687,7 @@ private Q_SLOTS:
 
         // Leading column is now on the right and the trailing arrow on the left: the whole
         // order reverses, without any per-part special casing.
-        QVERIFY(layout->icon.left() > layout->text.left());
+        QVERIFY(layout->indicator.left() > layout->text.left());
         QVERIFY(layout->text.left() > layout->arrow.left());
     }
 

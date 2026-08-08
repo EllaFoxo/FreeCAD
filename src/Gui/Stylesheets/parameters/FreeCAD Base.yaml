@@ -513,7 +513,7 @@ MenuOverlap: 0px
 # There are deliberately no MenuIndicator* tokens: contextOf() routes the Indicator element
 # to the CheckBox component, so the check column resolves against CheckBox*/RadioButton*.
 # The icon and the check indicator share one leading column, sized to the wider of MenuIconSize
-# and CheckBoxWidth: an item shows its icon when it has one and its indicator otherwise.
+# and CheckBoxWidth: a checkable item shows its indicator, any other item shows its icon.
 MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100, right: @Spacing.300)"
 MenuItemIconSpacing: "@ListItemIconSpacing"
 MenuItemSpacing: "@Spacing.050"
@@ -525,9 +525,11 @@ MenuItemHoveredTextColor: "@Colors.white"
 MenuItemPressedBackground: "@ListRowPressedBackground"
 MenuItemDisabledTextColor: "@ListDisabledTextColor"
 MenuItemMinWidth: 240px
-# A checkable item that also has an icon shows the icon, so its checked state is carried by
-# the row instead of the shared leading slot.
-MenuItemCheckedBackground: "opacity(@Accent.500, 20%)"
+# No MenuItemCheckedBackground on purpose: a checkable item always shows its indicator, so a
+# row tint would only repeat what the indicator already says — and a menu like the toolbar
+# visibility one has half a dozen checked rows at once, which reads as noise. The token does
+# resolve (contextOf() maps QStyleOptionMenuItem::checked to StyleState::Checked), so a theme
+# that wants the tint can state it.
 
 # ── Menu Shortcut ────────────────────────────────────────────────────────────
 # Only the gap is ours: Qt measures the accelerator column itself and adds its width to

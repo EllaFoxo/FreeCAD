@@ -3402,18 +3402,20 @@ std::optional<FreeCADStyle::MenuItemLayout> FreeCADStyle::menuItemLayout(
     if (columns.leading > 0) {
         const QRect column = columnAt(left, columns.leading - geometry.iconSpacing);
 
-        // One slot, one occupant. Deciding it here rather than in drawMenuItem keeps the
-        // painter from having to repeat the rule and drift from it.
-        if (!option->icon.isNull()) {
-            const int extent = menuIconSize(widget, option);
-            layout.icon = centredIn(column, {extent, extent});
-        }
-        else if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
+        // One slot, one occupant, and the checkable row's state takes it: the label already
+        // identifies the action, so when only one glyph fits, the one thing the row cannot
+        // say any other way is whether it is on. Deciding it here rather than in drawMenuItem
+        // keeps the painter from having to repeat the rule and drift from it.
+        if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
             const QSize size(
                 proxy()->pixelMetric(PM_IndicatorWidth, option, widget),
                 proxy()->pixelMetric(PM_IndicatorHeight, option, widget)
             );
             layout.indicator = centredIn(column, size);
+        }
+        else if (!option->icon.isNull()) {
+            const int extent = menuIconSize(widget, option);
+            layout.icon = centredIn(column, {extent, extent});
         }
 
         left += columns.leading;

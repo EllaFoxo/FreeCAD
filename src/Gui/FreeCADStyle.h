@@ -627,6 +627,9 @@ protected:
      *        and submenu arrow.
      *
      * Parts that the item does not have are left as null rects.
+     *
+     * @p indicator and @p icon are mutually exclusive — they share one leading column, so at
+     * most one of them is ever set and a caller may paint both without checking for a clash.
      */
     struct MenuItemLayout
     {
