@@ -3874,11 +3874,11 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
         container->installEventFilter(this);
     }
 
-    // Both widgets were created by the comboBox->view() call above — during polish — so they
-    // missed the StyleChange QApplication::setStyle sends every widget it polishes, and both
-    // computed their style-derived metrics while they still resolved as plain widgets. The tags
-    // just applied change those metrics: the view lays its rows out at the DropdownList pitch,
-    // and the container insets its contents by the popup's own border and padding.
+    // Both widgets were created before, or by, the comboBox->view() call above, and whatever
+    // metrics they cached they cached while resolving as plain widgets. The tags just applied
+    // change those metrics — the view's rows take the DropdownList pitch, the container insets
+    // its contents by the popup's own border and padding — and nothing in Qt reconsiders a cache
+    // because a property changed.
     notifyStyleChange(listView);
     notifyStyleChange(container);
 
