@@ -788,9 +788,12 @@ private:
     /**
      * @brief The rect an item view's frame leaves for its contents.
      *
-     * Insets by the container padding on three sides, and by the padding less one row gap on
-     * top — every row carries a leading gap including the first, and this is where that first
-     * gap is given back. Returns nullopt for views this style does not describe.
+     * Insets by the container border and padding on three sides, and by the padding less one row
+     * gap on top — every row carries a leading gap including the first, and this is where that
+     * first gap is given back. Returns nullopt for views this style does not describe.
+     *
+     * Unlike QCommonStyle's SE_ShapedFrameContents this ignores the frame shape, so a view set to
+     * QFrame::NoFrame still reports the inset as its frameWidth().
      */
     std::optional<QRect> itemViewContentsRect(const QStyleOption* option, const QWidget* widget) const;
 

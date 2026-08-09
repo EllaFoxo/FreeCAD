@@ -816,19 +816,27 @@ std::optional<QRect> FreeCADStyle::itemViewContentsRect(
         return {};
     }
 
-    const QMargins padding = resolveBoxGeometry(contextOf(widget, option, StyleComponentElement::Root))
-                                 .padding.toMargins();
+    // The view paints its own edge from the same tokens (PE_Frame reaches drawComponent), so the
+    // border is part of the inset here just as it is for a combo popup's container — contents
+    // laid out inside the padding alone would paint over that edge.
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Root);
+    const QMargins border = resolveBoxStyle(context).borderThickness.value_or(QMarginsF()).toMargins();
+    const QMargins padding = resolveBoxGeometry(context).padding.toMargins();
     if (padding.isNull()) {
         return {};
     }
 
     // The top gives back the leading gap row 0 now carries, so the first row still sits at
-    // exactly `padding` from the frame.
-    const int top = paddingLessLeadingGap(padding.top(), leadingRowGap(option, widget));
+    // exactly border + padding from the frame's edge.
+    const int top = border.top()
+        + paddingLessLeadingGap(padding.top(), leadingRowGap(option, widget));
 
-    return option->rect.marginsRemoved(
-        QMargins(padding.left(), top, padding.right(), padding.bottom())
-    );
+    return option->rect.marginsRemoved(QMargins(
+        border.left() + padding.left(),
+        top,
+        border.right() + padding.right(),
+        border.bottom() + padding.bottom()
+    ));
 }
 
 int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
