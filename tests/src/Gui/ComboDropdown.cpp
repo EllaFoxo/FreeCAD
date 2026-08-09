@@ -822,8 +822,57 @@ private Q_SLOTS:
 
         // The visible claim, not just the arithmetic: the bottom row meets the bottom of the
         // viewport, so there is no surface between the two.
-        const QRect last = view->visualRect(box.model()->index(box.count() - 1, 0));
-        QCOMPARE(last.bottom(), view->viewport()->rect().bottom());
+        const QRect lastRowRect = view->visualRect(box.model()->index(box.count() - 1, 0));
+        QCOMPARE(lastRowRect.bottom(), view->viewport()->rect().bottom());
+    }
+
+    // The trim changes the container's height, and the screen clamp is computed from that height,
+    // so the trim has to run first. A capped popup at the bottom of the screen is the shape that
+    // tells the two orders apart: the clamp seats the popup's bottom edge on the screen edge, and
+    // a trim applied after it lifts the popup clear of that edge by the remainder it removed.
+    void test_theTrimPrecedesTheScreenClamp()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        const QRect available = QGuiApplication::primaryScreen()->availableGeometry();
+
+        QComboBox box;
+        populateBeyondTheCap(box);
+        style.polish(&box);
+        box.move(available.left() + 40, available.bottom() - box.sizeHint().height());
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();  // the correction is deferred by a zero timer
+
+        QWidget* container = popupOf(box)->parentWidget();
+
+        // Two preconditions, because either one missing would let both orders pass.
+        //
+        // A popup that was not trimmed has the same height before and after the clamp, so the
+        // order cannot matter to it.
+        QVERIFY2(
+            container->height() < container->maximumHeight(),
+            qPrintable(QStringLiteral("the popup was not trimmed: %1px against a %2px cap")
+                           .arg(container->height())
+                           .arg(container->maximumHeight()))
+        );
+
+        // And a popup that fits below its combo box unaided never reaches the clamp at all.
+        QVERIFY2(
+            box.mapToGlobal(QPoint {}).y() + container->height() - 1 > available.bottom(),
+            "the popup fits below the combo box, so the clamp under test is never reached"
+        );
+
+        const int containerBottom = container->mapToGlobal(QPoint {}).y() + container->height() - 1;
+        QVERIFY2(
+            containerBottom == available.bottom(),
+            qPrintable(QStringLiteral(
+                           "the popup ends %1px short of the bottom of the screen: it "
+                           "was clamped against a height it no longer has"
+            )
+                           .arg(available.bottom() - containerBottom))
+        );
     }
 
     // Qt sizes the container afresh on every showPopup(), so the trim starts from the cap each
@@ -845,9 +894,9 @@ private Q_SLOTS:
             return height;
         };
 
-        const int first = heightAfterOpening();
-        QCOMPARE(heightAfterOpening(), first);
-        QCOMPARE(heightAfterOpening(), first);
+        const int firstHeight = heightAfterOpening();
+        QCOMPARE(heightAfterOpening(), firstHeight);
+        QCOMPARE(heightAfterOpening(), firstHeight);
     }
 
     // The snap applies only where there is a remainder to give back. An uncapped popup is
@@ -875,11 +924,11 @@ private Q_SLOTS:
 
         QCOMPARE(view->viewport()->height(), viewportHeightBeforeCorrection);
 
-        const QRect last = view->visualRect(box.model()->index(box.count() - 1, 0));
+        const QRect lastRowRect = view->visualRect(box.model()->index(box.count() - 1, 0));
         QVERIFY2(
-            last.bottom() <= view->viewport()->rect().bottom(),
+            lastRowRect.bottom() <= view->viewport()->rect().bottom(),
             qPrintable(QStringLiteral("the last row ends %1px past the viewport")
-                           .arg(last.bottom() - view->viewport()->rect().bottom()))
+                           .arg(lastRowRect.bottom() - view->viewport()->rect().bottom()))
         );
     }
 };

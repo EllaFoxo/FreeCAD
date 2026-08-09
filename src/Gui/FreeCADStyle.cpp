@@ -4078,7 +4078,7 @@ void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
     widenComboPopupForScrollBar(container);
 
     // Before the placement is worked out, because it and the screen clamp below both read the
-    // container's height.
+    // container's height. test_theTrimPrecedesTheScreenClamp covers the other order.
     snapComboPopupToWholeRows(container);
 
     const ComboPopupPlacement placement = resolveComboPopupPlacement(container);
