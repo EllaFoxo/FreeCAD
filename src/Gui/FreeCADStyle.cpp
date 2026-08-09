@@ -4033,20 +4033,11 @@ void FreeCADStyle::snapComboPopupToWholeRows(QWidget* container)
         return;
     }
 
-    // A popup that shows every row it has is exactly as tall as its content, and its first row
-    // is shorter than the rest — it reserves no leading DropdownListItemSpacing — so a remainder
-    // measured against a later row's pitch would shave pixels off a popup that already fits.
-    // Only one with rows it cannot show has anything to give back.
-    const QScrollBar* verticalBar = view->verticalScrollBar();
-    if (!verticalBar || verticalBar->maximum() <= 0) {
-        return;
-    }
-
-    // Scrolling per item takes row 0 out of sight, so the pitch governing the visible run is a
-    // later row's, gap included.
-    const QAbstractItemModel* model = view->model();
-    const int rowCount = model ? model->rowCount(view->rootIndex()) : 0;
-    const int rowHeight = view->sizeHintForRow(rowCount > 1 ? 1 : 0);
+    // The cap that bounds a capped popup's height is an arbitrary number of pixels, not a whole
+    // number of rows, so the viewport it produces generally has a partial row's worth of surface
+    // left over below the last full one. Every row shares the same pitch, so row 0's height
+    // stands in for all of them.
+    const int rowHeight = view->sizeHintForRow(0);
     if (rowHeight <= 0) {
         return;
     }

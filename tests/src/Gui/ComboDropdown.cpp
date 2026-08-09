@@ -908,6 +908,26 @@ private Q_SLOTS:
         );
     }
 
+    // With a uniform pitch the trim has nothing left to do on an unscrolled capped popup — the
+    // 3px residue that survived the old model is gone. This is the payoff the uniform gap was
+    // for.
+    void test_anUnscrolledCappedPopupHasNoResidue()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populateBeyondTheCap(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();  // the correction is deferred by a zero timer
+
+        QListView* view = popupOf(box);
+        const int rowHeight = view->sizeHintForRow(0);
+        QVERIFY(rowHeight > 0);
+        QCOMPARE(view->viewport()->height() % rowHeight, 0);
+    }
+
     // A capped popup scrolls per item, so it only ever shows whole rows: whatever the viewport
     // has left over after the last of them is empty surface, and the owner sees it as a band of
     // background under the bottom row. Measured scrolled, where every visible row carries the
