@@ -341,14 +341,12 @@ DropdownListPadding: "@MenuPadding"
 DropdownListItemPadding: "@MenuItemPadding"
 DropdownListItemIconSpacing: "@MenuItemIconSpacing"
 DropdownListItemSpacing: "@MenuItemSpacing"
-DropdownListItemHoveredTextColor: "@MenuItemHoveredTextColor"
-DropdownListItemCheckedTextColor: "@MenuItemHoveredTextColor"
 
 # The highlight. Moving the pointer over a dropdown row makes it the current row, so hover and
 # selection are the same thing here and share the menu's one highlight.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
-DropdownListRowCheckedBackground: "@MenuItemHoveredBackground"
+DropdownListRowCheckedBackground: "@MenuItemCheckedBackground"
 DropdownListRowPressedBackground: "@MenuItemPressedBackground"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
@@ -558,11 +556,10 @@ MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100, righ
 MenuItemIconSpacing: "@ListItemIconSpacing"
 MenuItemSpacing: "@Spacing.050"
 MenuItemMargin: "padding(0px)"
-MenuItemBorderRadius: 4px
+MenuItemBorderRadius: 2px
 MenuItemTextColor: "@BaseTextColor"
-MenuItemHoveredBackground: "@Accent.500"
-MenuItemHoveredTextColor: "@Colors.white"
-MenuItemPressedBackground: "@ListRowPressedBackground"
+MenuItemHoveredBackground: "@ListRowPressedBackground"
+MenuItemPressedBackground: "@ListRowCheckedBackground"
 MenuItemDisabledTextColor: "@ListDisabledTextColor"
 MenuItemMinWidth: 240px
 # No MenuItemCheckedBackground on purpose: a checkable item always shows its indicator, so a
