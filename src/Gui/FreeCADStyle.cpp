@@ -4033,6 +4033,16 @@ void FreeCADStyle::snapComboPopupToWholeRows(QWidget* container)
         return;
     }
 
+    // A popup showing all of its rows has no surface to give back, and the pitch below is not a
+    // safe thing to measure it against: rows share a pitch only where the style sizes them, and
+    // Qt sizes a separator inside QComboBoxDelegate::sizeHint() as QSize(pm, pm) from
+    // PM_DefaultFrameWidth, never reaching CT_ItemViewItem. A popup holding one is not a whole
+    // number of pitches tall even though it fits, and trimming it would clip its last row.
+    const QScrollBar* verticalBar = view->verticalScrollBar();
+    if (verticalBar && verticalBar->maximum() <= 0) {
+        return;
+    }
+
     // The cap that bounds a capped popup's height is an arbitrary number of pixels, not a whole
     // number of rows, so the viewport it produces generally has a partial row's worth of surface
     // left over below the last full one. Every row shares the same pitch, so row 0's height

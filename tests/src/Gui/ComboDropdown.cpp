@@ -564,10 +564,11 @@ private Q_SLOTS:
 
     // A separator row is a 1px rule, and the item-view popup route has to keep it one. Qt sizes
     // one as QSize(pm, pm) from PM_DefaultFrameWidth asked with the *combo box* as the widget,
-    // never the popup view, so this pins the one thing that could make it grow: item-view frame
-    // padding reaching a QComboBox. The fixture gives Select a padding precisely so there is
-    // something to leak — widen resolveItemViewFrameWidth()'s guard to cover combo boxes and this
-    // row becomes 5px.
+    // never the popup view, so this pins the one thing that could make it grow: item-view
+    // container padding reaching a QComboBox. The fixture gives Select a padding precisely so
+    // there is something to leak — route that padding back through PM_DefaultFrameWidth, where it
+    // lived before itemViewContentsRect() took it over as SE_ShapedFrameContents, without
+    // excluding combo boxes, and this row becomes 5px.
     void test_separatorRowsAreOnePixel()  // NOLINT
     {
         Gui::FreeCADStyle& style = installFreshApplicationStyle();
@@ -1045,9 +1046,8 @@ private Q_SLOTS:
     }
 
     // The snap applies only where there is a remainder to give back. An uncapped popup is
-    // already exactly as tall as its content, and its first row is shorter than the rest — it
-    // carries no leading DropdownListItemSpacing — so a remainder taken against a later row's
-    // pitch would shave pixels off a popup that fits perfectly, and push its last row out.
+    // already exactly as tall as its content, so there is nothing below the last row to reclaim
+    // and the popup must come out of the correction at the height Qt sized it to.
     void test_anUncappedPopupIsNotShrunk()  // NOLINT
     {
         Gui::FreeCADStyle& style = installFreshApplicationStyle();
@@ -1075,6 +1075,52 @@ private Q_SLOTS:
             qPrintable(QStringLiteral("the last row ends %1px past the viewport")
                            .arg(lastRowRect.bottom() - view->viewport()->rect().bottom()))
         );
+    }
+
+    // The uniform pitch the trim relies on covers only the rows the style sizes. Qt sizes a
+    // separator inside QComboBoxDelegate::sizeHint() as QSize(pm, pm) from PM_DefaultFrameWidth,
+    // which never reaches CT_ItemViewItem and so is nothing like a row's pitch. A popup holding
+    // one is therefore not a whole number of pitches tall, and a trim taken against that pitch
+    // would shave a popup that already shows everything it has — clipping its last row and
+    // raising a scroll bar on a popup that fits.
+    void test_aPopupWithASeparatorIsNotShrunk()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        box.insertSeparator(1);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QListView* view = popupOf(box);
+        const int viewportHeightBeforeCorrection = view->viewport()->height();
+
+        QCoreApplication::processEvents();  // the correction is deferred by a zero timer
+
+        // The precondition: the popup fits, so there is nothing for the trim to give back.
+        QVERIFY2(
+            viewportHeightBeforeCorrection % view->sizeHintForRow(0) != 0,
+            "the popup is already a whole number of row pitches tall, so a trim against that "
+            "pitch could not shrink it and the guard under test is never reached"
+        );
+
+        const QRect lastRowRect = view->visualRect(box.model()->index(box.count() - 1, 0));
+        QVERIFY2(
+            lastRowRect.bottom() <= view->viewport()->rect().bottom(),
+            qPrintable(QStringLiteral("the last row ends %1px past the viewport")
+                           .arg(lastRowRect.bottom() - view->viewport()->rect().bottom()))
+        );
+
+        QVERIFY2(
+            !view->verticalScrollBar()->isVisible(),
+            "a scroll bar appeared on a popup that shows every row it has"
+        );
+
+        QCOMPARE(view->viewport()->height(), viewportHeightBeforeCorrection);
     }
 };
 
