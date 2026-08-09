@@ -598,9 +598,9 @@ private Q_SLOTS:
     // Every other test here drives the style directly with a synthesised option, so
     // QMenuPrivate::updateActionRects — the code that consumes the four pixel metrics and
     // stacks the rows — never runs. This is the end-to-end check: a real popup, real actions,
-    // laid out by Qt against these metrics. The row heights carry half a gap at each end, so
-    // if the metrics and the stacking ever disagree about who owns the space at the ends of
-    // the list, the popup grows at one end only and this fails.
+    // laid out by Qt against these metrics. Each row carries half of MenuItemSpacing at each
+    // of its own ends, so the popup's two axes only agree once the vertical metric has given
+    // that orphaned half back — which is what this measures where it is actually visible.
     void test_aRealMenuStacksItsActionsAgainstTheMetrics()  // NOLINT
     {
         const auto guard = overrideToken("MenuItemSpacing", "6px");
@@ -641,11 +641,24 @@ private Q_SLOTS:
         const QRect first = menu.actionGeometry(actions.constFirst());
         const QRect last = menu.actionGeometry(actions.constLast());
 
-        // The list sits centred between the popup's edges.
+        // The list sits centred between the popup's edges. A genuine invariant, but note that
+        // it cannot see the defect below: that one was symmetric top-to-bottom.
         QCOMPARE(first.top(), hint.height() - 1 - last.bottom());
 
         // Nothing but the two margins is added around the stack.
         QCOMPARE(verticalMargin + stackedHeight + verticalMargin, hint.height());
+
+        // The half gap a row carries at its top sits inside the action rect, so the row's
+        // painted edge is half a gap below the rect. Nothing equivalent happens horizontally.
+        // The inset the eye sees is therefore PM_MenuVMargin plus half a gap vertically
+        // against PM_MenuHMargin horizontally, and the two have to come out equal — the
+        // measured defect was rows sitting 4px from the top and bottom edges but 3px from the
+        // left and right, vertically symmetric and still wrong.
+        constexpr int halfItemSpacing = 6 / 2;
+        const int horizontalMargin = freecadStyle.pixelMetric(QStyle::PM_MenuHMargin, nullptr, &menu);
+
+        QCOMPARE(first.left(), horizontalMargin);
+        QCOMPARE(first.top() + halfItemSpacing, horizontalMargin);
     }
 
     void test_plainSeparatorUsesItsOwnHeight()  // NOLINT

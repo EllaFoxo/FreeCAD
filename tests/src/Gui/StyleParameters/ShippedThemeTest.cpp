@@ -97,11 +97,19 @@ std::vector<Reference> referencesIn(const std::string& expression)
     return references;
 }
 
-// References that were already dangling before the dropdown-popup work started (verified
-// against the YAML at that base), left in place because repairing them means deciding what
-// each token should have said — a design question, not a defect this test may quietly answer.
-// They are listed one by one rather than waved through by pattern so a new one still fails,
-// and the list may only ever shrink.
+// References that were already dangling before the dropdown-popup work started, verified
+// present verbatim in the YAML at that base. They are NOT waived because they are harmless:
+// each one is the same defect this whole test exists to catch, and each one needs a design
+// decision before it can be repaired. "ButtonHeight", "ButtonSmallHeight",
+// "FormControlBigPadding" and "FormControlSmallPadding" are named by nothing at all, so
+// someone has to decide what those tokens were meant to say. "BaseShadowColor" is the worst
+// of them: "@Color.black" is a plain typo for the "Colors" tuple, and unlike the others it
+// throws at evaluation rather than quietly degrading — but repairing it gives shadows a real
+// colour for the first time, which is a visual change, not a cleanup.
+//
+// Shrinking this list is work, not tidying. Entries are listed one site at a time rather than
+// waved through by pattern, so a newly introduced dangling reference still fails, and the list
+// may only ever shrink.
 const std::set<std::string> knownDanglingReferences {
     "BaseShadowColor -> @Color.black",  // "Colors" is the tuple's name; "Color" is a typo
     "ButtonContentBox -> @ButtonHeight",
