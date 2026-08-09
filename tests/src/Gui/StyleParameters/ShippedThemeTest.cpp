@@ -97,25 +97,23 @@ std::vector<Reference> referencesIn(const std::string& expression)
     return references;
 }
 
-// References that were already dangling before the dropdown-popup work started, verified
-// present verbatim in the YAML at that base. They are NOT waived because they are harmless:
-// each one is the same defect this whole test exists to catch, and each one needs a design
-// decision before it can be repaired. "ButtonHeight", "ButtonSmallHeight",
-// "FormControlBigPadding" and "FormControlSmallPadding" are named by nothing at all, so
-// someone has to decide what those tokens were meant to say. "BaseShadowColor" is the worst
-// of them: "@Color.black" is a plain typo for the "Colors" tuple, and unlike the others it
-// throws at evaluation rather than quietly degrading — but repairing it gives shadows a real
-// colour for the first time, which is a visual change, not a cleanup.
+// The two references still dangling in the shipped theme, both pre-existing. They are NOT
+// waived because they are harmless: each is the same defect this test exists to catch.
+//
+// "ToolButtonMinWidth" and "ToolButtonSmallMinWidth" mean "@FormControlHeight" (26px) and
+// "@FormControlSmallHeight" (24px) — the values the Button → FormControl chain would answer
+// with, which is what the author's "@ButtonHeight" spelling was reaching for. Spelling them
+// correctly switches a minimum width on for every tool button that resolves through the
+// ToolButton prefix, toolbar buttons among them, and "FreeCAD Base.yaml" states in the same
+// block that icon-only toolbar buttons are meant to stay square at iconSize + 2 * padding.
+// A 26px floor breaks that for any toolbar icon size below 18px. Repairing these therefore
+// also needs a decision on whether "ToolBarButtonMinWidth: reset()" should accompany them,
+// which is a design call, not a typo fix.
 //
 // Shrinking this list is work, not tidying. Entries are listed one site at a time rather than
 // waved through by pattern, so a newly introduced dangling reference still fails, and the list
 // may only ever shrink.
 const std::set<std::string> knownDanglingReferences {
-    "BaseShadowColor -> @Color.black",  // "Colors" is the tuple's name; "Color" is a typo
-    "ButtonContentBox -> @ButtonHeight",
-    "ButtonContentBox -> @ButtonBorderThickness",
-    "SelectBigPadding -> @FormControlBigPadding",
-    "SelectSmallPadding -> @FormControlSmallPadding",
     "ToolButtonMinWidth -> @ButtonHeight",
     "ToolButtonSmallMinWidth -> @ButtonSmallHeight",
 };
@@ -272,6 +270,32 @@ TEST_P(ShippedThemeTest, HeadlineSurfaceTokensResolveToColours)  // NOLINT
             << "' — a reference in its expression chain does not exist";
         EXPECT_TRUE(value->holds<Base::Color>())
             << token << " resolved to '" << value->toString() << "', which is not a colour";
+    }
+}
+
+// The four tokens repaired out of the allowlist above. Their references now resolve, but the
+// point of the repair is that each token comes back as the kind of value its consumer needs:
+// a colour for the shadow, insets for the size-variant select paddings, a size tuple for the
+// button content box. Re-spelling any of them back to a name the flat lookup cannot find puts
+// a std::string here instead, which is exactly the failure the whole file guards against.
+TEST_P(ShippedThemeTest, RepairedTokensResolveToTheirConsumersKind)  // NOLINT
+{
+    const auto manager = loadShippedTheme(GetParam());
+
+    const std::optional<Value> shadow = manager->resolve("BaseShadowColor", {});
+    ASSERT_TRUE(shadow.has_value()) << "BaseShadowColor does not resolve at all";
+    EXPECT_TRUE(shadow->holds<Base::Color>())
+        << "BaseShadowColor resolved to '" << shadow->toString() << "', which is not a colour";
+
+    for (const std::string& token :
+         {std::string("SelectSmallPadding"),
+          std::string("SelectBigPadding"),
+          std::string("ButtonContentBox")}) {
+        const std::optional<Value> value = manager->resolve(token, {});
+
+        ASSERT_TRUE(value.has_value()) << token << " does not resolve at all";
+        EXPECT_TRUE(value->holds<Tuple>())
+            << token << " resolved to '" << value->toString() << "', which is not a tuple";
     }
 }
 

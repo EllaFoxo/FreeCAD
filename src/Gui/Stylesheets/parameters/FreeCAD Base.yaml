@@ -1,4 +1,12 @@
 ---
+# "@Name" inside an expression is a flat parameter lookup: it finds a parameter literally
+# named "Name" or nothing at all. It is NOT a component-chain lookup. FreeCADStyle walks
+# Button → FormControl when a widget asks for a Height, but that walk happens at draw time
+# and the expression evaluator has no part in it — so "@ButtonHeight" here resolves to the
+# literal string "@ButtonHeight", which is an engaged value that stops the chain walk dead
+# and silently disables the property. Always reference the concrete parameter that exists
+# (here: "@FormControlHeight").
+
 # ── Semantic surface tokens (drive QPalette) ─────────────────────────────────
 # Window / panel backgrounds
 BaseWindowBackground: "@Background.050"
@@ -31,7 +39,7 @@ BaseShadingDark: "@Neutral.600"
 BaseShadingShadow: "@Neutral.800"
 
 BaseBorderColor: "@Neutral.400"
-BaseShadowColor: "opacity(@Color.black, 8%)"
+BaseShadowColor: "opacity(@Colors.black, 8%)"
 BaseHoveredBorderColorEffect: "effect(darken: 0.08)"
 
 FormControlInternalHeight: 22px
@@ -59,7 +67,7 @@ ButtonIconSpacing: "@FormControlIconSpacing"
 ButtonIconSize: 16px
 ButtonFontSize: 12px
 ButtonFontWeight: 500
-ButtonContentBox: "content_box((width: @ButtonMinWidth, height: @ButtonHeight), @ButtonPadding, @ButtonBorderThickness)"
+ButtonContentBox: "content_box((width: @ButtonMinWidth, height: @FormControlHeight), @ButtonPadding, @FormControlBorderThickness)"
 
 ButtonSmallFontSize: 11px
 ButtonSmallFontWeight: 500
@@ -105,6 +113,12 @@ ToolButtonPadding: "padding(@Spacing.150)"
 ToolButtonSmallPadding: "padding(@Spacing.100)"
 ToolButtonInternalPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.050)"
 
+# These two reference names that do not exist, so neither minimum width is in force today.
+# Spelling them as "@FormControlHeight" / "@FormControlSmallHeight" would switch a 26px / 24px
+# floor on for every tool button, toolbar buttons included, and that contradicts the note below
+# about icon-only toolbar buttons being naturally square. Repairing them therefore also needs a
+# decision on "ToolBarButtonMinWidth: reset()"; until that is made they are left dangling and
+# waived by name in ShippedThemeTest.
 ToolButtonMinWidth: "@ButtonHeight"
 ToolButtonSmallMinWidth: "@ButtonSmallHeight"
 ToolButtonInternalMinWidth: "reset()"
@@ -171,9 +185,12 @@ WbToolBarItemMargin: 0px
 WbToolBarFrameWidth: 0px
 
 # ── Select Padding overrides
+# A select is roomier than a plain form control at the default size, but at the small and big
+# sizes it drops back to the form-control padding. There is no size-specific FormControl padding
+# to name, so both point at the single one that exists.
 SelectPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
-SelectSmallPadding: "@FormControlSmallPadding"
-SelectBigPadding: "@FormControlBigPadding"
+SelectSmallPadding: "@FormControlPadding"
+SelectBigPadding: "@FormControlPadding"
 
 # ── Line Edit / Input fields ──────────────────────────────────────────────
 LineEditBackground: "@Background.000"
