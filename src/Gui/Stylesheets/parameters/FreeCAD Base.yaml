@@ -346,7 +346,7 @@ DropdownListItemSpacing: "@MenuItemSpacing"
 # selection are the same thing here and share the menu's one highlight.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
-DropdownListRowCheckedBackground: "@MenuItemCheckedBackground"
+DropdownListRowCheckedBackground: "@ListRowCheckedBackground"
 DropdownListRowPressedBackground: "@MenuItemPressedBackground"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
@@ -544,8 +544,9 @@ MenuIconSize: 16px
 MenuOverlap: 0px
 
 # ── Menu Item ────────────────────────────────────────────────────────────────
-# MenuItemIconSpacing is every inter-column gap (indicator↔icon, icon↔text, text↔arrow),
-# matching how ListItemIconSpacing is used by itemViewLayout().
+# MenuItemIconSpacing is every inter-column gap (leading column↔text, text↔arrow), matching
+# how ListItemIconSpacing is used by itemViewLayout(). There is no indicator↔icon gap: the
+# two share one column, as the note below spells out.
 # MenuItemSpacing is the gap between consecutive items; MenuItemMargin insets the highlight
 # box beyond what MenuPadding already does. The two are independent knobs.
 # There are deliberately no MenuIndicator* tokens: contextOf() routes the Indicator element
