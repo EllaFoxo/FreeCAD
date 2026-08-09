@@ -70,7 +70,11 @@ public:
                     {.name = "DropdownListBorderColor", .value = "#00ff00"},
                     {.name = "DropdownListBorderThickness", .value = "1px"},
                     {.name = "DropdownListBorderRadius", .value = "0px"},
-                    {.name = "DropdownListPadding", .value = "padding(2px)"},
+                    // Deliberately larger than DropdownListItemSpacing below. Every row carries
+                    // a leading gap, and the container gives the first one back by shrinking
+                    // this padding at the top; a padding smaller than the gap would clamp at
+                    // zero and hide whether the deduction happens at all.
+                    {.name = "DropdownListPadding", .value = "padding(4px)"},
 
                     // The rows. The item-view path splits a row between two elements: padding
                     // and label colour on Item, the interaction fill on Row. Values are picked
@@ -101,6 +105,31 @@ private:
     // them. Named so an assertion reads as the token it is pinning.
     static constexpr int itemPaddingVertical = 5;
     static constexpr int itemSpacing = 3;
+
+    // DropdownListBorderThickness and DropdownListPadding, as the fixture states them. Together
+    // they are the whole inset between the popup's edge and the first row.
+    static constexpr int containerBorder = 1;
+    static constexpr int containerPadding = 4;
+
+    // Where the first row's box started before every row was given a leading gap: the container
+    // inset and nothing else, because row 0 alone reserved no gap above itself. The change adds
+    // that gap to row 0 and takes the same amount off the top inset, so this must not move.
+    static constexpr int baselineFirstRowTop = containerBorder + containerPadding;
+
+    // The popup's total height as the pre-change model computed it, on 2026-08-09: one gap
+    // between each adjacent pair of rows and none above the first, inside the container's
+    // border and padding.
+    //
+    // A formula rather than the raw pixel count it was measured at, because the label's height
+    // comes from the ambient font and the platform theme picks that — the number is 100 under
+    // qt5ct and 97 with no theme plugin, while the invariant holds in both.
+    static int baselineContainerHeight(const QListView& view, int rowCount)
+    {
+        const int rowHeight = view.fontMetrics().height() + (2 * itemPaddingVertical);
+
+        return (2 * containerBorder) + (2 * containerPadding) + (rowCount * rowHeight)
+            + ((rowCount - 1) * itemSpacing);
+    }
 
     // Swaps one token in for the body of a test and puts the fixture's value back on the way
     // out, so an assertion that returns early cannot leak it into the next test.
@@ -182,6 +211,25 @@ private:
         return *style;
     }
 
+    // The y at which the popup's first row starts painting, measured on the container so the
+    // frame's own inset counts. Row 0 is the combo's current item, so its box carries
+    // DropdownListRowCheckedBackground and is the topmost red pixel down the popup's centre.
+    // The box, not the cell: the cell above it also holds the leading gap, which is exactly
+    // what moved, so a cell-based measurement would report the move rather than survive it.
+    static int firstRowBoxTop(QWidget& container)
+    {
+        const QImage canvas = renderOf(container);
+        const int middle = canvas.width() / 2;
+
+        for (int y = 0; y < canvas.height(); ++y) {
+            if (canvas.pixelColor(middle, y) == QColor(0xff, 0x00, 0x00)) {
+                return y;
+            }
+        }
+
+        return -1;
+    }
+
     // The height of row 0 of a freshly shown popup, under a style built after the caller's
     // token overrides.
     static int firstRowHeightWithAFreshStyle()
@@ -198,6 +246,82 @@ private:
     }
 
 private Q_SLOTS:
+
+    // The property this change exists to create: every row the same height, so the pitch
+    // between any adjacent pair is identical. Row 0 was previously shorter by exactly the
+    // gap, which is what made a capped popup's trim leave a residue.
+    void test_everyRowHasTheSamePitch()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QListView* view = popupOf(box);
+        QAbstractItemModel* model = box.model();
+
+        const int firstPitch = view->visualRect(model->index(1, 0)).top()
+            - view->visualRect(model->index(0, 0)).top();
+
+        for (int row = 2; row < model->rowCount(); ++row) {
+            const int pitch = view->visualRect(model->index(row, 0)).top()
+                - view->visualRect(model->index(row - 1, 0)).top();
+            QCOMPARE(pitch, firstPitch);
+        }
+
+        // And every row is the same height, not merely evenly spaced.
+        const int firstHeight = view->visualRect(model->index(0, 0)).height();
+        for (int row = 1; row < model->rowCount(); ++row) {
+            QCOMPARE(view->visualRect(model->index(row, 0)).height(), firstHeight);
+        }
+    }
+
+    // The cancellation is the design's core claim: the gap added to row 0's height is exactly
+    // the gap removed from the container's top inset, so nothing moves and nothing grows.
+    // These constants are the PRE-CHANGE baseline, measured against the build before this
+    // work. This test must pass BOTH before and after. If it goes red, the cancellation is
+    // wrong and the design is broken — not the test.
+    void test_totalHeightAndFirstRowPositionAreUnchanged()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QListView* view = popupOf(box);
+        QWidget* container = view->parentWidget();
+
+        QCOMPARE(container->height(), baselineContainerHeight(*view, box.count()));
+        QCOMPARE(firstRowBoxTop(*container), baselineFirstRowTop);
+    }
+
+    // The model only works while the gap fits inside the padding. Past that the top inset
+    // would have to go negative, which SE_ShapedFrameContents cannot express, so it clamps
+    // and the first row sits `spacing - padding` lower. Documented, not silent.
+    void test_aGapLargerThanThePaddingClampsRatherThanInverting()  // NOLINT
+    {
+        const auto paddingGuard = overrideToken("DropdownListPadding", "padding(2px)");
+        const auto spacingGuard = overrideToken("DropdownListItemSpacing", "8px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        QWidget* container = popupOf(box)->parentWidget();
+
+        // Border 1 + clamped top padding 0 + the row's own 8px leading gap.
+        QCOMPARE(firstRowBoxTop(*container), 1 + 0 + 8);
+    }
 
     // Without an override the shared DropdownList cap applies, as it does to every combo box.
     void test_sharedCapApplies()  // NOLINT
@@ -403,7 +527,7 @@ private Q_SLOTS:
 
     // A populated popup's rows are ordinary item-view rows, so their height is assembled from the
     // DropdownList item tokens: the label, the item padding around it, and the inter-row gap every
-    // row but the first reserves above itself. The menu route answered this question with the size
+    // row reserves above itself. The menu route answered this question with the size
     // of the entire viewport, which is both wrong and impossible to tell from a plausible number
     // unless the tokens are pinned.
     void test_popupRowsAreItemViewRowsOfATokenDerivedHeight()  // NOLINT
@@ -420,11 +544,12 @@ private Q_SLOTS:
         const int firstRow = view->visualRect(box.model()->index(0, 0)).height();
         const int secondRow = view->visualRect(box.model()->index(1, 0)).height();
 
-        // The label, plus DropdownListItemPadding on both edges.
-        QCOMPARE(firstRow, view->fontMetrics().height() + (2 * itemPaddingVertical));
+        // The label, plus DropdownListItemPadding on both edges and the DropdownListItemSpacing
+        // gap the row reserves above itself.
+        QCOMPARE(firstRow, view->fontMetrics().height() + (2 * itemPaddingVertical) + itemSpacing);
 
-        // Every row after the first also carries DropdownListItemSpacing.
-        QCOMPARE(secondRow - firstRow, itemSpacing);
+        // Every row reserves that gap, the first included, so the pitch never varies.
+        QCOMPARE(secondRow, firstRow);
 
         // Three such rows sit well inside the cap, so the popup is nowhere near being one row
         // tall — the shape the regression took.

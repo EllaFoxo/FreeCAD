@@ -400,19 +400,13 @@ constexpr int arrowBoxSize = 13;
 // Matches the chevron elsewhere in the style, which is drawn slightly softer than body text.
 constexpr int arrowAlpha = 160;
 
-// Whether this row is the topmost one on screen, and so carries no gap above it.
-bool isFirstVisibleRow(const QStyleOption* option, const QWidget* widget)
+// What an item-view container's top padding becomes once it has handed back the leading gap its
+// first row carries, so that first row lands where the bare padding alone would have put it.
+// Never negative: a theme whose gap exceeds its padding sees the first row sit that much lower,
+// and the container that much taller, rather than an inverted rect.
+int paddingLessLeadingGap(int padding, int leadingGap)
 {
-    const auto* viewOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
-    if (viewOption == nullptr || !viewOption->index.isValid()) {
-        return false;
-    }
-
-    if (const auto* tree = qobject_cast<const QTreeView*>(itemViewOf(viewOption, widget))) {
-        return !tree->indexAbove(viewOption->index).isValid();
-    }
-
-    return viewOption->index.row() == 0 && !viewOption->index.parent().isValid();
+    return std::max(0, padding - leadingGap);
 }
 
 // How many of the three cell parts — check indicator, icon, text — this cell actually has.
@@ -674,15 +668,15 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
             }
             return {};
 
-        case PM_DefaultFrameWidth: {
+        // An item view's own container inset is answered as SE_ShapedFrameContents instead, which
+        // states four independent sides rather than the single symmetric one this metric allows.
+        // QCommonStyle derives that sub-element from this metric for a StyledPanel, so answering
+        // both would count the padding twice.
+        case PM_DefaultFrameWidth:
             if (qobject_cast<const QAbstractSpinBox*>(widget)) {
                 return 0;
             }
-            if (const auto itemViewFrameWidth = resolveItemViewFrameWidth(option, widget)) {
-                return itemViewFrameWidth;
-            }
             return {};
-        }
 
         // PM_TabBarTabOverlap is a pure painting hint: it tells CE_TabBarTabShape how many pixels
         // to extend (positive) or shrink (negative) the trailing edge of each non-last tab's paint
@@ -806,37 +800,35 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
     }
 }
 
-std::optional<int> FreeCADStyle::resolveItemViewFrameWidth(
+std::optional<QRect> FreeCADStyle::itemViewContentsRect(
     const QStyleOption* option,
     const QWidget* widget
 ) const
 {
-    if (!qobject_cast<const QAbstractItemView*>(widget)) {
+    if (option == nullptr || !qobject_cast<const QAbstractItemView*>(widget)) {
         return {};
     }
 
-    // Qt forces a combo popup's view frameless — QComboBoxPrivateContainer::setItemView() calls
-    // setFrameStyle(QFrame::NoFrame) and setLineWidth(0) — so this view never spends the metric
-    // on a frame, and an inflated answer only misreports: it would read 3 against a frameWidth()
-    // of 0. Left in place it is also a live hazard, because QListView doubles this metric into
-    // its layout bounds should SH_ScrollView_FrameOnlyAroundContents ever be answered non-zero.
-    // The popup's real inset is the container's, taken from the padding tokens directly by
-    // comboPopupContentsRect(), and never from here.
+    // A combo popup's inset belongs to its container, which paints the popup's edge; Qt forces
+    // the view itself frameless (QComboBoxPrivateContainer::setItemView() calls
+    // setFrameStyle(QFrame::NoFrame)), so there is no frame here to inset.
     if (widget->property(comboDropdownProperty).toBool()) {
         return {};
     }
 
-    const BoxGeometryDefinition geometry = resolveBoxGeometry(
-        contextOf(widget, option, StyleComponentElement::Root)
-    );
-    // Symmetric only: a scalar frame width expresses one inset, so item-view
-    // container padding uses the top inset for all four sides (see design doc).
-    const int containerPadding = static_cast<int>(geometry.padding.top());
-    if (containerPadding > 0) {
-        return QProxyStyle::pixelMetric(PM_DefaultFrameWidth, option, widget) + containerPadding;
+    const QMargins padding = resolveBoxGeometry(contextOf(widget, option, StyleComponentElement::Root))
+                                 .padding.toMargins();
+    if (padding.isNull()) {
+        return {};
     }
 
-    return {};
+    // The top gives back the leading gap row 0 now carries, so the first row still sits at
+    // exactly `padding` from the frame.
+    const int top = paddingLessLeadingGap(padding.top(), leadingRowGap(option, widget));
+
+    return option->rect.marginsRemoved(
+        QMargins(padding.left(), top, padding.right(), padding.bottom())
+    );
 }
 
 int FreeCADStyle::pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const
@@ -1075,10 +1067,6 @@ void FreeCADStyle::paintBox(
 
 int FreeCADStyle::leadingRowGap(const QStyleOption* option, const QWidget* widget) const
 {
-    if (isFirstVisibleRow(option, widget)) {
-        return 0;
-    }
-
     const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
     return resolveBoxGeometry(itemContext).spacing;
 }
@@ -1199,7 +1187,7 @@ void FreeCADStyle::drawItemViewRow(
     );
     // Exclude the reserved inter-row gap so the highlight floats below the background gap.
     QRect rowRect = vopt->rect;
-    rowRect.adjust(0, isFirstVisibleRow(vopt, widget) ? 0 : itemGeometry.spacing, 0, 0);
+    rowRect.adjust(0, itemGeometry.spacing, 0, 0);
 
     // A tree indents its leading cell past the branch column, which belongs to no cell and so
     // would stay unhighlighted. The leading cell reaches back over it. Only backwards: nothing
@@ -1357,9 +1345,7 @@ std::optional<FreeCADStyle::ItemViewLayout> FreeCADStyle::itemViewLayout(
     const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
 
     // The reserved inter-row gap belongs to the list background, not to the cell content.
-    const QRect content
-        = geometry.contentRect(option->rect)
-              .adjusted(0, isFirstVisibleRow(option, widget) ? 0 : geometry.spacing, 0, 0);
+    const QRect content = geometry.contentRect(option->rect).adjusted(0, geometry.spacing, 0, 0);
 
     const auto centredAt = [&content](int left, const QSize& size) {
         const int top = content.top() + ((content.height() - size.height()) / 2);
@@ -1507,12 +1493,7 @@ void FreeCADStyle::drawPrimitive(
 
         const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
         const BoxGeometryDefinition itemGeometry = resolveBoxGeometry(context);
-        const QRect itemRect = option->rect.adjusted(
-            0,
-            isFirstVisibleRow(option, widget) ? 0 : itemGeometry.spacing,
-            0,
-            0
-        );
+        const QRect itemRect = option->rect.adjusted(0, itemGeometry.spacing, 0, 0);
 
         paintBox(painter, itemRect, context);
 
@@ -1746,8 +1727,9 @@ QSize FreeCADStyle::itemViewItemSizeFromContents(
     QSize itemSize = geometry.sizeFromContents(baseSize);
     // ListItemSpacing: reserve an inter-row gap above each row. The gap is excluded from the
     // content rect (subElementRect) and the highlight (drawItemViewRow), so it renders as the
-    // list background between rows. The topmost row has nothing above it to separate from.
-    itemSize.rheight() += isFirstVisibleRow(option, widget) ? 0 : geometry.spacing;
+    // list background between rows. Every row reserves one, the first included, so the pitch is
+    // uniform; the container hands that first gap back through its own top inset.
+    itemSize.rheight() += geometry.spacing;
     return itemSize;
 }
 
@@ -1851,10 +1833,21 @@ std::optional<QRect> FreeCADStyle::comboPopupContentsRect(
     // between the popup edge and the list inside it. Deriving it from the surface's own border
     // and padding is what gives the popup the same breathing room a menu has.
     const StyleContext context = contextOf(widget, option);
-    const QMarginsF border = resolveBoxStyle(context).borderThickness.value_or(QMarginsF());
-    const QMarginsF inset = border + resolveBoxGeometry(context).padding;
+    const QMargins border = resolveBoxStyle(context).borderThickness.value_or(QMarginsF()).toMargins();
+    const QMargins padding = resolveBoxGeometry(context).padding.toMargins();
 
-    return option->rect.marginsRemoved(inset.toMargins());
+    // The popup's rows carry a leading gap like any other item view's, the first one included,
+    // so the padding at the top gives that first gap back and the first row still sits at
+    // exactly border + padding.
+    const int top = border.top()
+        + paddingLessLeadingGap(padding.top(), leadingRowGap(option, widget));
+
+    return option->rect.marginsRemoved(QMargins(
+        border.left() + padding.left(),
+        top,
+        border.right() + padding.right(),
+        border.bottom() + padding.bottom()
+    ));
 }
 
 QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* option, const QWidget* widget) const
@@ -1892,6 +1885,9 @@ QRect FreeCADStyle::subElementRect(SubElement element, const QStyleOption* optio
 
     if (element == SE_ShapedFrameContents) {
         if (const auto contents = comboPopupContentsRect(option, widget)) {
+            return *contents;
+        }
+        if (const auto contents = itemViewContentsRect(option, widget)) {
             return *contents;
         }
     }

@@ -577,7 +577,10 @@ protected:
     void drawBranchArrow(QPainter* painter, const QStyleOption* option, const QWidget* widget) const;
 
     /**
-     * @brief The inter-row gap reserved above a row, or zero for the topmost one.
+     * @brief The inter-row gap reserved above a row.
+     *
+     * Every row reserves one, the first included, so the pitch between any adjacent pair is the
+     * same. The container gives the first row's gap back through its own top inset.
      */
     int leadingRowGap(const QStyleOption* option, const QWidget* widget) const;
 
@@ -783,12 +786,13 @@ private:
     int tabOverlapOf(const QStyleOptionTab* option, const QWidget* widget) const;
 
     /**
-     * @brief Frame width for an item view widget, expanded by the root list container padding.
+     * @brief The rect an item view's frame leaves for its contents.
      *
-     * Returns nullopt for widgets other than QAbstractItemView, or when no positive
-     * container padding is defined.
+     * Insets by the container padding on three sides, and by the padding less one row gap on
+     * top — every row carries a leading gap including the first, and this is where that first
+     * gap is given back. Returns nullopt for views this style does not describe.
      */
-    std::optional<int> resolveItemViewFrameWidth(const QStyleOption* option, const QWidget* widget) const;
+    std::optional<QRect> itemViewContentsRect(const QStyleOption* option, const QWidget* widget) const;
 
 
     static QRect tabVisualRect(const QRect& rect, int tabOverlap, bool isVertical);
