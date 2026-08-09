@@ -97,27 +97,6 @@ std::vector<Reference> referencesIn(const std::string& expression)
     return references;
 }
 
-// The two references still dangling in the shipped theme, both pre-existing. They are NOT
-// waived because they are harmless: each is the same defect this test exists to catch.
-//
-// "ToolButtonMinWidth" and "ToolButtonSmallMinWidth" mean "@FormControlHeight" (26px) and
-// "@FormControlSmallHeight" (24px) — the values the Button → FormControl chain would answer
-// with, which is what the author's "@ButtonHeight" spelling was reaching for. Spelling them
-// correctly switches a minimum width on for every tool button that resolves through the
-// ToolButton prefix, toolbar buttons among them, and "FreeCAD Base.yaml" states in the same
-// block that icon-only toolbar buttons are meant to stay square at iconSize + 2 * padding.
-// A 26px floor breaks that for any toolbar icon size below 18px. Repairing these therefore
-// also needs a decision on whether "ToolBarButtonMinWidth: reset()" should accompany them,
-// which is a design call, not a typo fix.
-//
-// Shrinking this list is work, not tidying. Entries are listed one site at a time rather than
-// waved through by pattern, so a newly introduced dangling reference still fails, and the list
-// may only ever shrink.
-const std::set<std::string> knownDanglingReferences {
-    "ToolButtonMinWidth -> @ButtonHeight",
-    "ToolButtonSmallMinWidth -> @ButtonSmallHeight",
-};
-
 // Walks a resolved reference down its member chain, reporting the first step that does not
 // exist. An empty string means the whole reference is sound.
 std::string reasonReferenceFails(const StyleParameterManager& manager, const Reference& reference)
@@ -219,6 +198,11 @@ TEST_P(ShippedThemeTest, TheShippedFilesAreFoundAndNonEmpty)  // NOLINT
 // "@Name", which is an engaged Value — so a dangling reference does not fail loudly, it
 // silently becomes a string that later converts to Qt::NoBrush and stops the token fallback
 // chain dead. Sweeping every reference in the shipped files is the only cheap way to see it.
+//
+// Every "@ref" in the shipped theme resolves, and this test carries no waiver list. It used to:
+// seven references were dangling at the point the sweep was first written, and all seven have
+// since been repaired. Nothing here is expected to need waiving again — a failure means a real
+// dangling reference was introduced, so fix the YAML rather than reinstating a list.
 TEST_P(ShippedThemeTest, EveryParameterReferenceResolves)  // NOLINT
 {
     const auto manager = loadShippedTheme(GetParam());
@@ -227,14 +211,9 @@ TEST_P(ShippedThemeTest, EveryParameterReferenceResolves)  // NOLINT
 
     for (const Parameter& parameter : manager->parameters()) {
         for (const Reference& reference : referencesIn(parameter.value)) {
-            const std::string site = parameter.name + " -> " + reference.spelling();
-            if (knownDanglingReferences.contains(site)) {
-                continue;
-            }
-
             if (const std::string reason = reasonReferenceFails(*manager, reference);
                 !reason.empty()) {
-                dangling.insert(site + ": " + reason);
+                dangling.insert(parameter.name + " -> " + reference.spelling() + ": " + reason);
             }
         }
     }
@@ -273,11 +252,16 @@ TEST_P(ShippedThemeTest, HeadlineSurfaceTokensResolveToColours)  // NOLINT
     }
 }
 
-// The four tokens repaired out of the allowlist above. Their references now resolve, but the
-// point of the repair is that each token comes back as the kind of value its consumer needs:
-// a colour for the shadow, insets for the size-variant select paddings, a size tuple for the
-// button content box. Re-spelling any of them back to a name the flat lookup cannot find puts
-// a std::string here instead, which is exactly the failure the whole file guards against.
+// The six tokens that once made up the waiver list. Their references now resolve, but the point
+// of the repair is that each comes back as the kind of value its consumer needs: a colour for
+// the shadow, insets for the size-variant select paddings, a size tuple for the button content
+// box, a number for the two tool button width floors. Re-spelling any of them back to a name
+// the flat lookup cannot find puts a std::string here instead, which is exactly the failure the
+// whole file guards against.
+//
+// The two width floors are also asserted by value. They are the only repair in the set that
+// changes what the application draws, and 26px / 24px are the heights the Button → FormControl
+// chain answers with, so a tool button is never narrower than it is tall.
 TEST_P(ShippedThemeTest, RepairedTokensResolveToTheirConsumersKind)  // NOLINT
 {
     const auto manager = loadShippedTheme(GetParam());
@@ -296,6 +280,16 @@ TEST_P(ShippedThemeTest, RepairedTokensResolveToTheirConsumersKind)  // NOLINT
         ASSERT_TRUE(value.has_value()) << token << " does not resolve at all";
         EXPECT_TRUE(value->holds<Tuple>())
             << token << " resolved to '" << value->toString() << "', which is not a tuple";
+    }
+
+    for (const auto& [token, expected] :
+         {std::pair {std::string("ToolButtonMinWidth"), 26.0},
+          std::pair {std::string("ToolButtonSmallMinWidth"), 24.0}}) {
+        const std::optional<Numeric> value = valueAs<Numeric>(manager->resolve(token, {}));
+
+        ASSERT_TRUE(value.has_value()) << token << " does not resolve to a number";
+        EXPECT_DOUBLE_EQ(value->value, expected) << token << " floors the width at the wrong size";
+        EXPECT_EQ(value->unit, "px") << token << " resolved without a pixel unit";
     }
 }
 

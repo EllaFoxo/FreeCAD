@@ -113,14 +113,12 @@ ToolButtonPadding: "padding(@Spacing.150)"
 ToolButtonSmallPadding: "padding(@Spacing.100)"
 ToolButtonInternalPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.050)"
 
-# These two reference names that do not exist, so neither minimum width is in force today.
-# Spelling them as "@FormControlHeight" / "@FormControlSmallHeight" would switch a 26px / 24px
-# floor on for every tool button, toolbar buttons included, and that contradicts the note below
-# about icon-only toolbar buttons being naturally square. Repairing them therefore also needs a
-# decision on "ToolBarButtonMinWidth: reset()"; until that is made they are left dangling and
-# waived by name in ShippedThemeTest.
-ToolButtonMinWidth: "@ButtonHeight"
-ToolButtonSmallMinWidth: "@ButtonSmallHeight"
+# A tool button is at least as wide as it is tall, so an icon-only one is never narrower than
+# square. The floors are the form-control heights, which is what a tool button's own Height
+# resolves to through Button → FormControl. Toolbar buttons take these floors too — see the
+# note under the Link variant below for what that costs at small icon sizes.
+ToolButtonMinWidth: "@FormControlHeight"
+ToolButtonSmallMinWidth: "@FormControlSmallHeight"
 ToolButtonInternalMinWidth: "reset()"
 
 # ── PanelButton (dock panel title bar) ────────────────────────────────────────
@@ -132,8 +130,14 @@ PanelButtonIconSize: 12px
 
 # ── ToolButton – Link variant (auto-raise / toolbar buttons) ──────────────────
 # These tokens define the visual appearance of QToolButton with autoRaise=true,
-# which covers all standard toolbar buttons. The padding is uniform so that
-# icon-only buttons are naturally square: size = iconSize + 2 * padding.
+# which covers all standard toolbar buttons. The padding is uniform, so an icon-only
+# button grows squarely: size = iconSize + 2 * padding.
+#
+# That square only survives while iconSize + 2 * padding clears ToolButtonMinWidth (26px),
+# i.e. from an 18px icon upward. FreeCAD's default toolbar icon size is 24px, which measures
+# 32x32 and is unaffected. Below 18px the width floor wins and the button reads slightly wide:
+# a 16px icon measures 26x24 rather than 24x24. Height is never floored — ToolBarButtonHeight
+# is reset — so the two axes part company there rather than the button growing in both.
 
 ToolButtonLinkPadding: "@Spacing.100"
 ToolButtonMenuWidth: 14px
