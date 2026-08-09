@@ -550,7 +550,8 @@ MenuOverlap: 0px
 # MenuItemSpacing is the gap between consecutive items; MenuItemMargin insets the highlight
 # box beyond what MenuPadding already does. The two are independent knobs.
 # There are deliberately no MenuIndicator* tokens: contextOf() routes the Indicator element
-# to the CheckBox component, so the check column resolves against CheckBox*/RadioButton*.
+# to the CheckBox component, and drawPrimitive() points the exclusive glyph at RadioButton,
+# so the check column resolves against CheckBox*/RadioButton*.
 # The icon and the check indicator share one leading column, sized to the wider of MenuIconSize
 # and CheckBoxWidth: a checkable item shows its indicator, any other item shows its icon.
 MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100, right: @Spacing.300)"

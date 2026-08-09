@@ -102,6 +102,11 @@ public:
                     // not carry the element across, so the tokens are CheckBoxWidth/Height.
                     {.name = "CheckBoxWidth", .value = "14px"},
                     {.name = "CheckBoxHeight", .value = "14px"},
+
+                    // Two distinct fills so the check column says which component it
+                    // resolved against, rather than only which glyph it drew.
+                    {.name = "CheckBoxBackground", .value = "#00ffff"},
+                    {.name = "RadioButtonBackground", .value = "#ff00ff"},
                 },
                 {.name = "Menu Geometry"}
             )
@@ -157,6 +162,38 @@ private:
         QPixmap pixmap(iconSize, iconSize);
         pixmap.fill(Qt::blue);
         return QIcon(pixmap);
+    }
+
+    // Paints one checkable row of the given check type over magenta and reports the colour at
+    // the centre of its indicator, which is the fill the indicator's component resolved.
+    // Returns an invalid colour when the row produced no indicator at all.
+    static QColor indicatorFillOf(
+        ProbeStyle& probeStyle,
+        QMenu& menu,
+        QStyleOptionMenuItem::CheckType checkType
+    )
+    {
+        QStyle& style = probeStyle;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = checkType;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = probeStyle.menuItemLayout(&option, &menu);
+        if (!layout.has_value() || layout->indicator.isNull()) {
+            return {};
+        }
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        return canvas.pixelColor(layout->indicator.center());
     }
 
 private Q_SLOTS:
@@ -420,6 +457,27 @@ private Q_SLOTS:
         constexpr int itemPaddingLeft = 6;
         QCOMPARE(layout->indicator.left(), itemPaddingLeft + ((iconSize - indicatorSize) / 2));
         QVERIFY(option.rect.contains(layout->indicator));
+    }
+
+    // Which glyph a checkable row draws is decided from checkType, but which component it
+    // resolves against is not: contextOf() is handed the QMenu and an Indicator element, and a
+    // QMenu is no more a QRadioButton than it is a QCheckBox, so both check types would answer
+    // CheckBox. The only difference the theme states between the two is the border radius, so
+    // an exclusive row — View → Unit system, or any QActionGroup menu — came out as a rounded
+    // square instead of a circle. The primitive is the authority on which glyph it is drawing.
+    void test_exclusiveRowsResolveTheRadioIndicatorTokens()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QMenu menu;
+
+        QCOMPARE(
+            indicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::NonExclusive),
+            QColor(QStringLiteral("#00ffff"))
+        );
+        QCOMPARE(
+            indicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::Exclusive),
+            QColor(QStringLiteral("#ff00ff"))
+        );
     }
 
     // MenuItemCheckedBackground is not stated by the shipped theme — the indicator carries the

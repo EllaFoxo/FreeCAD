@@ -1525,7 +1525,14 @@ void FreeCADStyle::drawPrimitive(
     }
 
     if (element == PE_IndicatorRadioButton) {
-        const StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
+        StyleContext context = contextOf(widget, option, StyleComponentElement::Indicator);
+
+        // contextOf() only sees that this is an indicator and maps a bare one to CheckBox, so
+        // an exclusive menu item — whose widget is the QMenu, not a QRadioButton — would come
+        // out square. The primitive is the authority on which glyph this is, and RadioButton
+        // inherits CheckBox, so anything the theme states only once is still picked up.
+        context.component = StyleComponent::RadioButton;
+
         drawBoxBackground(painter, option->rect, resolveBoxStyle(context));
         if (option->state & QStyle::State_On) {
             drawRadioButtonDot(painter, option->rect, context, option->palette);
