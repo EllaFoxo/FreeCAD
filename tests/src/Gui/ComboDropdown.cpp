@@ -12,6 +12,7 @@
 #include <QRegion>
 #include <QScopeGuard>
 #include <QScreen>
+#include <QScrollBar>
 #include <QStyleFactory>
 #include <QStyleOptionComboBox>
 #include <QStyleOptionMenuItem>
@@ -127,6 +128,15 @@ private:
     static void populate(QComboBox& box)
     {
         box.addItems({QStringLiteral("Alpha"), QStringLiteral("Beta"), QStringLiteral("Gamma")});
+    }
+
+    // Far more rows than DropdownListMaxHeight can hold, so the popup is capped and has to
+    // scroll — the only shape in which a partial row's worth of surface can be left over.
+    static void populateBeyondTheCap(QComboBox& box)
+    {
+        for (int row = 0; row < 40; ++row) {
+            box.addItem(QStringLiteral("Item %1").arg(row));
+        }
     }
 
     // A menu-item option shaped the way QComboMenuDelegate builds one: the widget is the combo
@@ -770,6 +780,106 @@ private Q_SLOTS:
                            "— the current one among them — are off screen"
             )
                            .arg(available.top() - top))
+        );
+    }
+
+    // A capped popup scrolls per item, so it only ever shows whole rows: whatever the viewport
+    // has left over after the last of them is empty surface, and the owner sees it as a band of
+    // background under the bottom row. Measured scrolled, where every visible row carries the
+    // leading DropdownListItemSpacing and the pitch is uniform.
+    void test_aScrolledCappedPopupEndsOnARowEdge()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populateBeyondTheCap(box);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();  // the correction is deferred by a zero timer
+
+        QListView* view = popupOf(box);
+        QScrollBar* verticalBar = view->verticalScrollBar();
+
+        // The mechanism the band comes from, pinned rather than assumed: per-pixel scrolling
+        // shows a partial row instead of leaving the remainder blank, and nothing below applies.
+        QCOMPARE(view->verticalScrollMode(), QAbstractItemView::ScrollPerItem);
+
+        // The precondition: a popup that shows every row it has cannot leave a remainder, so it
+        // would pass the assertions below without the correction under test ever running.
+        QVERIFY2(
+            verticalBar->maximum() > 0,
+            "the popup shows every row, so it never scrolls and has no remainder"
+        );
+
+        verticalBar->setValue(verticalBar->maximum());
+
+        const int rowHeight = view->sizeHintForRow(1);
+        QVERIFY(rowHeight > 0);
+        QCOMPARE(view->viewport()->height() % rowHeight, 0);
+
+        // The visible claim, not just the arithmetic: the bottom row meets the bottom of the
+        // viewport, so there is no surface between the two.
+        const QRect last = view->visualRect(box.model()->index(box.count() - 1, 0));
+        QCOMPARE(last.bottom(), view->viewport()->rect().bottom());
+    }
+
+    // Qt sizes the container afresh on every showPopup(), so the trim starts from the cap each
+    // time. A trim that compounded instead would cost the popup a row per open.
+    void test_reopeningACappedPopupDoesNotTrimItFurther()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populateBeyondTheCap(box);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        const auto heightAfterOpening = [&box] {
+            box.showPopup();
+            QCoreApplication::processEvents();
+            const int height = popupOf(box)->parentWidget()->height();
+            box.hidePopup();
+            return height;
+        };
+
+        const int first = heightAfterOpening();
+        QCOMPARE(heightAfterOpening(), first);
+        QCOMPARE(heightAfterOpening(), first);
+    }
+
+    // The snap applies only where there is a remainder to give back. An uncapped popup is
+    // already exactly as tall as its content, and its first row is shorter than the rest — it
+    // carries no leading DropdownListItemSpacing — so a remainder taken against a later row's
+    // pitch would shave pixels off a popup that fits perfectly, and push its last row out.
+    void test_anUncappedPopupIsNotShrunk()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populate(box);
+        style.polish(&box);
+        box.move(200, 200);
+        box.show();
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+
+        // Qt has already sized the popup by the time showPopup() returns; the correction is what
+        // has not run yet.
+        QListView* view = popupOf(box);
+        const int viewportHeightBeforeCorrection = view->viewport()->height();
+
+        QCoreApplication::processEvents();
+
+        QCOMPARE(view->viewport()->height(), viewportHeightBeforeCorrection);
+
+        const QRect last = view->visualRect(box.model()->index(box.count() - 1, 0));
+        QVERIFY2(
+            last.bottom() <= view->viewport()->rect().bottom(),
+            qPrintable(QStringLiteral("the last row ends %1px past the viewport")
+                           .arg(last.bottom() - view->viewport()->rect().bottom()))
         );
     }
 };

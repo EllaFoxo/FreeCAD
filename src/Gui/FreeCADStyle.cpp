@@ -4023,6 +4023,37 @@ void FreeCADStyle::widenComboPopupForScrollBar(QWidget* container)
     }
 }
 
+void FreeCADStyle::snapComboPopupToWholeRows(QWidget* container)
+{
+    QListView* view = comboPopupListView(container);
+    if (!view || view->verticalScrollMode() != QAbstractItemView::ScrollPerItem) {
+        return;
+    }
+
+    // A popup that shows every row it has is exactly as tall as its content, and its first row
+    // is shorter than the rest — it reserves no leading DropdownListItemSpacing — so a remainder
+    // measured against a later row's pitch would shave pixels off a popup that already fits.
+    // Only one with rows it cannot show has anything to give back.
+    const QScrollBar* verticalBar = view->verticalScrollBar();
+    if (!verticalBar || verticalBar->maximum() <= 0) {
+        return;
+    }
+
+    // Scrolling per item takes row 0 out of sight, so the pitch governing the visible run is a
+    // later row's, gap included.
+    const QAbstractItemModel* model = view->model();
+    const int rowCount = model ? model->rowCount(view->rootIndex()) : 0;
+    const int rowHeight = view->sizeHintForRow(rowCount > 1 ? 1 : 0);
+    if (rowHeight <= 0) {
+        return;
+    }
+
+    const int remainder = view->viewport()->height() % rowHeight;
+    if (remainder > 0) {
+        container->resize(container->width(), container->height() - remainder);
+    }
+}
+
 int FreeCADStyle::comboPopupCurrentRowOffset(const QWidget* container)
 {
     const QListView* view = comboPopupListView(container);
@@ -4045,6 +4076,10 @@ void FreeCADStyle::correctComboPopupPlacement(QWidget* container)
     }
 
     widenComboPopupForScrollBar(container);
+
+    // Before the placement is worked out, because it and the screen clamp below both read the
+    // container's height.
+    snapComboPopupToWholeRows(container);
 
     const ComboPopupPlacement placement = resolveComboPopupPlacement(container);
     const QPoint comboTopLeft = comboBox->mapToGlobal(QPoint {});

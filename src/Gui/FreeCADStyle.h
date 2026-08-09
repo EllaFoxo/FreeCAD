@@ -1224,6 +1224,15 @@ private:
     /** @brief Widens the popup when a scrollbar appeared after Qt had settled its width. */
     static void widenComboPopupForScrollBar(QWidget* container);
 
+    /**
+     * @brief Trims a scrolling popup so its list holds a whole number of rows.
+     *
+     * A view that scrolls per item never shows a partial row, so a popup capped at a height that
+     * is not a multiple of its row pitch leaves the remainder as empty surface under the last
+     * row. A popup that shows every row it has is left alone.
+     */
+    static void snapComboPopupToWholeRows(QWidget* container);
+
     /** @brief Distance from the popup's top edge to the top of its current row. */
     static int comboPopupCurrentRowOffset(const QWidget* container);
 
