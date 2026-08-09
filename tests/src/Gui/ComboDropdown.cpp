@@ -57,6 +57,12 @@ public:
                     {.name = "UncappedDropdownMaxHeight", .value = "reset()"},
                     {.name = "ShortDropdownMaxHeight", .value = "80px"},
 
+                    // The combo box itself, which production also gives a padding. Stated here
+                    // because it is what the popup's frame width must NOT be resolved from:
+                    // without it nothing would inflate for a Select and a metric that leaked
+                    // from the view onto the combo box would go unnoticed.
+                    {.name = "SelectPadding", .value = "padding(horizontal: 8px, vertical: 4px)"},
+
                     // The popup surface. The container around the list paints it, so these are
                     // the tokens the popup's fill and edge come from.
                     {.name = "DropdownListBackground", .value = "#101010"},
@@ -422,9 +428,11 @@ private Q_SLOTS:
     }
 
     // A separator row is a 1px rule, and the item-view popup route has to keep it one. Qt sizes
-    // one as QSize(pm, pm) from PM_DefaultFrameWidth asked with the *combo box* as the widget, so
-    // the popup view's own inflated frame width must not be what answers — a separator three
-    // times too tall is what a metric leaking across those two widgets looks like.
+    // one as QSize(pm, pm) from PM_DefaultFrameWidth asked with the *combo box* as the widget,
+    // never the popup view, so this pins the one thing that could make it grow: item-view frame
+    // padding reaching a QComboBox. The fixture gives Select a padding precisely so there is
+    // something to leak — widen resolveItemViewFrameWidth()'s guard to cover combo boxes and this
+    // row becomes 5px.
     void test_separatorRowsAreOnePixel()  // NOLINT
     {
         Gui::FreeCADStyle& style = installFreshApplicationStyle();

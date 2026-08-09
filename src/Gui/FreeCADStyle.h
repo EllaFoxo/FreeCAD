@@ -917,6 +917,9 @@ private:
 
     /// Recomputes and applies the rounded-rect clip mask on a scroll area's viewport.
     /// Must be called after polish and on every viewport resize.
+    ///
+    /// A combo popup's view is left unmasked: the popup's edge belongs to the container around
+    /// that view, so clipping the view would round a widget whose corners are not the popup's.
     void updateScrollAreaMask(QAbstractScrollArea* scrollArea) const;
     void drawSpinBox(const QStyleOptionSpinBox* option, QPainter* painter, const QWidget* widget) const;
     void drawComboBox(const QStyleOptionComboBox* option, QPainter* painter, const QWidget* widget) const;

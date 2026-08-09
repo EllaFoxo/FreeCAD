@@ -815,6 +815,17 @@ std::optional<int> FreeCADStyle::resolveItemViewFrameWidth(
         return {};
     }
 
+    // Qt forces a combo popup's view frameless — QComboBoxPrivateContainer::setItemView() calls
+    // setFrameStyle(QFrame::NoFrame) and setLineWidth(0) — so this view never spends the metric
+    // on a frame, and an inflated answer only misreports: it would read 3 against a frameWidth()
+    // of 0. Left in place it is also a live hazard, because QListView doubles this metric into
+    // its layout bounds should SH_ScrollView_FrameOnlyAroundContents ever be answered non-zero.
+    // The popup's real inset is the container's, taken from the padding tokens directly by
+    // comboPopupContentsRect(), and never from here.
+    if (widget->property(comboDropdownProperty).toBool()) {
+        return {};
+    }
+
     const BoxGeometryDefinition geometry = resolveBoxGeometry(
         contextOf(widget, option, StyleComponentElement::Root)
     );
@@ -3724,7 +3735,9 @@ void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
 
     // A combo popup's edge is painted by the container around the list, not by the list itself,
     // which sits inset from it. Clipping the list would round a widget whose corners are not the
-    // popup's, and leave the visible edge square.
+    // popup's, and leave the visible edge square. Nothing masks the container in its place:
+    // giving the popup a real radius would mean marking that container WA_TranslucentBackground,
+    // which is why this only declines rather than redirecting.
     if (scrollArea->property(comboDropdownProperty).toBool()) {
         return;
     }
