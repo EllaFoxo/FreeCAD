@@ -17,6 +17,7 @@ add_executable(Gui_tests_run
         StyleParameters/ValueTest.cpp
         StyleParameters/DescriptorRegistryTest.cpp
         StyleParameters/StyleOverridesTest.cpp
+        StyleParameters/ShippedThemeTest.cpp
         TreeBranchGeometryTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
@@ -39,6 +40,10 @@ setup_qt_test(MdiSurface)
 setup_qt_test(FormControlSizing)
 setup_qt_test(HighlightOverlay)
 setup_qt_test(MenuGeometry)
+
+# ShippedThemeTest reads the theme YAML out of the build's data directory, so the copy has to
+# have happened before the suite runs — otherwise it silently checks a stale snapshot.
+add_dependencies(Gui_tests_run Stylesheets_data)
 
 target_link_libraries(Gui_tests_run PRIVATE
     GTest::gmock_main
