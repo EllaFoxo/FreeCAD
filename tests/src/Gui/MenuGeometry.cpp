@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 
+#include <QAction>
 #include <QApplication>
 #include <QIcon>
 #include <QImage>
@@ -592,6 +593,59 @@ private Q_SLOTS:
             = spacedStyle.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu).height();
 
         QCOMPARE(spaced - tight, 6);
+    }
+
+    // Every other test here drives the style directly with a synthesised option, so
+    // QMenuPrivate::updateActionRects — the code that consumes the four pixel metrics and
+    // stacks the rows — never runs. This is the end-to-end check: a real popup, real actions,
+    // laid out by Qt against these metrics. The row heights carry half a gap at each end, so
+    // if the metrics and the stacking ever disagree about who owns the space at the ends of
+    // the list, the popup grows at one end only and this fails.
+    void test_aRealMenuStacksItsActionsAgainstTheMetrics()  // NOLINT
+    {
+        const auto guard = overrideToken("MenuItemSpacing", "6px");
+
+        // Declared before the menu so it outlives it: QWidget::setStyle does not take
+        // ownership, and a fresh instance is needed for the override to be visible at all.
+        Gui::FreeCADStyle freecadStyle;
+
+        QMenu menu;
+        menu.setStyle(&freecadStyle);
+
+        const QList<QAction*> actions {
+            menu.addAction(QStringLiteral("Open")),
+            menu.addAction(QStringLiteral("Save")),
+            menu.addAction(QStringLiteral("Save As...")),
+        };
+        menu.ensurePolished();
+
+        const QSize hint = menu.sizeHint();
+        const int verticalMargin = freecadStyle.pixelMetric(QStyle::PM_MenuVMargin, nullptr, &menu);
+
+        int stackedHeight = 0;
+        QRect previous;
+
+        for (QAction* action : actions) {
+            const QRect geometry = menu.actionGeometry(action);
+            QVERIFY(!geometry.isEmpty());
+
+            if (!previous.isNull()) {
+                // Abutting, not overlapping and not gapped: the gap lives inside the rows.
+                QCOMPARE(geometry.top(), previous.bottom() + 1);
+            }
+
+            stackedHeight += geometry.height();
+            previous = geometry;
+        }
+
+        const QRect first = menu.actionGeometry(actions.constFirst());
+        const QRect last = menu.actionGeometry(actions.constLast());
+
+        // The list sits centred between the popup's edges.
+        QCOMPARE(first.top(), hint.height() - 1 - last.bottom());
+
+        // Nothing but the two margins is added around the stack.
+        QCOMPARE(verticalMargin + stackedHeight + verticalMargin, hint.height());
     }
 
     void test_plainSeparatorUsesItsOwnHeight()  // NOLINT
