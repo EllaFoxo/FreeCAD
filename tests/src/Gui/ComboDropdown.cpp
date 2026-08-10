@@ -227,6 +227,22 @@ private:
         return *style;
     }
 
+    // How much of @p rect @p canvas paints in @p colour. A label is a handful of glyph pixels
+    // over a much larger fill, so a text colour can only be asserted as a presence or an
+    // absence — never as the colour of any one pixel picked in advance.
+    static int pixelsOfColour(const QImage& canvas, const QRect& rect, const QColor& colour)
+    {
+        int found = 0;
+        for (int y = rect.top(); y <= rect.bottom(); ++y) {
+            for (int x = rect.left(); x <= rect.right(); ++x) {
+                if (canvas.rect().contains(x, y) && canvas.pixelColor(x, y) == colour) {
+                    ++found;
+                }
+            }
+        }
+        return found;
+    }
+
     // The y at which the popup's first row starts painting, measured on the container so the
     // frame's own inset counts. Row 0 always carries an interaction fill — it is the combo's
     // chosen entry and also the row Qt makes current when the popup opens — so its box is the
@@ -1296,6 +1312,59 @@ private Q_SLOTS:
         const QImage canvas = renderOf(*view->viewport());
 
         QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0x00, 0x00, 0xff));
+    }
+
+    // DropdownListItemHoveredTextColor is what stops a hovered row's label going white.
+    // QCommonStyle paints an item's label in QPalette::HighlightedText whenever State_Selected
+    // is set, and on a dropdown that flag marks the cursor rather than the selection — so the
+    // label of the row under the pointer takes the highlight colour over a mere hover tint. The
+    // Item TextColor patched into that palette role is the only thing holding it back, and a
+    // token that resolves to nothing leaves the patch unapplied and the label near-white.
+    //
+    // Only a rendered popup can tell that apart from "the token is defined": the name has to
+    // reach the paint, and a name misspelt consistently everywhere it is written resolves to
+    // nothing while every by-name test still passes.
+    void test_aHoveredRowTakesItsLabelColourFromTheDropdownItemToken()  // NOLINT
+    {
+        const auto textGuard = overrideToken("DropdownListItemHoveredTextColor", "#00ff00");
+
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.setCurrentIndex(2);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+
+        QListView* view = qobject_cast<QListView*>(comboBox.view());
+        QVERIFY(view != nullptr);
+
+        // The cursor on a row that is not the chosen entry, so the hovered label and the chosen
+        // one are separable. Qt marks the current row State_Selected, which is exactly the flag
+        // that sends QCommonStyle to HighlightedText.
+        view->setCurrentIndex(view->model()->index(0, 0));
+
+        const QImage canvas = renderOf(*view->viewport());
+        const QRect hoveredRow = view->visualRect(view->model()->index(0, 0));
+        const QRect chosenRow = view->visualRect(view->model()->index(2, 0));
+
+        const QColor labelColour(0x00, 0xff, 0x00);
+        const int hoveredLabel = pixelsOfColour(canvas, hoveredRow, labelColour);
+        const int chosenLabel = pixelsOfColour(canvas, chosenRow, labelColour);
+
+        QVERIFY2(
+            hoveredLabel > 0,
+            "the hovered row's label was not drawn in the token's colour, so the palette patch "
+            "never ran and Qt is free to paint it in the raw highlight text colour"
+        );
+
+        // The token is the hovered row's alone: a chosen row that is not under the cursor keeps
+        // the ordinary label colour, so the assertion above cannot be satisfied by the colour
+        // leaking onto every row.
+        QCOMPARE(chosenLabel, 0);
     }
 
     void test_aComboWithNoCurrentIndexMarksNothing()  // NOLINT
