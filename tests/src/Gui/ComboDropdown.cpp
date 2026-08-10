@@ -1412,6 +1412,73 @@ private Q_SLOTS:
         }
     }
 
+    // Qt sizes a popup and only then shows it, and it is the show that polishes a widget for the
+    // first time — so a view recognised as a dropdown no earlier than its own polish is measured
+    // at the plain List pitch and painted at the dropdown's. The popup opens too short, scrolled,
+    // and comes right only on the second open. Recognising the view when setView() installs it,
+    // which happens well before anything measures the popup, is what makes the first open right.
+    void test_aViewInstalledAfterPolishIsSizedOnItsFirstOpen()  // NOLINT
+    {
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.move(200, 200);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        // Built and handed over the way DlgExpressionInput's variable set combo does it, from a
+        // runtime slot long after the combo box was polished.
+        auto* replacementView = new QListView(&comboBox);
+        comboBox.setView(replacementView);
+        QCOMPARE(comboBox.view(), replacementView);
+
+        // The first open, and the only one.
+        comboBox.showPopup();
+        const auto guard = qScopeGuard([&comboBox] { comboBox.hidePopup(); });
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+
+        QWidget* container = replacementView->parentWidget();
+
+        // The precondition: four short rows at the dropdown's pitch sit well inside the shared
+        // cap, so nothing but a mis-measurement could make this popup scroll.
+        QVERIFY2(
+            baselineContainerHeight(*replacementView, comboBox.count())
+                < replacementView->maximumHeight(),
+            "the four rows do not fit the cap, so a scrolled popup would be honest"
+        );
+
+        QVERIFY2(
+            container->height() == baselineContainerHeight(*replacementView, comboBox.count()),
+            qPrintable(QStringLiteral(
+                           "the popup is %1px tall, against the %2px its four rows at "
+                           "the dropdown pitch need"
+            )
+                           .arg(container->height())
+                           .arg(baselineContainerHeight(*replacementView, comboBox.count())))
+        );
+
+        // The consequence the owner sees, not only the arithmetic: every row is on screen.
+        const QRect lastRowRect = replacementView->visualRect(
+            comboBox.model()->index(comboBox.count() - 1, 0)
+        );
+        QVERIFY2(
+            lastRowRect.bottom() <= replacementView->viewport()->rect().bottom(),
+            qPrintable(QStringLiteral(
+                           "the last row spans y %1..%2, past the viewport's %3, so the "
+                           "popup opened showing only part of its rows"
+            )
+                           .arg(lastRowRect.top())
+                           .arg(lastRowRect.bottom())
+                           .arg(replacementView->viewport()->rect().bottom()))
+        );
+
+        QVERIFY2(
+            !replacementView->verticalScrollBar()->isVisible(),
+            "a scroll bar appeared on a popup that has room for every row it holds"
+        );
+    }
+
     // A view handed to a combo box after it was polished — what DlgExpressionInput's variable
     // set combo does from a runtime slot — is that combo's popup like any other and has to be
     // recognised as one. Nothing polishes the combo box again, so the recognition can only come
@@ -1423,11 +1490,10 @@ private Q_SLOTS:
     // cursor's row instead — so this cannot pass on the fixture's identically coloured ListRow
     // token.
     //
-    // The popup is opened twice because the first open is measured before the view is polished:
-    // Qt sizes the popup, then shows it, and it is that show which polishes the view and gives
-    // its rows the dropdown's pitch. The first open therefore scrolls, and only the second is
-    // laid out from the metrics it paints with. What is asserted here is the marking, which is
-    // right from the first open; the sizing is what needs the reopen to be observable at all.
+    // One open is enough: the view is recognised when setView() installs it, so the popup is laid
+    // out from the metrics it paints with from the first open. This test used to open the popup
+    // twice for that reason; test_aViewInstalledAfterPolishIsSizedOnItsFirstOpen above is what
+    // holds the single open to being sufficient.
     void test_aViewInstalledAfterPolishStillMarksTheChosenEntry()  // NOLINT
     {
         installFreshApplicationStyle();
@@ -1449,10 +1515,6 @@ private Q_SLOTS:
 
         comboBox.showPopup();
         QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
-        comboBox.hidePopup();
-
-        comboBox.showPopup();
-        QCoreApplication::processEvents();
 
         // What a mouse-move over the first row does, without needing a synthetic mouse event.
         replacementView->setCurrentIndex(replacementView->model()->index(0, 0));

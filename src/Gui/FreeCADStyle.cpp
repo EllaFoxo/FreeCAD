@@ -3840,8 +3840,10 @@ void FreeCADStyle::polish(QWidget* widget)
 
     // A popup list that arrived after its combo box was polished — setView() from a runtime
     // slot — was never reached by the branch above, and nothing polishes the combo box again.
-    // Tagging it here catches it instead: Qt polishes a widget on its first show, and a popup
-    // list is shown before it is ever painted, whenever it was installed.
+    // The container's ChildAdded filter normally catches it at install time, early enough to be
+    // measured with the dropdown's own metrics; this is the backstop for a view that reaches a
+    // container the filter never saw. Qt polishes a widget on its first show, and a popup list is
+    // shown before it is ever painted, whenever it was installed.
     if (auto* listView = qobject_cast<QListView*>(widget)) {
         if (QComboBox* comboBox = comboBoxOwning(listView)) {
             constrainComboDropdown(comboBox);
@@ -4194,6 +4196,10 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
         scheduleComboPopupCorrection(obj);
     }
 
+    if (event->type() == QEvent::ChildAdded) {
+        constrainReplacedComboDropdown(obj, static_cast<QChildEvent*>(event));
+    }
+
     if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
         if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(obj)) {
             updateScrollAreaMask(scrollArea);
@@ -4256,6 +4262,31 @@ void FreeCADStyle::forceTabBarRepaint(QObject* obj, QEvent* event)
         || event->type() == QEvent::HoverMove || event->type() == QEvent::HoverLeave) {
         static_cast<QWidget*>(obj)->update();
     }
+}
+
+void FreeCADStyle::constrainReplacedComboDropdown(QObject* obj, QChildEvent* event)
+{
+    if (!obj->property(comboContainerProperty).toBool()) {
+        return;
+    }
+
+    auto* container = qobject_cast<QWidget*>(obj);
+    if (!container) {
+        return;
+    }
+
+    auto* comboBox = qobject_cast<QComboBox*>(container->parentWidget());
+    if (!comboBox) {
+        return;
+    }
+
+    // A popup container also acquires scroller buttons and the view's own internals. Only the
+    // widget the combo box now calls its view is the one the dropdown metrics belong on.
+    if (comboBox->view() != event->child()) {
+        return;
+    }
+
+    constrainComboDropdown(comboBox);
 }
 
 void FreeCADStyle::scheduleComboPopupCorrection(QObject* obj)

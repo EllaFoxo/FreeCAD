@@ -53,6 +53,7 @@
 #include "StyleParameters/StyleContext.h"
 #include "StyleParameters/StyleOverrides.h"
 
+class QChildEvent;
 class QListView;
 class QTextDocument;
 class QTreeView;
@@ -1266,6 +1267,17 @@ private:
     /** Defers correctComboPopupPlacement() via QTimer::singleShot(0) so Qt
      *  finishes its own screen-edge clamping before we adjust the popup. */
     void scheduleComboPopupCorrection(QObject* obj);
+
+    /**
+     * @brief Applies the dropdown metrics to a popup list setView() has just installed.
+     *
+     * A view handed to a combo box after it was polished is otherwise not recognised as a popup
+     * until its own first polish, which Qt runs on the show — after Qt has already sized the
+     * popup, so the first open is measured at one pitch and painted at another. The container
+     * takes the new view as a child at install time, well before anything measures the popup.
+     * Ignores any other child, and any object that is not a tagged popup container.
+     */
+    void constrainReplacedComboDropdown(QObject* obj, QChildEvent* event);
 
     /** Resolves token padding and applies it to @p document's document margin. */
     void applyTextEditDocumentPadding(QWidget* widget, QTextDocument* document) const;
