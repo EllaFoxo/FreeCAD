@@ -183,11 +183,12 @@ private Q_SLOTS:
         multi.selection()->stopSelecting();
     }
 
-    // The widget resolves the List token chain, not LineEdit.
+    // The widget names a component of its own, which chains to List — so it inherits the list
+    // row and item tokens while keeping a form control's height.
     void test_usesListComponentOverride()  // NOLINT
     {
         Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
-        QCOMPARE(widget.property("component").toString(), QStringLiteral("List"));
+        QCOMPARE(widget.property("component").toString(), QStringLiteral("GeometrySelector"));
     }
 
     // Headless fallback: no inter-row gap is applied, so the reference rows abut.
