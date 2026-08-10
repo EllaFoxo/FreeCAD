@@ -18,6 +18,7 @@ add_executable(Gui_tests_run
         StyleParameters/DescriptorRegistryTest.cpp
         StyleParameters/StyleOverridesTest.cpp
         StyleParameters/ShippedThemeTest.cpp
+        StyleParameters/StyleContextTest.cpp
         TreeBranchGeometryTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp

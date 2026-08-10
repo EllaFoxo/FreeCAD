@@ -156,7 +156,7 @@ enum class Position : uint8_t
  * @brief Interaction state bitmask — multiple flags may be active simultaneously.
  *
  * Token resolution expands active flags into a fallback prefix list in priority
- * order (highest priority first): Disabled > Pressed > Hovered > Checked > Focused.
+ * order (highest priority first): Disabled > Pressed > Selected > Hovered > Checked > Focused.
  */
 enum class StyleState : uint8_t
 {
@@ -164,8 +164,9 @@ enum class StyleState : uint8_t
     Focused = 1 << 0,
     Checked = 1 << 1,
     Hovered = 1 << 2,
-    Pressed = 1 << 3,
-    Disabled = 1 << 4,
+    Selected = 1 << 3,
+    Pressed = 1 << 4,
+    Disabled = 1 << 5,
 };
 
 /**
@@ -373,12 +374,14 @@ struct GuiExport StyleContext
 
 private:
     // clang-format off
-    static constexpr uint8_t componentBitOffset = 0;
-    static constexpr uint8_t elementBitOffset   = 8;
-    static constexpr uint8_t stateBitOffset     = 12;
-    static constexpr uint8_t propertyBitOffset  = 17;
-    static constexpr uint8_t overrideBitOffset  = 24;
-    static constexpr uint8_t variantBitOffset   = 32;
+    // Each field is given its natural width, so a new component, element, state, property or
+    // variant does not need this layout revisited. cacheKey() asserts every one of them.
+    static constexpr uint8_t componentBitOffset = 0;   //  8 bits
+    static constexpr uint8_t elementBitOffset   = 8;   //  4 bits
+    static constexpr uint8_t stateBitOffset     = 12;  //  8 bits
+    static constexpr uint8_t propertyBitOffset  = 20;  //  8 bits
+    static constexpr uint8_t overrideBitOffset  = 28;  //  8 bits
+    static constexpr uint8_t variantBitOffset   = 36;  // 24 bits (VariantSlot::COUNT * 4)
     // clang-format on
 
     static uint64_t packVariant(const VariantKey& variant);

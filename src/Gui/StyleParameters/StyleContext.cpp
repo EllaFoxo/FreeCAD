@@ -23,6 +23,9 @@
 
 #include "StyleContext.h"
 
+#include <limits>
+#include <type_traits>
+
 namespace Gui::StyleParameters
 {
 
@@ -65,9 +68,33 @@ void StyleContext::Intern::clear()
 uint64_t StyleContext::cacheKey() const
 {
     static_assert(
+        static_cast<uint64_t>(StyleComponent::COUNT)
+            <= (uint64_t {1} << (elementBitOffset - componentBitOffset)),
+        "StyleComponent no longer fits in the component field packed at componentBitOffset"
+    );
+    static_assert(
         static_cast<uint64_t>(StyleComponentElement::COUNT)
             <= (uint64_t {1} << (stateBitOffset - elementBitOffset)),
-        "StyleComponentElement no longer fits in the 4-bit element field packed at elementBitOffset"
+        "StyleComponentElement no longer fits in the element field packed at elementBitOffset"
+    );
+    // A full byte, so every StyleState flag fits by construction rather than by inspection.
+    static_assert(
+        propertyBitOffset - stateBitOffset
+            >= std::numeric_limits<std::underlying_type_t<StyleState>>::digits,
+        "StyleState no longer fits in the state field packed at stateBitOffset"
+    );
+    static_assert(
+        static_cast<uint64_t>(StyleProperty::COUNT)
+            <= (uint64_t {1} << (overrideBitOffset - propertyBitOffset)),
+        "StyleProperty no longer fits in the property field packed at propertyBitOffset"
+    );
+    static_assert(
+        std::numeric_limits<uint8_t>::digits <= variantBitOffset - overrideBitOffset,
+        "The interned component override no longer fits in the field packed at overrideBitOffset"
+    );
+    static_assert(
+        static_cast<uint64_t>(VariantSlot::COUNT) * 4 <= 64 - variantBitOffset,
+        "VariantKey no longer fits in the variant field packed at variantBitOffset"
     );
 
     const uint8_t overrideId = componentOverride.empty()

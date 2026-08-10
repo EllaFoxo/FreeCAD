@@ -116,3 +116,43 @@ TEST(DescriptorRegistryTest, MenuSubElementsNameTheirOwnPrefixes)
     EXPECT_EQ(prefixFor(StyleComponentElement::Arrow), "MenuArrow");
     EXPECT_EQ(prefixFor(StyleComponentElement::Shortcut), "MenuShortcut");
 }
+
+TEST(DescriptorRegistryTest, SelectedOutranksHoveredInTheFallbackChain)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    StyleContext context;
+    context.component = StyleComponent::List;
+    context.element = StyleComponentElement::Row;
+    context.state |= StyleState::Selected;
+    context.state |= StyleState::Hovered;
+
+    const auto prefixes = registry.buildPrefixes(context);
+
+    // A row that is both selected and hovered keeps its selection colour: states do not
+    // compose, so whichever prefix comes first is the one a theme's token is found under.
+    const auto selected = std::ranges::find(prefixes, "ListRowSelected");
+    const auto hovered = std::ranges::find(prefixes, "ListRowHovered");
+    ASSERT_NE(selected, prefixes.end());
+    ASSERT_NE(hovered, prefixes.end());
+    EXPECT_LT(selected - prefixes.begin(), hovered - prefixes.begin());
+}
+
+TEST(DescriptorRegistryTest, PressedOutranksSelected)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    StyleContext context;
+    context.component = StyleComponent::List;
+    context.element = StyleComponentElement::Row;
+    context.state |= StyleState::Pressed;
+    context.state |= StyleState::Selected;
+
+    const auto prefixes = registry.buildPrefixes(context);
+
+    const auto pressed = std::ranges::find(prefixes, "ListRowPressed");
+    const auto selected = std::ranges::find(prefixes, "ListRowSelected");
+    ASSERT_NE(pressed, prefixes.end());
+    ASSERT_NE(selected, prefixes.end());
+    EXPECT_LT(pressed - prefixes.begin(), selected - prefixes.begin());
+}

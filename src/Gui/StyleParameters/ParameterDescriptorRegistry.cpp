@@ -171,6 +171,7 @@ std::vector<std::string> variantCombinations(const std::vector<std::string>& fra
 const std::map<StyleState, std::string_view> stateNames = {
     {StyleState::Disabled, "Disabled"},
     {StyleState::Pressed,  "Pressed"},
+    {StyleState::Selected, "Selected"},
     {StyleState::Hovered,  "Hovered"},
     {StyleState::Checked,  "Checked"},
     {StyleState::Focused,  "Focused"},
@@ -186,6 +187,7 @@ std::string_view stateString(StyleState state)
 constexpr auto statePriorityOrder = std::to_array({
     StyleState::Disabled,
     StyleState::Pressed,
+    StyleState::Selected,
     StyleState::Hovered,
     StyleState::Checked,
     StyleState::Focused,
