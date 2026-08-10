@@ -156,15 +156,15 @@ enum class Position : uint8_t
  * @brief Interaction state bitmask — multiple flags may be active simultaneously.
  *
  * Token resolution expands active flags into a fallback prefix list in priority
- * order (highest priority first): Disabled > Pressed > Selected > Hovered > Checked > Focused.
+ * order (highest priority first): Disabled > Pressed > Hovered > Checked > Selected > Focused.
  */
 enum class StyleState : uint8_t
 {
     Normal = 0,
     Focused = 1 << 0,
-    Checked = 1 << 1,
-    Hovered = 1 << 2,
-    Selected = 1 << 3,
+    Selected = 1 << 1,
+    Checked = 1 << 2,
+    Hovered = 1 << 3,
     Pressed = 1 << 4,
     Disabled = 1 << 5,
 };

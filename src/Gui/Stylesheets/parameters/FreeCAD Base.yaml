@@ -371,7 +371,8 @@ DropdownListItemHoveredTextColor: "@BaseTextColor"
 
 # The highlight. Two different rows can carry one: hover follows the pointer, while selection
 # marks the entry the combo box currently holds and stays put as the pointer moves. A row that is
-# both resolves the selected fill, since Selected outranks Hovered.
+# both resolves the hovered fill, since Hovered outranks Selected — the chosen entry still has to
+# react to the pointer.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
 DropdownListRowSelectedBackground: "@ListRowSelectedBackground"

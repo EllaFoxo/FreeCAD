@@ -122,6 +122,11 @@ private:
     static constexpr int containerBorder = 1;
     static constexpr int containerPadding = 4;
 
+    // DropdownListBackground and DropdownListBorderColor, as the fixture states them. Anything
+    // else down the popup's centre belongs to a row.
+    static const inline QColor surfaceColor {0x10, 0x10, 0x10};
+    static const inline QColor surfaceBorderColor {0x00, 0xff, 0x00};
+
     // Where the first row's box started before every row was given a leading gap: the container
     // inset and nothing else, because row 0 alone reserved no gap above itself. The change adds
     // that gap to row 0 and takes the same amount off the top inset, so this must not move.
@@ -223,8 +228,11 @@ private:
     }
 
     // The y at which the popup's first row starts painting, measured on the container so the
-    // frame's own inset counts. Row 0 is the combo's current item, so its box carries
-    // DropdownListRowSelectedBackground and is the topmost red pixel down the popup's centre.
+    // frame's own inset counts. Row 0 always carries an interaction fill — it is the combo's
+    // chosen entry and also the row Qt makes current when the popup opens — so its box is the
+    // topmost pixel down the popup's centre that is neither the surface nor the surface's edge.
+    // Which of the two interaction fills wins is a matter of state priority, and a geometry
+    // measurement has no business depending on that.
     // The box, not the cell: the cell above it also holds the leading gap, which is exactly
     // what moved, so a cell-based measurement would report the move rather than survive it.
     static int firstRowBoxTop(QWidget& container)
@@ -233,7 +241,8 @@ private:
         const int middle = canvas.width() / 2;
 
         for (int y = 0; y < canvas.height(); ++y) {
-            if (canvas.pixelColor(middle, y) == QColor(0xff, 0x00, 0x00)) {
+            const QColor pixel = canvas.pixelColor(middle, y);
+            if (pixel != surfaceColor && pixel != surfaceBorderColor) {
                 return y;
             }
         }
@@ -653,6 +662,12 @@ private Q_SLOTS:
 
         QListView* view = popupOf(box);
 
+        // Qt makes the chosen entry the view's current row when the popup opens, and a dropdown
+        // reads the view's current row as the cursor. Move it off, so the chosen row carries the
+        // selection alone: Hovered outranks Selected, and the selection's own fill is the subject
+        // here.
+        view->setCurrentIndex(box.model()->index(0, 0));
+
         const QImage canvas = renderOf(*view);
         const QPoint selected = view->visualRect(box.model()->index(1, 0)).center();
         const QPoint resting = view->visualRect(box.model()->index(0, 0)).center();
@@ -661,11 +676,11 @@ private Q_SLOTS:
         QVERIFY(canvas.pixelColor(resting) != QColor(0xff, 0x00, 0x00));
     }
 
-    void test_aHoveredSelectedRowKeepsItsSelectionColour()  // NOLINT
+    void test_aHoveredSelectedRowStillGivesHoverFeedback()  // NOLINT
     {
-        // Selected outranks Hovered, so the row that is both must resolve the selected
-        // background. Before this change Hovered won, and a selected row visibly weakened under
-        // the cursor.
+        // A selection must keep reacting to the pointer: Hovered outranks Selected, so the row
+        // that is both resolves the hovered background. With the order the other way round a
+        // selected row was inert under the cursor, which is what the visual review rejected.
         installFreshApplicationStyle();
 
         QListView listView;
@@ -683,7 +698,7 @@ private Q_SLOTS:
             QApplication::style()->drawControl(QStyle::CE_ItemViewItem, &option, &painter, &listView);
         }
 
-        QCOMPARE(canvas.pixelColor(50, 10), QColor(0xff, 0x00, 0x00));
+        QCOMPARE(canvas.pixelColor(50, 10), QColor(0x00, 0x00, 0xff));
     }
 
     // With the popup off the menu route Qt no longer asks for PE_PanelMenu, so the popup's edge
