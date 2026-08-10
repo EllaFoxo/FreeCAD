@@ -1411,6 +1411,60 @@ private Q_SLOTS:
             );
         }
     }
+
+    // A view handed to a combo box after it was polished — what DlgExpressionInput's variable
+    // set combo does from a runtime slot — is that combo's popup like any other and has to be
+    // recognised as one. Nothing polishes the combo box again, so the recognition can only come
+    // from the view's own polish, which Qt runs when the popup is first shown.
+    //
+    // The cursor is parked away from the chosen entry on purpose: that is what separates the
+    // dropdown's derived selection from the generic item-view one. An untagged view resolves as
+    // a plain List, where the mark follows the view's own current row and would sit on the
+    // cursor's row instead — so this cannot pass on the fixture's identically coloured ListRow
+    // token.
+    //
+    // The popup is opened twice because the first open is measured before the view is polished:
+    // Qt sizes the popup, then shows it, and it is that show which polishes the view and gives
+    // its rows the dropdown's pitch. The first open therefore scrolls, and only the second is
+    // laid out from the metrics it paints with. What is asserted here is the marking, which is
+    // right from the first open; the sizing is what needs the reopen to be observable at all.
+    void test_aViewInstalledAfterPolishStillMarksTheChosenEntry()  // NOLINT
+    {
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.setCurrentIndex(2);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        // Given a parent of its own before it is handed over, the way DlgExpressionInput builds
+        // one, and the combo box itself at that — a child created under an already visible
+        // widget stays hidden, so the view reaches setView() unpolished no matter whose child
+        // it was. A view polished while it was merely inside a combo box would be a view the
+        // popup's own show can no longer reach.
+        auto* replacementView = new QListView(&comboBox);
+        comboBox.setView(replacementView);
+        QCOMPARE(comboBox.view(), replacementView);
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+        comboBox.hidePopup();
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();
+
+        // What a mouse-move over the first row does, without needing a synthetic mouse event.
+        replacementView->setCurrentIndex(replacementView->model()->index(0, 0));
+
+        const QImage canvas = renderOf(*replacementView->viewport());
+
+        const QRect chosenRow = replacementView->visualRect(replacementView->model()->index(2, 0));
+        const QRect cursorRow = replacementView->visualRect(replacementView->model()->index(0, 0));
+
+        QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0xff, 0x00, 0x00));
+        QCOMPARE(canvas.pixelColor(cursorRow.center()), QColor(0x00, 0x00, 0xff));
+    }
 };
 
 QTEST_MAIN(TestComboDropdown)

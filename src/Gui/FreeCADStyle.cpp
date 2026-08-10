@@ -3775,6 +3775,21 @@ void FreeCADStyle::updateScrollAreaMask(QAbstractScrollArea* scrollArea) const
     scrollArea->setMask(bitmap);
 }
 
+// The combo box @p listView is the popup list of, or nullptr if it is not one.
+//
+// The parent chain only says where to look. A QListView that merely sits inside a combo box is
+// not its popup — an editable combo's completer builds one of those — so the combo box is
+// returned only when it names this very view as its own.
+static QComboBox* comboBoxOwning(QListView* listView)
+{
+    for (QWidget* ancestor = listView->parentWidget(); ancestor; ancestor = ancestor->parentWidget()) {
+        if (auto* comboBox = qobject_cast<QComboBox*>(ancestor)) {
+            return comboBox->view() == listView ? comboBox : nullptr;
+        }
+    }
+    return nullptr;
+}
+
 void FreeCADStyle::polish(QWidget* widget)
 {
     QProxyStyle::polish(widget);
@@ -3821,6 +3836,16 @@ void FreeCADStyle::polish(QWidget* widget)
 
     if (auto* comboBox = qobject_cast<QComboBox*>(widget)) {
         constrainComboDropdown(comboBox);
+    }
+
+    // A popup list that arrived after its combo box was polished — setView() from a runtime
+    // slot — was never reached by the branch above, and nothing polishes the combo box again.
+    // Tagging it here catches it instead: Qt polishes a widget on its first show, and a popup
+    // list is shown before it is ever painted, whenever it was installed.
+    if (auto* listView = qobject_cast<QListView*>(widget)) {
+        if (QComboBox* comboBox = comboBoxOwning(listView)) {
+            constrainComboDropdown(comboBox);
+        }
     }
 
     if (qobject_cast<TaskView::TaskBox*>(widget)) {
