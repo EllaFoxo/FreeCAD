@@ -15,6 +15,7 @@
 #include <QScrollBar>
 #include <QStyleFactory>
 #include <QStyleOptionComboBox>
+#include <QStyleOptionFrame>
 #include <QStyleOptionMenuItem>
 #include <QTest>
 
@@ -1101,7 +1102,9 @@ private Q_SLOTS:
 
         QCoreApplication::processEvents();  // the correction is deferred by a zero timer
 
-        // The precondition: the popup fits, so there is nothing for the trim to give back.
+        // The precondition: the separator keeps the popup from dividing evenly into row pitches,
+        // so a trim taken against that pitch would clip a row instead of removing empty surface
+        // — which is exactly what the guard under test exists to skip.
         QVERIFY2(
             viewportHeightBeforeCorrection % view->sizeHintForRow(0) != 0,
             "the popup is already a whole number of row pitches tall, so a trim against that "
@@ -1121,6 +1124,32 @@ private Q_SLOTS:
         );
 
         QCOMPARE(view->viewport()->height(), viewportHeightBeforeCorrection);
+    }
+
+    // itemViewContentsRect() insets an ordinary item view by border and padding on every side,
+    // the same claim comboPopupContentsRect() makes for a popup's container. ListItemSpacing is
+    // pinned to 0px so the top inset carries only that border-plus-padding claim, not also the
+    // leading-gap deduction every row's own top now carries — otherwise the assertion below would
+    // be measuring two things at once.
+    void test_itemViewContentsRectInsetsByBorderAndPadding()  // NOLINT
+    {
+        const auto paddingGuard = overrideToken("ListPadding", "padding(4px)");
+        const auto borderGuard = overrideToken("ListBorderThickness", "2px");
+        const auto spacingGuard = overrideToken("ListItemSpacing", "0px");
+
+        Gui::FreeCADStyle freecadStyle;
+        // subElementRect() is exposed publicly on QStyle only; FreeCADStyle narrows its override.
+        QStyle& style = freecadStyle;
+        QListView listView;
+        style.polish(&listView);
+
+        QStyleOptionFrame option;
+        option.initFrom(&listView);
+        option.rect = QRect(0, 0, 100, 100);
+
+        const QRect contents = style.subElementRect(QStyle::SE_ShapedFrameContents, &option, &listView);
+
+        QCOMPARE(contents, QRect(6, 6, 88, 88));
     }
 };
 
