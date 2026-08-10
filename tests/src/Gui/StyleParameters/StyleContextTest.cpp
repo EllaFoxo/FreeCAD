@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <set>
+#include <string>
 #include <vector>
 
 #include <Gui/StyleParameters/StyleContext.h>
@@ -24,7 +25,101 @@ StyleContext populatedContext()
     return context;
 }
 
+// The layout cacheKey() must produce, written out as a second, independent copy of what
+// StyleContext's private offsets say. Changing the production constants without changing these
+// is meant to fail: the duplication is the mechanism, not an oversight.
+constexpr uint64_t componentShift = 0;
+constexpr uint64_t elementShift = 8;
+constexpr uint64_t stateShift = 12;
+constexpr uint64_t propertyShift = 20;
+constexpr uint64_t overrideShift = 28;
+constexpr uint64_t variantShift = 36;
+constexpr uint64_t variantSlotWidth = 4;
+
 }  // namespace
+
+TEST(StyleContextTest, PacksEachDimensionAtItsDocumentedOffset)
+{
+    // One dimension at a time on an otherwise-default context, whose key is zero. The whole key is
+    // then the field under test, so a field packed at a neighbour's offset fails outright — unlike
+    // an inequality check, which two overlapping fields still satisfy for most pairs of values.
+    EXPECT_EQ(StyleContext {}.cacheKey(), uint64_t {0})
+        << "a context with every dimension at its default must pack to an empty key";
+
+    StyleContext component;
+    component.component = StyleComponent::Tree;
+    EXPECT_EQ(component.cacheKey(), static_cast<uint64_t>(StyleComponent::Tree) << componentShift);
+
+    StyleContext element;
+    element.element = StyleComponentElement::Shortcut;
+    EXPECT_EQ(element.cacheKey(), static_cast<uint64_t>(StyleComponentElement::Shortcut) << elementShift);
+
+    StyleContext state;
+    state.state |= StyleState::Selected;
+    state.state |= StyleState::Disabled;
+    EXPECT_EQ(state.cacheKey(), static_cast<uint64_t>(state.state.toUnderlyingType()) << stateShift);
+
+    EXPECT_EQ(
+        StyleContext {}.cacheKey(StyleProperty::PlacementOffset),
+        static_cast<uint64_t>(StyleProperty::PlacementOffset) << propertyShift
+    );
+
+    // intern() is idempotent, so asking for the id is a reading of the intern table rather than a
+    // restatement of whatever cacheKey() happened to pack.
+    StyleContext override;
+    override.componentOverride = "CacheKeyLayoutProbe";
+    const uint64_t overrideId = StyleContext::Intern::global().intern("CacheKeyLayoutProbe");
+    EXPECT_EQ(override.cacheKey(), overrideId << overrideShift);
+
+    // First and last slot together pin the variant field's offset and its per-slot stride.
+    StyleContext firstSlot;
+    firstSlot.variant.set(VariantSlot::ButtonType, ButtonType::Link);
+    EXPECT_EQ(firstSlot.cacheKey(), static_cast<uint64_t>(ButtonType::Link) << variantShift);
+
+    StyleContext lastSlot;
+    lastSlot.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
+    EXPECT_EQ(
+        lastSlot.cacheKey(),
+        static_cast<uint64_t>(TransparencyMode::Transparent)
+            << (variantShift + variantSlotWidth * static_cast<uint64_t>(VariantSlot::TransparencyMode))
+    );
+}
+
+TEST(StyleContextTest, TheKeyFieldsAreDisjoint)
+{
+    // Summing the single-dimension keys agrees with the combined key only when no two fields share
+    // a bit — OR-ing loses what addition carries. This catches an overlap without naming a single
+    // offset, so it still holds if the layout is deliberately rearranged.
+    const std::string probe = "CacheKeyDisjointProbe";
+
+    StyleContext component;
+    component.component = StyleComponent::Tree;
+
+    StyleContext element;
+    element.element = StyleComponentElement::Shortcut;
+
+    StyleContext state;
+    state.state |= StyleState::Disabled;
+
+    StyleContext override;
+    override.componentOverride = probe;
+
+    StyleContext variant;
+    variant.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
+
+    StyleContext combined;
+    combined.component = component.component;
+    combined.element = element.element;
+    combined.state = state.state;
+    combined.componentOverride = probe;
+    combined.variant = variant.variant;
+
+    const uint64_t sum = component.cacheKey() + element.cacheKey() + state.cacheKey()
+        + override.cacheKey() + variant.cacheKey()
+        + StyleContext {}.cacheKey(StyleProperty::PlacementOffset);
+
+    EXPECT_EQ(combined.cacheKey(StyleProperty::PlacementOffset), sum);
+}
 
 TEST(StyleContextTest, StatesThatDifferProduceDifferentKeys)
 {

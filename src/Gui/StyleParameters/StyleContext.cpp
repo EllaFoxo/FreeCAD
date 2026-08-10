@@ -23,6 +23,7 @@
 
 #include "StyleContext.h"
 
+#include <algorithm>
 #include <limits>
 #include <type_traits>
 
@@ -60,7 +61,7 @@ void StyleContext::Intern::clear()
 {
     uint64_t packed = 0;
     for (size_t index = 0; index < variant.slots.size(); ++index) {
-        packed |= static_cast<uint64_t>(variant.slots.at(index)) << (index * 4);
+        packed |= static_cast<uint64_t>(variant.slots.at(index)) << (index * variantSlotBitWidth);
     }
     return packed;
 }
@@ -93,8 +94,21 @@ uint64_t StyleContext::cacheKey() const
         "The interned component override no longer fits in the field packed at overrideBitOffset"
     );
     static_assert(
-        static_cast<uint64_t>(VariantSlot::COUNT) * 4 <= 64 - variantBitOffset,
+        static_cast<uint64_t>(VariantSlot::COUNT) * variantSlotBitWidth <= 64 - variantBitOffset,
         "VariantKey no longer fits in the variant field packed at variantBitOffset"
+    );
+    // Slot widths are checked separately from the field as a whole: a dimension that outgrows its
+    // own slot would overflow into its neighbour's without changing the size of the variant field.
+    static_assert(
+        std::max({
+            static_cast<uint64_t>(ButtonType::COUNT),
+            static_cast<uint64_t>(ControlSize::COUNT),
+            static_cast<uint64_t>(Position::COUNT),
+            static_cast<uint64_t>(RowType::COUNT),
+            static_cast<uint64_t>(FrameType::COUNT),
+            static_cast<uint64_t>(TransparencyMode::COUNT),
+        }) <= (uint64_t {1} << variantSlotBitWidth),
+        "A variant dimension no longer fits in its slot of the variant field"
     );
 
     const uint8_t overrideId = componentOverride.empty()

@@ -227,7 +227,9 @@ enum class TransparencyMode : uint8_t
  * Each slot corresponds to one enum dimension (ButtonType, ControlSize, …).
  * Adding a new variant dimension requires:
  *   1. Adding a slot entry before COUNT here.
- *   2. Defining the values enum with Default = 0 and COUNT as the last value.
+ *   2. Defining the values enum with Default = 0 and COUNT as the last value, and listing that
+ *      COUNT in StyleContext::cacheKey()'s variant static_assert so it is checked against the
+ *      width of a slot.
  *   3. Adding a string table and entry in ParameterDescriptorRegistry.cpp::variantSlotNames.
  *   4. Setting the slot in FreeCADStyle.cpp::contextOf().
  *   5. Placing the entry last if the slot applies to every component (see globalSlots in
@@ -383,6 +385,9 @@ private:
     static constexpr uint8_t overrideBitOffset  = 28;  //  8 bits
     static constexpr uint8_t variantBitOffset   = 36;  // 24 bits (VariantSlot::COUNT * 4)
     // clang-format on
+
+    /// Width of one VariantSlot's field within the packed variant array.
+    static constexpr uint8_t variantSlotBitWidth = 4;
 
     static uint64_t packVariant(const VariantKey& variant);
 };
