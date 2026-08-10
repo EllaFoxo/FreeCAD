@@ -1291,7 +1291,7 @@ private:
      * @brief Gives a combo box popup's row the selection state its combo box implies.
      *
      * A dropdown's selection is the combo's chosen entry, which stays put. Qt's own
-     * State_Selected on these rows means something else and is taken as hover instead.
+     * State_Selected on any other row means the cursor and is taken as hover instead.
      */
     static void applyDropdownSelectionState(
         StyleParameters::StyleContext& context,

@@ -4448,29 +4448,31 @@ QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
 // A combo popup's selection is the combo's own current index. Qt repurposes the view's
 // selection as a cursor — it follows the pointer and the arrow keys — so State_Selected is
 // folded into Hovered and the chosen entry is identified from the combo box instead.
+//
+// The chosen entry is exempt from that fold. Qt makes it the view's current row the instant
+// the popup opens, so it arrives carrying State_Selected before anything has been navigated;
+// folding it would show the value as merely hovered on every freshly opened dropdown, which
+// is precisely when the owner opens one to see what is set. The exemption costs it nothing
+// under the pointer: State_MouseOver is mapped to Hovered by the generic state block that
+// runs before this, and Hovered outranks Selected.
 void FreeCADStyle::applyDropdownSelectionState(
     StyleContext& context,
     const QStyleOption* option,
     const QWidget* widget
 )
 {
-    if (option->state & QStyle::State_Selected) {
-        context.state |= StyleState::Hovered;
-    }
-
     const auto* viewItemOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
-    if (!viewItemOption || !viewItemOption->index.isValid()) {
-        return;
-    }
-
     const QVariant tagged = widget->property(FreeCADStyle::comboBoxProperty);
     const auto* comboBox = qobject_cast<const QComboBox*>(tagged.value<QObject*>());
-    if (!comboBox) {
-        return;
-    }
 
-    if (viewItemOption->index.row() == comboBox->currentIndex()) {
+    const bool isChosenEntry = viewItemOption && viewItemOption->index.isValid() && comboBox
+        && viewItemOption->index.row() == comboBox->currentIndex();
+
+    if (isChosenEntry) {
         context.state |= StyleState::Selected;
+    }
+    else if (option->state & QStyle::State_Selected) {
+        context.state |= StyleState::Hovered;
     }
 }
 

@@ -1235,6 +1235,69 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(cursorRow.center()), QColor(0x00, 0x00, 0xff));
     }
 
+    // The moment the feature exists for: opening the dropdown to see what is currently set,
+    // without the pointer ever going near it. Qt makes the chosen entry the view's current row
+    // as the popup opens, so that row arrives carrying State_Selected — the flag a dropdown
+    // otherwise reads as the cursor. Folding it here would paint the chosen entry as merely
+    // hovered and the selection would never be visible on a freshly opened popup.
+    void test_aKeyboardOpenedPopupShowsTheChosenEntryAsChosen()  // NOLINT
+    {
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.setCurrentIndex(2);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+
+        QListView* view = qobject_cast<QListView*>(comboBox.view());
+        QVERIFY(view != nullptr);
+
+        // The precondition the exemption exists for, stated rather than assumed: without Qt
+        // making the chosen entry current on open there would be no State_Selected on it and
+        // the fold could not reach it.
+        QCOMPARE(view->currentIndex().row(), 2);
+
+        const QImage canvas = renderOf(*view->viewport());
+        const QRect chosenRow = view->visualRect(view->model()->index(2, 0));
+
+        QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0xff, 0x00, 0x00));
+    }
+
+    // The exemption must not cost the chosen entry its pointer feedback. State_MouseOver is
+    // mapped to Hovered before the dropdown's own selection handling runs, so a chosen row
+    // under the cursor resolves the hovered fill — hover outranking selection, as the visual
+    // review asked for.
+    void test_theChosenEntryStillReactsToTheCursor()  // NOLINT
+    {
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.setCurrentIndex(2);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();
+
+        QListView* view = qobject_cast<QListView*>(comboBox.view());
+        QVERIFY(view != nullptr);
+
+        // What the pointer arriving over the chosen row does: QAbstractItemView tracks the row
+        // under it and hands the painter State_MouseOver for that row alone.
+        const QRect chosenRow = view->visualRect(view->model()->index(2, 0));
+        QTest::mouseMove(view->viewport(), chosenRow.center());
+        QCoreApplication::processEvents();
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0x00, 0x00, 0xff));
+    }
+
     void test_aComboWithNoCurrentIndexMarksNothing()  // NOLINT
     {
         installFreshApplicationStyle();
