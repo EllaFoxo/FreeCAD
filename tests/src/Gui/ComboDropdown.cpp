@@ -6,6 +6,7 @@
 #include <QAbstractItemModel>
 #include <QApplication>
 #include <QComboBox>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QImage>
 #include <QListView>
@@ -15,6 +16,7 @@
 #include <QScopeGuard>
 #include <QScreen>
 #include <QScrollBar>
+#include <QStandardItemModel>
 #include <QStyleFactory>
 #include <QStyleOptionComboBox>
 #include <QStyleOptionFrame>
@@ -1372,6 +1374,37 @@ private Q_SLOTS:
 
         QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0xff, 0x00, 0x00));
         QCOMPARE(canvas.pixelColor(cursorRow.center()), QColor(0x00, 0x00, 0xff));
+    }
+
+    // A dropdown is not necessarily a combo box's. Adopting a bare view gives it and the frame
+    // around it the same surface, metrics and cap a combo popup gets — the whole reason the
+    // entry point is public.
+    void test_aBareViewCanBeAdoptedAsADropdown()  // NOLINT
+    {
+        const auto capGuard = overrideToken("DropdownListMaxHeight", "80px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        for (int row = 0; row < 40; ++row) {
+            model->appendRow(new QStandardItem(QStringLiteral("Item %1").arg(row)));
+        }
+        view->setModel(model);
+
+        style.constrainDropdown(view);
+
+        // The cap reaches both halves of the popup: the list, and the frame that paints its edge.
+        QCOMPARE(view->maximumHeight(), 80);
+        QCOMPARE(container.maximumHeight(), 80);
+
+        // The frame resolves the dropdown surface rather than a bare widget's, which is what
+        // gives it the popup's border and padding.
+        container.resize(200, 80);
+        const QImage canvas = renderOf(container);
+        QCOMPARE(canvas.pixelColor(0, 0), surfaceBorderColor);
     }
 };
 

@@ -3904,7 +3904,6 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
     if (!listView) {
         return;
     }
-    listView->setProperty(comboDropdownProperty, true);
 
     // The popup's rows are painted with the view as the widget, but the selection they should
     // show belongs to the combo box. Carry it here rather than walking the parent chain, which
@@ -3912,25 +3911,41 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
     // null if the combo box ever outlives its view, instead of resting on their ownership order.
     listView->setProperty(comboBoxProperty, QVariant::fromValue(QPointer<QComboBox>(comboBox)));
 
-    listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-
     // The popup list belongs to Qt, so a caller that needs its own dropdown metrics names the
     // component on the combo box and it is carried over here. The list then resolves against
     // that prefix ahead of DropdownList, which is how one dropdown takes a height of its own.
     const QVariant component = comboBox->property("dropdownComponent");
     if (component.isValid()) {
         listView->setProperty("component", component);
+        // The surface and edge belong to the container, so it answers to the same name as the
+        // list it holds — otherwise a named dropdown could restyle its rows but not the popup
+        // around them.
+        if (QWidget* container = listView->parentWidget()) {
+            container->setProperty("component", component);
+        }
+    }
+
+    constrainDropdown(listView);
+}
+
+void FreeCADStyle::constrainDropdown(QListView* listView, int chosenRow)
+{
+    if (!listView) {
+        return;
+    }
+
+    listView->setProperty(comboDropdownProperty, true);
+    listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+
+    // An out-of-range row is no row. Left untagged rather than tagged with a value nothing can
+    // match, so the state mapping can tell "no chosen entry" from "one that happens to be -1".
+    if (chosenRow >= 0) {
+        listView->setProperty(chosenRowProperty, chosenRow);
     }
 
     QWidget* container = listView->parentWidget();
     if (!container) {
         return;
-    }
-
-    // The surface and edge belong to the container, so it answers to the same name as the list
-    // it holds — otherwise a named dropdown could restyle its rows but not the popup around them.
-    if (component.isValid()) {
-        container->setProperty("component", component);
     }
 
     // Guard against double-installation on re-polish (e.g. theme change).
@@ -3939,11 +3954,10 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
         container->installEventFilter(this);
     }
 
-    // Both widgets were created before, or by, the comboBox->view() call above, and whatever
-    // metrics they cached they cached while resolving as plain widgets. The tags just applied
-    // change those metrics — the view's rows take the DropdownList pitch, the container insets
-    // its contents by the popup's own border and padding — and nothing in Qt reconsiders a cache
-    // because a property changed.
+    // Both widgets were created before, or by, the caller, and whatever metrics they cached they
+    // cached while resolving as plain widgets. The tags just applied change those metrics — the
+    // view's rows take the DropdownList pitch, the container insets its contents by the popup's
+    // own border and padding — and nothing in Qt reconsiders a cache because a property changed.
     notifyStyleChange(listView);
     notifyStyleChange(container);
 

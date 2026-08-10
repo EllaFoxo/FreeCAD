@@ -475,6 +475,16 @@ public:
      */
     static QPointF branchCenter(const QRect& cell, int leadingGap);
 
+    /**
+     * @brief Gives @p view, and the container around it, a dropdown's surface, metrics and
+     *        placement.
+     *
+     * For a popup list that is not a combo box's. @p chosenRow is the entry the control
+     * currently holds, or -1 when it holds none — the row that stays marked while the cursor
+     * moves over the others.
+     */
+    void constrainDropdown(QListView* listView, int chosenRow = -1);
+
 protected:
     void drawPrimitive(
         PrimitiveElement element,
@@ -1150,6 +1160,7 @@ private:
     static constexpr const char* comboDropdownProperty         = "_fc_comboDropdown";
     static constexpr const char* comboContainerProperty        = "_fc_comboContainer";
     static constexpr const char* comboBoxProperty              = "_fc_comboBox";
+    static constexpr const char* chosenRowProperty             = "_fc_chosenRow";
     static constexpr const char* viewportMaskInstalledProperty = "_fc_viewportMask";
     static constexpr const char* transparencyProperty          = "_fc_transparent";
     static constexpr const char* transparencyOverrideProperty  = "transparent";
