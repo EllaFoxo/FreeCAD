@@ -40,7 +40,7 @@ public:
                     {.name = "ListRowAlternateBackground", .value = "#00ff00"},
                     // Opaque so a column that kept the resting colour is distinguishable from
                     // one the selection reached.
-                    {.name = "ListRowCheckedBackground", .value = "#ff00ff"},
+                    {.name = "ListRowSelectedBackground", .value = "#ff00ff"},
                     // Translucent, so a second application of the same fill lands on a
                     // different colour than the first.
                     {.name = "ListRowHoveredBackground", .value = "opacity(#0000ff, 50%)"},

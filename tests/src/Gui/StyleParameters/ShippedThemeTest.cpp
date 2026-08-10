@@ -236,7 +236,7 @@ TEST_P(ShippedThemeTest, HeadlineSurfaceTokensResolveToColours)  // NOLINT
     const std::vector<std::string> tokens {
         "MenuBackground",
         "MenuItemHoveredBackground",
-        "DropdownListRowCheckedBackground",
+        "DropdownListRowSelectedBackground",
         "DropdownListRowHoveredBackground",
     };
 

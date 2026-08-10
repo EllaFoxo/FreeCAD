@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <QAbstractItemModel>
+#include <QApplication>
 #include <QComboBox>
 #include <QGuiApplication>
 #include <QImage>
@@ -17,6 +18,7 @@
 #include <QStyleOptionComboBox>
 #include <QStyleOptionFrame>
 #include <QStyleOptionMenuItem>
+#include <QStyleOptionViewItem>
 #include <QTest>
 
 #include "src/App/InitApplication.h"
@@ -84,7 +86,15 @@ public:
                     {.name = "DropdownListItemPadding",
                      .value = "padding(horizontal: 7px, vertical: 5px)"},
                     {.name = "DropdownListItemSpacing", .value = "3px"},
-                    {.name = "DropdownListRowCheckedBackground", .value = "#ff0000"},
+                    {.name = "DropdownListRowSelectedBackground", .value = "#ff0000"},
+                    {.name = "DropdownListRowHoveredBackground", .value = "#0000ff"},
+
+                    // The same pair on the plain List component. The priority test below uses an
+                    // untagged view on purpose: Task 3 gives DropdownList a selection of its own,
+                    // derived from the combo box rather than from State_Selected, so a test of
+                    // the generic item-view mapping must not be written against that component.
+                    {.name = "ListRowSelectedBackground", .value = "#ff0000"},
+                    {.name = "ListRowHoveredBackground", .value = "#0000ff"},
                 },
                 {.name = "Dropdown Fixture"}
             )
@@ -214,7 +224,7 @@ private:
 
     // The y at which the popup's first row starts painting, measured on the container so the
     // frame's own inset counts. Row 0 is the combo's current item, so its box carries
-    // DropdownListRowCheckedBackground and is the topmost red pixel down the popup's centre.
+    // DropdownListRowSelectedBackground and is the topmost red pixel down the popup's centre.
     // The box, not the cell: the cell above it also holds the leading gap, which is exactly
     // what moved, so a cell-based measurement would report the move rather than survive it.
     static int firstRowBoxTop(QWidget& container)
@@ -623,7 +633,7 @@ private Q_SLOTS:
         QCOMPARE(firstRowHeightWithAFreshStyle() - before, 2 * (taller - itemPaddingVertical));
     }
 
-    // The selected row's fill comes from DropdownListRowCheckedBackground — the Row element. A
+    // The selected row's fill comes from DropdownListRowSelectedBackground — the Row element. A
     // menu states the same fill on its item, and an alias that copied that name across would
     // never resolve here: the item-view path paints the interaction layer from Row alone. Only a
     // rendered popup can tell "the token is defined" from "the token reached the paint".
@@ -646,6 +656,31 @@ private Q_SLOTS:
 
         QCOMPARE(canvas.pixelColor(selected), QColor(0xff, 0x00, 0x00));
         QVERIFY(canvas.pixelColor(resting) != QColor(0xff, 0x00, 0x00));
+    }
+
+    void test_aHoveredSelectedRowKeepsItsSelectionColour()  // NOLINT
+    {
+        // Selected outranks Hovered, so the row that is both must resolve the selected
+        // background. Before this change Hovered won, and a selected row visibly weakened under
+        // the cursor.
+        installFreshApplicationStyle();
+
+        QListView listView;
+
+        QStyleOptionViewItem option;
+        option.initFrom(&listView);
+        option.rect = QRect(0, 0, 100, 20);
+        option.state |= QStyle::State_Selected;
+        option.state |= QStyle::State_MouseOver;
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+        {
+            QPainter painter(&canvas);
+            QApplication::style()->drawControl(QStyle::CE_ItemViewItem, &option, &painter, &listView);
+        }
+
+        QCOMPARE(canvas.pixelColor(50, 10), QColor(0xff, 0x00, 0x00));
     }
 
     // With the popup off the menu route Qt no longer asks for PE_PanelMenu, so the popup's edge

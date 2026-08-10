@@ -695,8 +695,8 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         // QCommonStyle::sizeFromContents(CT_TabBarTab). Driving padding through these metrics
         // preserves Qt's close-button width, minimum-size constraints, and all other CT_TabBarTab
         // logic. North position is used because QTabBar::tabSizeHint() transposes the returned size
-        // for East/West tabs itself. State is preserved (e.g. checked tabs use
-        // TabBarTabCheckedPadding).
+        // for East/West tabs itself. State is preserved (e.g. selected tabs use
+        // TabBarTabSelectedPadding).
         case PM_TabBarTabHSpace:
         case PM_TabBarTabVSpace: {
             const StyleContext tabContext = withNorthPosition(element(StyleComponentElement::Tab));
@@ -1170,7 +1170,7 @@ void FreeCADStyle::drawItemViewRow(
 
     const bool interactive = rowContext.state.testFlag(StyleState::Hovered)
         || rowContext.state.testFlag(StyleState::Pressed)
-        || rowContext.state.testFlag(StyleState::Checked);
+        || rowContext.state.testFlag(StyleState::Selected);
 
     if (layer == RowLayer::Surface) {
         // The surface is what the row looks like at rest — its own background, or the
@@ -4678,9 +4678,9 @@ StyleContext FreeCADStyle::contextOf(
         context.component = StyleComponent::TabBar;
         context.element = element;
         context.variant.set(VariantSlot::Position, tabPositionOf(tabBar->shape()));
-        // QTabBar uses State_Selected (not State_On) to mark the active tab; map it to Checked.
+        // QTabBar uses State_Selected (not State_On) to mark the active tab.
         if (option && (option->state & QStyle::State_Selected)) {
-            context.state |= StyleState::Checked;
+            context.state |= StyleState::Selected;
         }
         // State_MouseOver is not reliably set in QStyleOptionTab — Qt tracks tab hover via
         // WA_Hover events and an internal hoverIndex, but does not always propagate that to
@@ -4780,13 +4780,13 @@ StyleContext FreeCADStyle::contextOf(
         if (option->state & QStyle::State_On) {
             context.state |= StyleState::Checked;
         }
-        // For item views, State_Selected marks the currently selected item.
-        // Map it to Checked — same convention used for active tabs.
+        // For item views, State_Selected marks the currently selected item — a persistent
+        // selection, unlike a menu's State_Selected, which follows the cursor.
         const bool isItemView = context.component == StyleComponent::List
             || context.component == StyleComponent::Tree
             || context.component == StyleComponent::DropdownList;
         if (isItemView && (option->state & QStyle::State_Selected)) {
-            context.state |= StyleState::Checked;
+            context.state |= StyleState::Selected;
         }
         if (option->state & QStyle::State_HasFocus) {
             context.state |= StyleState::Focused;

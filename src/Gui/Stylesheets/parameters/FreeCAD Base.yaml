@@ -317,11 +317,11 @@ ListRowAlternateBackground: "@BaseAlternateBackground"
 
 
 # ── Item state backgrounds (hover / selection) ────────────────────────────
-# State_Selected maps to Checked in the token system (same as active tab).
+# State_Selected maps to Selected in the token system (same as an active tab).
 # State_Sunken (pressed) and State_MouseOver (hovered) map directly.
 # No explicit token = transparent (falls through to row background).
-ListRowCheckedBackground: "opacity(@Accent.500, 40%)"
-ListItemCheckedTextColor: "@BaseTextColor"
+ListRowSelectedBackground: "opacity(@Accent.500, 40%)"
+ListItemSelectedTextColor: "@BaseTextColor"
 
 ListRowHoveredBackground: "opacity(@Accent.500, 20%)"
 ListRowPressedBackground: "@Background.200"
@@ -367,7 +367,7 @@ DropdownListItemSpacing: "@MenuItemSpacing"
 # selection are the same thing here and share the menu's one highlight.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
-DropdownListRowCheckedBackground: "@ListRowCheckedBackground"
+DropdownListRowSelectedBackground: "@ListRowSelectedBackground"
 DropdownListRowPressedBackground: "@MenuItemPressedBackground"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
@@ -394,8 +394,8 @@ DocumentTreeItemTransparentSpacing: "@Spacing.100"
 
 DocumentTreeItemTransparentHoveredBackgroundEffect: "effect(lighten: 0.05)"
 
-DocumentTreeItemTransparentCheckedBackground: "blend(@DocumentTreeItemTransparentBackground, @Accent.500, 20%)"
-DocumentTreeItemTransparentCheckedBorderColor: "blend(@DocumentTreeItemTransparentBorderColor, @Accent.500, 20%)"
+DocumentTreeItemTransparentSelectedBackground: "blend(@DocumentTreeItemTransparentBackground, @Accent.500, 20%)"
+DocumentTreeItemTransparentSelectedBorderColor: "blend(@DocumentTreeItemTransparentBorderColor, @Accent.500, 20%)"
 
 # ── Header / QHeaderView ─────────────────────────────────────────────────────
 # Section background — button-like but flat (no border radius)
@@ -421,7 +421,7 @@ HeaderItemBorderRadius: "border_radius(0px)"
 # of a literal lets a pane whose background is not the default declare its own — see
 # FreeCADStyle::setStyleOverride and PropertyView.
 CurrentPaneBackground: "@TabWidgetBackground"
-TabBarTabCheckedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @CurrentPaneBackground, @Background.000)"
+TabBarTabSelectedBackground: "linear_gradient(x1: 0, x2: 0, y1: 1, y2: 0, @CurrentPaneBackground, @Background.000)"
 
 TabBarTabBorderRadius: "border_radius(0px, top: @BaseRadius.medium)"
 TabBarTabHoveredBorderColor: "@BaseBorderColor"
@@ -435,7 +435,7 @@ TabBarTabSpacing: -1px
 TabBarTabPadding: "padding(vertical: @Spacing.150, horizontal: @Spacing.300)"
 TabBarTabIconSpacing: "@Spacing.150"
 
-TabBarTabCheckedBorderColor: "@BaseBorderColor"
+TabBarTabSelectedBorderColor: "@BaseBorderColor"
 TabBarTabDisabledBackground: "@BaseDisabledBackground"
 TabBarTabDisabledTextColor: "@BaseDisabledTextColor"
 
@@ -452,8 +452,8 @@ TabBarTabTransparentBorderColor: "@BaseBorderColor"
 TabBarTabTransparentBorderThickness: 1px
 TabBarTabTransparentPadding: "padding(horizontal: @Spacing.200, vertical: @Spacing.100)"
 TabBarTabTransparentHoveredBackgroundEffect: "effect(lighten: 0.05)"
-TabBarTabTransparentCheckedBackground: "blend(@TabBarTabTransparentBackground, @Accent.500, 20%)"
-TabBarTabTransparentCheckedBorderColor: "blend(@TabBarTabTransparentBorderColor, @Accent.500, 20%)"
+TabBarTabTransparentSelectedBackground: "blend(@TabBarTabTransparentBackground, @Accent.500, 20%)"
+TabBarTabTransparentSelectedBorderColor: "blend(@TabBarTabTransparentBorderColor, @Accent.500, 20%)"
 
 # No base strip and no pane — the pills float over the view. Height and Overlap are 0px
 # rather than reset(), because reset() would fall through to Fusion's own metrics and
@@ -582,7 +582,7 @@ MenuItemMargin: "padding(0px)"
 MenuItemBorderRadius: 2px
 MenuItemTextColor: "@BaseTextColor"
 MenuItemHoveredBackground: "@ListRowPressedBackground"
-MenuItemPressedBackground: "@ListRowCheckedBackground"
+MenuItemPressedBackground: "@ListRowSelectedBackground"
 MenuItemDisabledTextColor: "@ListDisabledTextColor"
 MenuItemMinWidth: 240px
 # No MenuItemCheckedBackground on purpose: a checkable item always shows its indicator, so a

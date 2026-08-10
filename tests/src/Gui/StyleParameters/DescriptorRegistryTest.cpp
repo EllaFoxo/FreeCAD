@@ -156,3 +156,20 @@ TEST(DescriptorRegistryTest, PressedOutranksSelected)
     ASSERT_NE(selected, prefixes.end());
     EXPECT_LT(pressed - prefixes.begin(), selected - prefixes.begin());
 }
+
+TEST(DescriptorRegistryTest, AnActiveTabResolvesThroughSelected)
+{
+    const ParameterDescriptorRegistry registry = builtinRegistry();
+
+    StyleContext context;
+    context.component = StyleComponent::TabBar;
+    context.element = StyleComponentElement::Tab;
+    context.state |= StyleState::Selected;
+
+    const auto prefixes = registry.buildPrefixes(context);
+
+    // The active tab is a selection, not a toggle: the theme states TabBarTabSelected*, and
+    // nothing should still be reachable under the Checked spelling it used to carry.
+    EXPECT_NE(std::ranges::find(prefixes, "TabBarTabSelected"), prefixes.end());
+    EXPECT_EQ(std::ranges::find(prefixes, "TabBarTabChecked"), prefixes.end());
+}
