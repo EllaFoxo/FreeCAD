@@ -3878,6 +3878,12 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
         return;
     }
     listView->setProperty(comboDropdownProperty, true);
+
+    // The popup's rows are painted with the view as the widget, but the selection they should
+    // show belongs to the combo box. Carry it here rather than walking the parent chain, which
+    // changes when the container is reparented at show time.
+    listView->setProperty(comboBoxProperty, QVariant::fromValue(static_cast<QObject*>(comboBox)));
+
     listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     // The popup list belongs to Qt, so a caller that needs its own dropdown metrics names the
@@ -4439,6 +4445,35 @@ QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
 
 // ─── Context building ────────────────────────────────────────────────────────
 
+// A combo popup's selection is the combo's own current index. Qt repurposes the view's
+// selection as a cursor — it follows the pointer and the arrow keys — so State_Selected is
+// folded into Hovered and the chosen entry is identified from the combo box instead.
+void FreeCADStyle::applyDropdownSelectionState(
+    StyleContext& context,
+    const QStyleOption* option,
+    const QWidget* widget
+)
+{
+    if (option->state & QStyle::State_Selected) {
+        context.state |= StyleState::Hovered;
+    }
+
+    const auto* viewItemOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+    if (!viewItemOption || !viewItemOption->index.isValid()) {
+        return;
+    }
+
+    const QVariant tagged = widget->property(FreeCADStyle::comboBoxProperty);
+    const auto* comboBox = qobject_cast<const QComboBox*>(tagged.value<QObject*>());
+    if (!comboBox) {
+        return;
+    }
+
+    if (viewItemOption->index.row() == comboBox->currentIndex()) {
+        context.state |= StyleState::Selected;
+    }
+}
+
 static bool isFlat(const QWidget* widget, const QStyleOption* option)
 {
     if (const auto* buttonOption = qstyleoption_cast<const QStyleOptionButton*>(option)) {
@@ -4783,10 +4818,12 @@ StyleContext FreeCADStyle::contextOf(
         // For item views, State_Selected marks the currently selected item — a persistent
         // selection, unlike a menu's State_Selected, which follows the cursor.
         const bool isItemView = context.component == StyleComponent::List
-            || context.component == StyleComponent::Tree
-            || context.component == StyleComponent::DropdownList;
+            || context.component == StyleComponent::Tree;
         if (isItemView && (option->state & QStyle::State_Selected)) {
             context.state |= StyleState::Selected;
+        }
+        if (context.component == StyleComponent::DropdownList) {
+            applyDropdownSelectionState(context, option, widget);
         }
         if (option->state & QStyle::State_HasFocus) {
             context.state |= StyleState::Focused;

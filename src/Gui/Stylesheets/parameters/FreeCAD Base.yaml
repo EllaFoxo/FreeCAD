@@ -359,12 +359,19 @@ DropdownListPadding: "@MenuPadding"
 # The rows. No DropdownListItemTextColor or DropdownListItemDisabledTextColor: the item-view path
 # only overrides the label colour of the highlighted row, and a resting or disabled dropdown label
 # already takes the same palette colour a menu's does.
+#
+# The highlighted row here is the hovered one, not the selected one: Qt marks the row under the
+# pointer State_Selected, which is what makes the base style reach for the palette's highlight
+# text colour. That colour is meant for a fully saturated fill, and the hover tint below is not
+# one, so the label is held at the ordinary text colour instead.
 DropdownListItemPadding: "@MenuItemPadding"
 DropdownListItemIconSpacing: "@MenuItemIconSpacing"
 DropdownListItemSpacing: "@MenuItemSpacing"
+DropdownListItemHoveredTextColor: "@BaseTextColor"
 
-# The highlight. Moving the pointer over a dropdown row makes it the current row, so hover and
-# selection are the same thing here and share the menu's one highlight.
+# The highlight. Two different rows can carry one: hover follows the pointer, while selection
+# marks the entry the combo box currently holds and stays put as the pointer moves. A row that is
+# both resolves the selected fill, since Selected outranks Hovered.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
 DropdownListRowSelectedBackground: "@ListRowSelectedBackground"

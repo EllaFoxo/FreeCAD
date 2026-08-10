@@ -1148,6 +1148,7 @@ private:
     // clang-format off
     static constexpr const char* comboDropdownProperty         = "_fc_comboDropdown";
     static constexpr const char* comboContainerProperty        = "_fc_comboContainer";
+    static constexpr const char* comboBoxProperty              = "_fc_comboBox";
     static constexpr const char* viewportMaskInstalledProperty = "_fc_viewportMask";
     static constexpr const char* transparencyProperty          = "_fc_transparent";
     static constexpr const char* transparencyOverrideProperty  = "transparent";
@@ -1285,6 +1286,18 @@ private:
      * belonged to no widget at all.
      */
     static void bindWidget(StyleParameters::StyleContext& context, const QWidget* widget);
+
+    /**
+     * @brief Gives a combo box popup's row the selection state its combo box implies.
+     *
+     * A dropdown's selection is the combo's chosen entry, which stays put. Qt's own
+     * State_Selected on these rows means something else and is taken as hover instead.
+     */
+    static void applyDropdownSelectionState(
+        StyleParameters::StyleContext& context,
+        const QStyleOption* option,
+        const QWidget* widget
+    );
 
     /**
      * @brief Tags @p widget itself with @p surface and notifies it, without touching children.

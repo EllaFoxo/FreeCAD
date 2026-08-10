@@ -644,11 +644,14 @@ private Q_SLOTS:
         populate(box);
         style.polish(&box);
 
+        // The chosen entry, which is what a dropdown's selection means — not the view's own
+        // current index, which Qt moves to whatever the pointer is over.
+        box.setCurrentIndex(1);
+
         box.showPopup();
         const auto guard = qScopeGuard([&box] { box.hidePopup(); });
 
         QListView* view = popupOf(box);
-        view->setCurrentIndex(box.model()->index(1, 0));
 
         const QImage canvas = renderOf(*view);
         const QPoint selected = view->visualRect(box.model()->index(1, 0)).center();
@@ -1185,6 +1188,65 @@ private Q_SLOTS:
         const QRect contents = style.subElementRect(QStyle::SE_ShapedFrameContents, &option, &listView);
 
         QCOMPARE(contents, QRect(6, 6, 88, 88));
+    }
+
+    void test_theChosenEntryStaysMarkedWhileTheCursorIsElsewhere()  // NOLINT
+    {
+        // Qt moves the popup's current index to whatever the pointer is over, so the view's
+        // selection is a cursor, not a selection. The chosen entry is the combo's currentIndex.
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.addItems({"first", "second", "third", "fourth"});
+        comboBox.setCurrentIndex(2);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+
+        QListView* view = qobject_cast<QListView*>(comboBox.view());
+        QVERIFY(view != nullptr);
+
+        // What a mouse-move over the first row does, without needing a synthetic mouse event.
+        view->setCurrentIndex(view->model()->index(0, 0));
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        const QRect chosenRow = view->visualRect(view->model()->index(2, 0));
+        const QRect cursorRow = view->visualRect(view->model()->index(0, 0));
+
+        QCOMPARE(canvas.pixelColor(chosenRow.center()), QColor(0xff, 0x00, 0x00));
+        QCOMPARE(canvas.pixelColor(cursorRow.center()), QColor(0x00, 0x00, 0xff));
+    }
+
+    void test_aComboWithNoCurrentIndexMarksNothing()  // NOLINT
+    {
+        installFreshApplicationStyle();
+
+        QComboBox comboBox;
+        comboBox.setEditable(true);
+        comboBox.addItems({"first", "second", "third"});
+        comboBox.setCurrentIndex(-1);
+        comboBox.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&comboBox));
+
+        comboBox.showPopup();
+        QCoreApplication::processEvents();
+
+        QListView* view = qobject_cast<QListView*>(comboBox.view());
+        QVERIFY(view != nullptr);
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        // Nothing is chosen, so nothing carries the selected background.
+        for (int row = 0; row < 3; ++row) {
+            const QRect rowRect = view->visualRect(view->model()->index(row, 0));
+            QVERIFY2(
+                canvas.pixelColor(rowRect.center()) != QColor(0xff, 0x00, 0x00),
+                qPrintable(QStringLiteral("row %1 is marked as chosen").arg(row))
+            );
+        }
     }
 };
 

@@ -238,6 +238,9 @@ TEST_P(ShippedThemeTest, HeadlineSurfaceTokensResolveToColours)  // NOLINT
         "MenuItemHoveredBackground",
         "DropdownListRowSelectedBackground",
         "DropdownListRowHoveredBackground",
+        // Not a surface, but it defends the same paint: the base style reaches for the palette's
+        // highlight text colour on the hovered dropdown row, and only this token holds it back.
+        "DropdownListItemHoveredTextColor",
     };
 
     for (const std::string& token : tokens) {
