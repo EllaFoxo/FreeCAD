@@ -376,14 +376,16 @@ struct GuiExport StyleContext
 
 private:
     // clang-format off
-    // Each field is given its natural width, so a new component, element, state, property or
-    // variant does not need this layout revisited. cacheKey() asserts every one of them.
+    // Each field is given its natural width, so adding a component, element, state, property or
+    // variant does not need these offsets revisited; cacheKey() asserts every field against them.
+    // A new variant *dimension* is the one case that still needs an edit, though not here: its
+    // COUNT has to join the per-slot assert in cacheKey(), as VariantSlot's docs describe.
     static constexpr uint8_t componentBitOffset = 0;   //  8 bits
     static constexpr uint8_t elementBitOffset   = 8;   //  4 bits
     static constexpr uint8_t stateBitOffset     = 12;  //  8 bits
     static constexpr uint8_t propertyBitOffset  = 20;  //  8 bits
     static constexpr uint8_t overrideBitOffset  = 28;  //  8 bits
-    static constexpr uint8_t variantBitOffset   = 36;  // 24 bits (VariantSlot::COUNT * 4)
+    static constexpr uint8_t variantBitOffset   = 36;  // VariantSlot::COUNT * variantSlotBitWidth
     // clang-format on
 
     /// Width of one VariantSlot's field within the packed variant array.

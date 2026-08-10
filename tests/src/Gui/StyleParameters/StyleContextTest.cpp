@@ -71,18 +71,15 @@ TEST(StyleContextTest, PacksEachDimensionAtItsDocumentedOffset)
     const uint64_t overrideId = StyleContext::Intern::global().intern("CacheKeyLayoutProbe");
     EXPECT_EQ(override.cacheKey(), overrideId << overrideShift);
 
-    // First and last slot together pin the variant field's offset and its per-slot stride.
-    StyleContext firstSlot;
-    firstSlot.variant.set(VariantSlot::ButtonType, ButtonType::Link);
-    EXPECT_EQ(firstSlot.cacheKey(), static_cast<uint64_t>(ButtonType::Link) << variantShift);
-
-    StyleContext lastSlot;
-    lastSlot.variant.set(VariantSlot::TransparencyMode, TransparencyMode::Transparent);
-    EXPECT_EQ(
-        lastSlot.cacheKey(),
-        static_cast<uint64_t>(TransparencyMode::Transparent)
-            << (variantShift + variantSlotWidth * static_cast<uint64_t>(VariantSlot::TransparencyMode))
-    );
+    // Every slot, not just the ends: checking only the first and last would take the uniform
+    // stride on trust, when that uniformity is exactly what the packing could get wrong. Value 1
+    // is valid for every dimension, all of which have at least a Default and one other value.
+    for (size_t slot = 0; slot < size_t(VariantSlot::COUNT); ++slot) {
+        StyleContext variant;
+        variant.variant.slots.at(slot) = 1;
+        EXPECT_EQ(variant.cacheKey(), uint64_t {1} << (variantShift + variantSlotWidth * slot))
+            << "variant slot " << slot;
+    }
 }
 
 TEST(StyleContextTest, TheKeyFieldsAreDisjoint)
