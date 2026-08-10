@@ -9,6 +9,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QListView>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QRegion>
 #include <QScopeGuard>
@@ -1305,8 +1306,23 @@ private Q_SLOTS:
 
         // What the pointer arriving over the chosen row does: QAbstractItemView tracks the row
         // under it and hands the painter State_MouseOver for that row alone.
+        //
+        // The move is delivered to the viewport directly rather than through QTest::mouseMove,
+        // which for a widget with no button held warps the real desktop pointer via
+        // QCursor::setPos: on a live display that produces no move at all when the cursor
+        // already sits at that global position, and the row is then never hovered. Only the
+        // offscreen platform makes it reliable, so do not simplify this back.
         const QRect chosenRow = view->visualRect(view->model()->index(2, 0));
-        QTest::mouseMove(view->viewport(), chosenRow.center());
+        const QPointF cursorSpot = chosenRow.center();
+        QMouseEvent cursorArrival(
+            QEvent::MouseMove,
+            cursorSpot,
+            view->viewport()->mapToGlobal(cursorSpot),
+            Qt::NoButton,
+            Qt::NoButton,
+            Qt::NoModifier
+        );
+        QCoreApplication::sendEvent(view->viewport(), &cursorArrival);
         QCoreApplication::processEvents();
 
         const QImage canvas = renderOf(*view->viewport());

@@ -3881,8 +3881,9 @@ void FreeCADStyle::constrainComboDropdown(QComboBox* comboBox)
 
     // The popup's rows are painted with the view as the widget, but the selection they should
     // show belongs to the combo box. Carry it here rather than walking the parent chain, which
-    // changes when the container is reparented at show time.
-    listView->setProperty(comboBoxProperty, QVariant::fromValue(static_cast<QObject*>(comboBox)));
+    // changes when the container is reparented at show time. A QPointer so the tag reads back as
+    // null if the combo box ever outlives its view, instead of resting on their ownership order.
+    listView->setProperty(comboBoxProperty, QVariant::fromValue(QPointer<QComboBox>(comboBox)));
 
     listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
@@ -4463,7 +4464,7 @@ void FreeCADStyle::applyDropdownSelectionState(
 {
     const auto* viewItemOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
     const QVariant tagged = widget->property(FreeCADStyle::comboBoxProperty);
-    const auto* comboBox = qobject_cast<const QComboBox*>(tagged.value<QObject*>());
+    const QComboBox* comboBox = tagged.value<QPointer<QComboBox>>();
 
     const bool isChosenEntry = viewItemOption && viewItemOption->index.isValid() && comboBox
         && viewItemOption->index.row() == comboBox->currentIndex();
