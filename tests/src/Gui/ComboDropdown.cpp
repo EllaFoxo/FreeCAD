@@ -1406,6 +1406,80 @@ private Q_SLOTS:
         const QImage canvas = renderOf(container);
         QCOMPARE(canvas.pixelColor(0, 0), surfaceBorderColor);
     }
+
+    // The chosen row keeps its mark while the view's own selection moves. Without a combo box
+    // the view's selection is still a cursor — the popup moves it under the pointer and under
+    // the arrow keys — so the entry the control holds has to come from somewhere else.
+    void test_anAdoptedViewMarksItsTaggedChosenRow()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        for (const QString& label :
+             {QStringLiteral("first"),
+              QStringLiteral("second"),
+              QStringLiteral("third"),
+              QStringLiteral("fourth")}) {
+            model->appendRow(new QStandardItem(label));
+        }
+        view->setModel(model);
+
+        style.constrainDropdown(view, /*chosenRow=*/2);
+
+        container.resize(200, 200);
+        view->resize(200, 200);
+        container.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        // The cursor sits somewhere else entirely.
+        view->setCurrentIndex(model->index(0, 0));
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(model->index(2, 0)).center()),
+            QColor(0xff, 0x00, 0x00)
+        );
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(model->index(0, 0)).center()),
+            QColor(0x00, 0x00, 0xff)
+        );
+    }
+
+    // With no chosen row tagged and no combo box, nothing re-interprets the view's selection,
+    // so it means what it means everywhere else in an item view.
+    void test_anAdoptedViewWithNoChosenRowHonoursItsSelection()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        for (const QString& label :
+             {QStringLiteral("first"), QStringLiteral("second"), QStringLiteral("third")}) {
+            model->appendRow(new QStandardItem(label));
+        }
+        view->setModel(model);
+
+        style.constrainDropdown(view);  // no chosen row
+
+        container.resize(200, 200);
+        view->resize(200, 200);
+        container.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+        view->setCurrentIndex(model->index(1, 0));
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(model->index(1, 0)).center()),
+            QColor(0xff, 0x00, 0x00)
+        );
+    }
 };
 
 QTEST_MAIN(TestComboDropdown)

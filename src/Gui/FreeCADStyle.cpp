@@ -4516,9 +4516,28 @@ QBrush applyEffectToBrush(const QBrush& brush, const ColorEffect& effect)
 
 // ─── Context building ────────────────────────────────────────────────────────
 
+// The entry @p widget's dropdown currently holds, or nothing when nothing drives its selection.
+//
+// A combo box answers for its own popup and answers live, so its current index is read through
+// the tag rather than copied. Any other dropdown states the row once, when it is adopted.
+std::optional<int> FreeCADStyle::chosenDropdownRow(const QWidget* widget)
+{
+    const QVariant tagged = widget->property(comboBoxProperty);
+    if (const QComboBox* comboBox = tagged.value<QPointer<QComboBox>>()) {
+        return comboBox->currentIndex();
+    }
+
+    const QVariant chosenRow = widget->property(chosenRowProperty);
+    if (chosenRow.isValid()) {
+        return chosenRow.toInt();
+    }
+
+    return {};
+}
+
 // A combo popup's selection is the combo's own current index. Qt repurposes the view's
 // selection as a cursor — it follows the pointer and the arrow keys — so State_Selected is
-// folded into Hovered and the chosen entry is identified from the combo box instead.
+// folded into Hovered and the chosen entry is identified separately instead.
 //
 // The chosen entry is exempt from that fold. Qt makes it the view's current row the instant
 // the popup opens, so it arrives carrying State_Selected before anything has been navigated;
@@ -4532,14 +4551,21 @@ void FreeCADStyle::applyDropdownSelectionState(
     const QWidget* widget
 )
 {
+    const std::optional<int> chosenRow = chosenDropdownRow(widget);
+    if (!chosenRow) {
+        return;  // nothing drives this view's selection, so it means what it says
+    }
+
     const auto* viewItemOption = qstyleoption_cast<const QStyleOptionViewItem*>(option);
-    const QVariant tagged = widget->property(FreeCADStyle::comboBoxProperty);
-    const QComboBox* comboBox = tagged.value<QPointer<QComboBox>>();
+    if (!viewItemOption || !viewItemOption->index.isValid()) {
+        return;
+    }
 
-    const bool isChosenEntry = viewItemOption && viewItemOption->index.isValid() && comboBox
-        && viewItemOption->index.row() == comboBox->currentIndex();
+    // Here the view's selection is a cursor: it follows the pointer and the arrow keys. Clear
+    // the mark the generic item-view rule just granted, so only the chosen entry carries it.
+    context.state.setFlag(StyleState::Selected, false);
 
-    if (isChosenEntry) {
+    if (viewItemOption->index.row() == *chosenRow) {
         context.state |= StyleState::Selected;
     }
     else if (option->state & QStyle::State_Selected) {
@@ -4889,9 +4915,11 @@ StyleContext FreeCADStyle::contextOf(
             context.state |= StyleState::Checked;
         }
         // For item views, State_Selected marks the currently selected item — a persistent
-        // selection, unlike a menu's State_Selected, which follows the cursor.
+        // selection, unlike a menu's State_Selected, which follows the cursor. A dropdown whose
+        // selection is driven for it re-interprets that below.
         const bool isItemView = context.component == StyleComponent::List
-            || context.component == StyleComponent::Tree;
+            || context.component == StyleComponent::Tree
+            || context.component == StyleComponent::DropdownList;
         if (isItemView && (option->state & QStyle::State_Selected)) {
             context.state |= StyleState::Selected;
         }

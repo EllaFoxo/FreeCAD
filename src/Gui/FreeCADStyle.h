@@ -1310,6 +1310,9 @@ private:
      */
     static void bindWidget(StyleParameters::StyleContext& context, const QWidget* widget);
 
+    /// The entry a dropdown currently holds, or nothing when nothing drives its selection.
+    static std::optional<int> chosenDropdownRow(const QWidget* widget);
+
     /**
      * @brief Gives a combo box popup's row the selection state its combo box implies.
      *
