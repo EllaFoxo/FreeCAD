@@ -1344,6 +1344,19 @@ int FreeCADStyle::itemViewTextGutter(const QStyleOption* option, const QWidget* 
     return pixelMetric(PM_FocusFrameHMargin, option, widget) + 1;
 }
 
+int FreeCADStyle::itemViewContentHeight(
+    const QStyleOptionViewItem& option,
+    int iconExtent,
+    const QWidget* widget
+) const
+{
+    int height = std::max(option.fontMetrics.height(), iconExtent);
+    if (option.features & QStyleOptionViewItem::HasCheckIndicator) {
+        height = std::max(height, pixelMetric(PM_IndicatorHeight, &option, widget));
+    }
+    return height;
+}
+
 std::optional<FreeCADStyle::ItemViewLayout> FreeCADStyle::itemViewLayout(
     const QStyleOptionViewItem* option,
     const QWidget* widget
@@ -1725,14 +1738,28 @@ QSize FreeCADStyle::itemViewItemSizeFromContents(
     }
     if (!baseSize.isValid()) {
         baseSize = QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
-        // Qt sizes a cell by surrounding each of its parts with one gutter. itemViewLayout()
-        // separates them with IconSpacing instead, so trade the gutters Qt charged for the
-        // gaps actually inserted.
         if (vopt && ownsItemViewLayout(vopt, itemViewOf(vopt, widget))) {
+            // Qt sizes a cell by surrounding each of its parts with one gutter. itemViewLayout()
+            // separates them with IconSpacing instead, so trade the gutters Qt charged for the
+            // gaps actually inserted.
             const int parts = itemViewPartCount(*vopt);
             const int gaps = std::max(0, parts - 1) * geometry.iconSpacing;
             const int gutters = 2 * parts * itemViewTextGutter(option, widget);
             baseSize.setWidth(std::max(0, baseSize.width() - gutters + gaps));
+
+            // Qt's height is the tallest part, plus two pixels whenever that part is the icon
+            // ("prevent icons from overlapping"). Both halves make the pitch depend on which
+            // part happened to win: a row carrying no icon comes out short, and a row whose
+            // label just outgrows its icon drops the two pixels its neighbours keep. Separating
+            // rows is ListItemSpacing's job here, so state the height outright instead.
+            //
+            // Only when the theme states an icon size. A component that leaves IconSize unset
+            // takes whatever the base style sizes decorations at — Fusion hardcodes 24 — and
+            // deriving a row height from that number would resize views this style never
+            // described.
+            if (const auto iconExtent = resolvePixelMetric(PM_ListViewIconSize, option, widget)) {
+                baseSize.setHeight(itemViewContentHeight(*vopt, *iconExtent, widget));
+            }
         }
     }
 

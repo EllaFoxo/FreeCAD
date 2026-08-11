@@ -1464,6 +1464,40 @@ private Q_SLOTS:
         QCOMPARE(probe.decorationSize, QSize(13, 13));
     }
 
+    // A dropdown holds one row pitch whether or not a given entry carries an icon. Every row
+    // reserves the icon's height, the way a menu reserves it for every item once any item has
+    // one (menuItemSizeFromContents), so a list mixing captioned and plain entries does not step
+    // between two heights.
+    void test_aRowWithoutAnIconIsAsTallAsOneWithIt()  // NOLINT
+    {
+        constexpr int iconExtent = 30;  // well clear of the text height, so the two cannot tie
+        const auto iconGuard = overrideToken("DropdownListIconSize", std::to_string(iconExtent) + "px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QPixmap swatch(iconExtent, iconExtent);
+        swatch.fill(Qt::red);
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        auto* captioned = new QStandardItem(QStringLiteral("with icon"));
+        captioned->setIcon(QIcon(swatch));
+        model->appendRow(captioned);
+        model->appendRow(new QStandardItem(QStringLiteral("without icon")));
+        view->setModel(model);
+
+        style.constrainDropdown(view);
+
+        const int captionedRow = view->sizeHintForIndex(model->index(0, 0)).height();
+        const int plainRow = view->sizeHintForIndex(model->index(1, 0)).height();
+
+        QCOMPARE(plainRow, captionedRow);
+        // The two met by raising the plain row, not by cropping the icon out of its own row.
+        QVERIFY(captionedRow >= iconExtent);
+    }
+
     // The chosen row keeps its mark while the view's own selection moves. Without a combo box
     // the view's selection is still a cursor — the popup moves it under the pointer and under
     // the arrow keys — so the entry the control holds has to come from somewhere else.

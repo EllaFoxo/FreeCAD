@@ -1111,6 +1111,16 @@ private:
      */
     int itemViewTextGutter(const QStyleOption* option, const QWidget* widget) const;
 
+    /**
+     * @brief The height a row's content occupies, with @p iconExtent reserved whether or not the
+     *        row carries an icon, so every row in a view holds the same pitch.
+     */
+    int itemViewContentHeight(
+        const QStyleOptionViewItem& option,
+        int iconExtent,
+        const QWidget* widget
+    ) const;
+
     /** @brief Serves the SE_ItemViewItem* sub-elements from itemViewLayout(). */
     QRect itemViewSubElementRect(
         SubElement element,
