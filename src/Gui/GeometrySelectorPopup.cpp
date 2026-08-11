@@ -91,9 +91,10 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     adoptAsDropdown();
 
     connect(m_view, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
-        // Qt never emits this signal for a disabled row, so index.row() always names a real
-        // entry — never a rule's.
-        activateIndex(m_rowToIndex[index.row()]);
+        // A valid clicked() index is always in [0, rowCount()) == [0, m_rowToIndex.size()), so
+        // the subscript is safe even for a rule's row — that entry is -1, and activateIndex()
+        // rejects it.
+        activateIndex(m_rowToIndex.at(index.row()));
     });
 }
 

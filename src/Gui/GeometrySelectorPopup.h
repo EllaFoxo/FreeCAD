@@ -57,7 +57,7 @@ public:
         QWidget* parent = nullptr
     );
 
-    /// Number of selectable rows: predefined options plus the Custom row when enabled.
+    /// Number of selectable entries: predefined options, history and the Custom row when enabled.
     int optionCount() const;
     /// Validates @p index and emits optionActivated; ignored when out of range.
     void activateIndex(int index);

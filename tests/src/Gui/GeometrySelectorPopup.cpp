@@ -284,6 +284,7 @@ private Q_SLOTS:
         QListView* view = viewOf(popup);
         // 2 options + rule + 3 history + rule + custom
         QCOMPARE(view->model()->rowCount(), 8);
+        QCOMPARE(popup.optionCount(), 6);  // 2 options + 3 history + custom; rules do not count
         QVERIFY(isSeparatorRow(*view, 2));
         QVERIFY(isSeparatorRow(*view, 6));
         for (int row : {0, 1, 3, 4, 5, 7}) {
@@ -370,8 +371,32 @@ private Q_SLOTS:
         QCOMPARE(spy.at(0).at(0).toInt(), 5);  // 2 options + 3 history
     }
 
+    // Qt does emit clicked() for a disabled row — a press+release on a rule reaches the
+    // connection carrying its row, whose m_rowToIndex entry is -1. Nothing must activate.
+    void test_clickingASeparatorNeverActivatesAnything()  // NOLINT
+    {
+        // The fixture leaves the rule's own height token unset; give it one so the row is tall
+        // enough to actually receive the click (see
+        // test_hoveringOverASeparatorDoesNotMoveTheCursorThere).
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "20px");
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, -1, nullptr);
+        showPopup(popup);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+        QListView* view = viewOf(popup);
+        const QPoint windowPos = view->viewport()->mapTo(&popup, rowCentre(*view, 2));
+        QTest::mouseClick(popup.windowHandle(), Qt::LeftButton, Qt::NoModifier, windowPos);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(spy.count(), 0);
+    }
+
     // The pointer passing over a rule must not park the cursor there, or Enter would activate
-    // nothing the instant it crosses one.
+    // nothing the instant it crosses one. GeometrySelectorPopup no longer filters this itself —
+    // it relies on QAbstractItemView::setCurrentIndex() refusing a disabled index — so this test
+    // guards that reliance rather than code in this class.
     void test_hoveringOverASeparatorDoesNotMoveTheCursorThere()  // NOLINT
     {
         // The fixture leaves the rule's own height token unset, so give it one: a zero-height
