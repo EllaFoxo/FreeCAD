@@ -368,6 +368,9 @@ DropdownListItemPadding: "@MenuItemPadding"
 DropdownListItemIconSpacing: "@MenuItemIconSpacing"
 DropdownListItemSpacing: "@MenuItemSpacing"
 DropdownListItemHoveredTextColor: "@BaseTextColor"
+# Without this alias, PM_SmallIconSize finds nothing on the DropdownList -> List chain and falls
+# through to the platform theme, so a row's icon takes whatever size the desktop happens to use.
+DropdownListIconSize: "@MenuIconSize"
 
 # The highlight. Two different rows can carry one: hover follows the pointer, while selection
 # marks the entry the combo box currently holds and stays put as the pointer moves. A row that is
