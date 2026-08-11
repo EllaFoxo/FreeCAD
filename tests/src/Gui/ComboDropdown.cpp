@@ -1480,6 +1480,54 @@ private Q_SLOTS:
             QColor(0xff, 0x00, 0x00)
         );
     }
+
+    // A dropdown that names its own component puts its prefix ahead of the whole
+    // DropdownList→List chain, so a Selected token there outranks the shared Hovered one. That is
+    // what makes clearing the generic item-view rule's mark load-bearing rather than tidy: without
+    // the clear, the cursor row keeps Selected and paints the chosen entry's colour.
+    void test_aNamedDropdownDoesNotLeakTheChosenFillOntoTheCursor()  // NOLINT
+    {
+        const auto chosenFill = overrideToken("TaggedDropdownRowSelectedBackground", "#00ff00");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        for (const QString& label :
+             {QStringLiteral("first"),
+              QStringLiteral("second"),
+              QStringLiteral("third"),
+              QStringLiteral("fourth")}) {
+            model->appendRow(new QStandardItem(label));
+        }
+        view->setModel(model);
+
+        view->setProperty("component", "TaggedDropdown");
+        style.constrainDropdown(view, /*chosenRow=*/2);
+
+        container.resize(200, 200);
+        view->resize(200, 200);
+        container.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        // The cursor sits somewhere else entirely.
+        view->setCurrentIndex(model->index(0, 0));
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        // The cursor row is hovered and must never wear the named chosen fill.
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(model->index(0, 0)).center()),
+            QColor(0x00, 0x00, 0xff)
+        );
+        // The chosen row wears it.
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(model->index(2, 0)).center()),
+            QColor(0x00, 0xff, 0x00)
+        );
+    }
 };
 
 QTEST_MAIN(TestComboDropdown)

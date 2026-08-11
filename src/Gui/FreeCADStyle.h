@@ -1314,10 +1314,12 @@ private:
     static std::optional<int> chosenDropdownRow(const QWidget* widget);
 
     /**
-     * @brief Gives a combo box popup's row the selection state its combo box implies.
+     * @brief Gives a dropdown row the selection state its chosen entry implies.
      *
-     * A dropdown's selection is the combo's chosen entry, which stays put. Qt's own
-     * State_Selected on any other row means the cursor and is taken as hover instead.
+     * The chosen entry is whichever row a driving combo box currently holds, or failing that
+     * whichever row was tagged directly; it stays marked as selected regardless of where the
+     * pointer or keyboard cursor sits. Any other row's own State_Selected means the cursor
+     * instead and is taken as hover. If nothing drives the view's selection, it is left alone.
      */
     static void applyDropdownSelectionState(
         StyleParameters::StyleContext& context,
