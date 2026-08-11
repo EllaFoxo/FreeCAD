@@ -148,9 +148,6 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
     , m_selection(new GeometrySelection(mode, this))
     , m_contentLayout(nullptr)
 {
-    // Resolves the GeometrySelector token chain (which inherits List), so the widget matches
-    // native lists but can carry its own tokens such as the form-control min height.
-    setProperty("component", "GeometrySelector");
     // Makes real keyboard focus show the focused style like any input.
     setFocusPolicy(Qt::StrongFocus);
     // Repaint on pointer enter/leave so the frame reflects its hovered background.

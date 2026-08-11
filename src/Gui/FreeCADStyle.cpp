@@ -3937,11 +3937,11 @@ void FreeCADStyle::constrainDropdown(QListView* listView, int chosenRow)
     listView->setProperty(comboDropdownProperty, true);
     listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
-    // An out-of-range row is no row. Left untagged rather than tagged with a value nothing can
-    // match, so the state mapping can tell "no chosen entry" from "one that happens to be -1".
-    if (chosenRow >= 0) {
-        listView->setProperty(chosenRowProperty, chosenRow);
-    }
+    // Written even for -1, and even when a previous adoption already tagged this view. The tag's
+    // presence is what says the view's own selection is a cursor rather than a choice, so a
+    // dropdown holding nothing has to state that too — a combo box with no current index answers
+    // -1 the same way. An absent tag is then only ever a view that was never adopted.
+    listView->setProperty(chosenRowProperty, chosenRow);
 
     QWidget* container = listView->parentWidget();
     if (!container) {

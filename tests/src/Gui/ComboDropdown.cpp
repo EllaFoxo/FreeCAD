@@ -1248,6 +1248,9 @@ private Q_SLOTS:
         QListView* view = qobject_cast<QListView*>(comboBox.view());
         QVERIFY(view != nullptr);
 
+        // What a mouse-move over the first row does, without needing a synthetic mouse event.
+        view->setCurrentIndex(view->model()->index(0, 0));
+
         const QImage canvas = renderOf(*view->viewport());
 
         // Nothing is chosen, so nothing carries the selected background.
@@ -1258,6 +1261,14 @@ private Q_SLOTS:
                 qPrintable(QStringLiteral("row %1 is marked as chosen").arg(row))
             );
         }
+
+        // And the cursor row still reads as a cursor: a combo box holding nothing answers an
+        // engaged -1, so its popup keeps folding State_Selected into hover rather than falling
+        // back on the plain item-view meaning.
+        QCOMPARE(
+            canvas.pixelColor(view->visualRect(view->model()->index(0, 0)).center()),
+            QColor(0x00, 0x00, 0xff)
+        );
     }
 
     // Qt sizes a popup and only then shows it, and it is the show that polishes a widget for the
@@ -1401,10 +1412,13 @@ private Q_SLOTS:
         QCOMPARE(container.maximumHeight(), 80);
 
         // The frame resolves the dropdown surface rather than a bare widget's, which is what
-        // gives it the popup's border and padding.
+        // gives it the popup's border and padding. Sampled at the container's bottom edge, past
+        // where the view sits: the view is never laid out here, so it keeps its own default
+        // 100x30 at the origin and paints its own dropdown edge over (0, 0) whether the
+        // container was tagged or not.
         container.resize(200, 80);
         const QImage canvas = renderOf(container);
-        QCOMPARE(canvas.pixelColor(0, 0), surfaceBorderColor);
+        QCOMPARE(canvas.pixelColor(0, container.height() - 1), surfaceBorderColor);
     }
 
     // Without a token on the DropdownList -> List chain, PM_SmallIconSize falls through to the
@@ -1470,9 +1484,11 @@ private Q_SLOTS:
         );
     }
 
-    // With no chosen row tagged and no combo box, nothing re-interprets the view's selection,
-    // so it means what it means everywhere else in an item view.
-    void test_anAdoptedViewWithNoChosenRowHonoursItsSelection()  // NOLINT
+    // A dropdown that holds nothing is still a dropdown: its selection is a cursor like any
+    // other dropdown's, so the row it sits on reads as hovered and no row is marked as chosen.
+    // -1 says "adopted, nothing chosen" — the same answer a combo box with no current index
+    // gives — and not "this view was never adopted".
+    void test_anAdoptedViewWithNoChosenRowTreatsItsSelectionAsACursor()  // NOLINT
     {
         Gui::FreeCADStyle& style = installFreshApplicationStyle();
 
@@ -1498,7 +1514,7 @@ private Q_SLOTS:
 
         QCOMPARE(
             canvas.pixelColor(view->visualRect(model->index(1, 0)).center()),
-            QColor(0xff, 0x00, 0x00)
+            QColor(0x00, 0x00, 0xff)
         );
     }
 

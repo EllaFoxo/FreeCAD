@@ -476,12 +476,12 @@ public:
     static QPointF branchCenter(const QRect& cell, int leadingGap);
 
     /**
-     * @brief Gives @p view, and the container around it, a dropdown's surface, metrics and
+     * @brief Gives @p listView, and the container around it, a dropdown's surface, metrics and
      *        placement.
      *
      * For a popup list that is not a combo box's. @p chosenRow is the entry the control
-     * currently holds, or -1 when it holds none — the row that stays marked while the cursor
-     * moves over the others.
+     * currently holds — the row that stays marked while the cursor moves over the others — and
+     * -1 says the control holds none, which leaves every row to the cursor alone.
      */
     void constrainDropdown(QListView* listView, int chosenRow = -1);
 

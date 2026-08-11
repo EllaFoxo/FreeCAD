@@ -6,6 +6,7 @@
 
 #include <QListView>
 #include <QScrollBar>
+#include <QSignalSpy>
 #include <QTest>
 
 #include <App/Application.h>
@@ -120,6 +121,50 @@ private Q_SLOTS:
 
         QCOMPARE(canvas.pixelColor(rowCentre(*view, 2)), QColor(0xff, 0x00, 0x00));
         QCOMPARE(canvas.pixelColor(rowCentre(*view, 3)), QColor(0x00, 0x00, 0xff));
+    }
+
+    // A popup that holds nothing is the widget's most common state: m_currentIndex starts at -1
+    // and setOptions puts it back there. The cursor must still read as a cursor, so arrowing
+    // onto a row paints it hovered — not with the accent fill that says "this is what you have
+    // chosen", which would claim a choice the control has not made.
+    void test_aPopupHoldingNothingPaintsItsCursorAsHovered()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        QTest::keyClick(popup.windowHandle(), Qt::Key_Down);
+        QVERIFY(view->currentIndex().isValid());
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        QCOMPARE(
+            canvas.pixelColor(rowCentre(*view, view->currentIndex().row())),
+            QColor(0x00, 0x00, 0xff)
+        );
+    }
+
+    // Clicking a row is what the popup exists for. Delivered through the popup's window rather
+    // than by calling activateIndex, so the whole path — the view's own click handling and the
+    // connection onto it — is what the test rests on.
+    void test_clickingARowActivatesIt()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        QSignalSpy activations(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+
+        const QPoint windowPos = view->viewport()->mapTo(&popup, rowCentre(*view, 2));
+        QTest::mouseClick(popup.windowHandle(), Qt::LeftButton, Qt::NoModifier, windowPos);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(activations.count(), 1);
+        QCOMPARE(activations.at(0).at(0).toInt(), 2);
     }
 
     // The popup has a surface of its own — the frame around the list paints it, from the same

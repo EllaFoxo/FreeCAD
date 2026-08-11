@@ -68,6 +68,10 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     m_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // Qt sets no WA_Hover on an item view's viewport, so a row is only told the pointer is over
     // it once the view sees plain moves — the same line Tree and the property editor carry.
+    // Redundant while FreeCADStyle is the one painting: its polish() sets WA_MouseTracking on
+    // every QAbstractItemView and QAbstractScrollArea::event() forwards that to the viewport.
+    // It is kept for the case that does not hold — an ambient style that is not FreeCADStyle,
+    // where nothing else turns tracking on and the rows would never see a hover.
     m_view->viewport()->setMouseTracking(true);
     m_view->viewport()->installEventFilter(this);
     m_view->installEventFilter(this);
@@ -126,6 +130,11 @@ void GeometrySelectorPopup::adoptAsDropdown()
     }
     FreeCADStyle* style = Application::Instance->freeCADStyle();
     setStyle(style);
+    // setStyle() does not propagate to children — QWidget::style() answers the widget's own
+    // style or qApp's, never a parent's — so the view has to be told separately or the frame
+    // and the rows inside it are painted by two different styles whenever the user's QtStyle
+    // preference is not FreeCAD (the Classic pack, for one, removes it).
+    m_view->setStyle(style);
     style->constrainDropdown(m_view, m_currentIndex);
 }
 
