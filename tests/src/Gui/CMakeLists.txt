@@ -31,6 +31,7 @@ add_executable(Gui_tests_run
 # Qt tests
 setup_qt_test(QuantitySpinBox)
 setup_qt_test(GeometrySelectorWidget)
+setup_qt_test(GeometrySelectorPopup)
 setup_qt_test(StyleTransparency)
 setup_qt_test(ComboDropdown)
 setup_qt_test(TreeBranch)
