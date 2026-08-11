@@ -4194,17 +4194,22 @@ void FreeCADStyle::snapComboPopupToWholeRows(QWidget* container)
     }
 
     // The cap that bounds a capped popup's height is an arbitrary number of pixels, not a whole
-    // number of rows, so the viewport it produces generally has a partial row's worth of surface
-    // left over below the last full one. Every row shares the same pitch, so row 0's height
-    // stands in for all of them.
-    const int rowHeight = view->sizeHintForRow(0);
-    if (rowHeight <= 0) {
+    // number of rows, so the viewport it produces generally has one row straddling its bottom
+    // edge. Trim by however much of that row shows, rather than by a remainder of an assumed
+    // pitch: rows share a pitch only where this style sizes them, and a separator is sized from
+    // its own token — or, in a QComboBox, by QComboBoxDelegate from PM_DefaultFrameWidth.
+    const int bottom = view->viewport()->height() - 1;
+    const QModelIndex straddling = view->indexAt({0, bottom});
+    if (!straddling.isValid()) {
         return;
     }
 
-    const int remainder = view->viewport()->height() % rowHeight;
-    if (remainder > 0) {
-        container->resize(container->width(), container->height() - remainder);
+    // straddling's rect contains (0, bottom) by construction of indexAt(), so rowRect.top() can
+    // never exceed bottom and shown is always at least 1 — nothing left to guard against there.
+    const QRect rowRect = view->visualRect(straddling);
+    const int shown = view->viewport()->height() - rowRect.top();
+    if (shown < rowRect.height()) {
+        container->resize(container->width(), container->height() - shown);
     }
 }
 

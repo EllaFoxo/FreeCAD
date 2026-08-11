@@ -1075,6 +1075,34 @@ private Q_SLOTS:
         );
     }
 
+    // A capped popup gives back the surface its last row does not fill, so the viewport ends on a
+    // row boundary. The pitch is not a safe way to work that out: a separator is 1px where a row
+    // is many, so a modulo of the first row's height trims by the wrong amount and leaves the
+    // last row cut off.
+    void test_aCappedPopupWithASeparatorStillEndsOnARowBoundary()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QComboBox box;
+        populateBeyondTheCap(box);
+        box.insertSeparator(1);
+        style.polish(&box);
+
+        box.showPopup();
+        const auto guard = qScopeGuard([&box] { box.hidePopup(); });
+        QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
+
+        QListView* view = popupOf(box);
+        QVERIFY2(
+            view->verticalScrollBar()->maximum() > 0,
+            "the popup was not capped, so there was nothing to trim"
+        );
+
+        const int bottom = view->viewport()->height() - 1;
+        const QModelIndex last = view->indexAt({0, bottom});
+        QVERIFY(last.isValid());
+        QCOMPARE(view->visualRect(last).bottom(), bottom);
+    }
+
     // Qt sizes the container afresh on every showPopup(), so the trim starts from the cap each
     // time. A trim that compounded instead would cost the popup a row per open.
     void test_reopeningACappedPopupDoesNotTrimItFurther()  // NOLINT
