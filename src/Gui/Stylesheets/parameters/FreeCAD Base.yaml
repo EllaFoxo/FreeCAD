@@ -379,7 +379,7 @@ DropdownListIconSize: "@MenuIconSize"
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
 DropdownListRowSelectedBackground: "@ListRowSelectedBackground"
-DropdownListRowPressedBackground: "@MenuItemPressedBackground"
+DropdownListRowPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
@@ -593,7 +593,7 @@ MenuItemMargin: "padding(0px)"
 MenuItemBorderRadius: 2px
 MenuItemTextColor: "@BaseTextColor"
 MenuItemHoveredBackground: "@ListRowPressedBackground"
-MenuItemPressedBackground: "@ListRowSelectedBackground"
+MenuItemPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 MenuItemDisabledTextColor: "@ListDisabledTextColor"
 MenuItemMinWidth: 240px
 # No MenuItemCheckedBackground on purpose: a checkable item always shows its indicator, so a
