@@ -17,6 +17,7 @@
 #include <QScreen>
 #include <QScrollBar>
 #include <QStandardItemModel>
+#include <QStyledItemDelegate>
 #include <QStyleFactory>
 #include <QStyleOptionComboBox>
 #include <QStyleOptionFrame>
@@ -1421,11 +1422,29 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(0, container.height() - 1), surfaceBorderColor);
     }
 
-    // Without a token on the DropdownList -> List chain, PM_SmallIconSize falls through to the
-    // platform theme and a row's icon takes whatever size the desktop happens to use. The size is
-    // the theme's to state, so a dropdown has to resolve it from the token.
+    // A row's icon size is the theme's to state, so it has to come from the token rather than
+    // from whatever the base style happens to hardcode.
+    //
+    // Asserted on the option the view builds, not on a pixelMetric() return value: a list view
+    // sizes its decoration from PM_ListViewIconSize, never PM_SmallIconSize, so a style that
+    // answers only the latter reports the token correctly and still hands the delegate Fusion's
+    // hardcoded 24. Reading the metric back would pass in exactly that broken state. Capturing
+    // the delegate's option goes through QListView::initViewItemOption, which is the code that
+    // actually chooses the number the rows are drawn with.
     void test_aDropdownRowIconSizeComesFromTheToken()  // NOLINT
     {
+        struct DecorationProbe: QStyledItemDelegate
+        {
+            mutable QSize decorationSize;
+
+            QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const override
+            {
+                decorationSize = option.decorationSize;
+                return QStyledItemDelegate::sizeHint(option, index);
+            }
+        };
+        DecorationProbe probe;
+
         const auto iconGuard = overrideToken("DropdownListIconSize", "13px");
 
         Gui::FreeCADStyle& style = installFreshApplicationStyle();
@@ -1436,10 +1455,13 @@ private Q_SLOTS:
         auto* model = new QStandardItemModel(&container);
         model->appendRow(new QStandardItem(QStringLiteral("only")));
         view->setModel(model);
+        view->setItemDelegate(&probe);
 
         style.constrainDropdown(view);
 
-        QCOMPARE(style.pixelMetric(QStyle::PM_SmallIconSize, nullptr, view), 13);
+        view->sizeHintForIndex(model->index(0, 0));
+
+        QCOMPARE(probe.decorationSize, QSize(13, 13));
     }
 
     // The chosen row keeps its mark while the view's own selection moves. Without a combo box

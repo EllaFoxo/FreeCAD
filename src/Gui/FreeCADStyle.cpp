@@ -651,11 +651,15 @@ std::optional<int> FreeCADStyle::resolvePixelMetric(
         {PM_MenuBarItemSpacing, {StyleComponentElement::Item, Spacing}},
         {PM_TabCloseIndicatorWidth, {StyleComponentElement::CloseButton, Width}},
         {PM_TabCloseIndicatorHeight, {StyleComponentElement::CloseButton, Height}},
-        // Qt asks for whichever of these suits the widget it is sizing an icon for; all three
-        // answer from the same token, so a component states its icon size once.
+        // Qt asks for whichever of these suits the widget it is sizing an icon for; all four
+        // answer from the same token, so a component states its icon size once. PM_ListViewIconSize
+        // is the one a row's decoration comes from — QListView::initViewItemOption asks for it and
+        // never for PM_SmallIconSize — and Fusion hardcodes it, so leaving it out silently pins
+        // every dropdown and list row's icon to 24 no matter what the theme says.
         {PM_SmallIconSize, {StyleComponentElement::Root, IconSize}},
         {PM_ButtonIconSize, {StyleComponentElement::Root, IconSize}},
         {PM_ToolBarIconSize, {StyleComponentElement::Root, IconSize}},
+        {PM_ListViewIconSize, {StyleComponentElement::Root, IconSize}},
     };
 
     switch (metric) {
