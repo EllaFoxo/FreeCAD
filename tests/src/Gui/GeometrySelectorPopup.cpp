@@ -5,10 +5,7 @@
 #include <Inventor/SoDB.h>
 
 #include <QListView>
-#include <QScreen>
 #include <QScrollBar>
-#include <QSignalSpy>
-#include <QStandardItemModel>
 #include <QTest>
 
 #include <App/Application.h>
@@ -86,7 +83,15 @@ private Q_SLOTS:
         showPopup(popup);
 
         QListView* view = viewOf(popup);
-        hover(*view, 0);
+        // The precondition hover depends on. Stated rather than assumed — though note it holds
+        // even without GeometrySelectorPopup's own explicit setMouseTracking(true) call: any
+        // live FreeCADStyle sets Qt::WA_MouseTracking on every QAbstractItemView it polishes,
+        // and QAbstractScrollArea::event() forwards that to the viewport on its own
+        // (QEvent::MouseTrackingChange, qabstractscrollarea.cpp). So this assertion cannot by
+        // itself catch that line going missing; it only documents that the mechanism the row
+        // colours below depend on is in place.
+        QVERIFY(view->viewport()->hasMouseTracking());
+        hover(popup, *view, 0);
 
         const QImage canvas = renderOf(*view->viewport());
 
@@ -168,14 +173,18 @@ private Q_SLOTS:
     // the style's placement correction, reached because the popup is a tagged container.
     void test_placementFollowsTheDropdownToken()  // NOLINT
     {
-        Gui::GeometrySelectorWidget anchor(Gui::GeometryQuantity::Single);
-        anchor.move(200, 200);
-        anchor.show();
-        QVERIFY(QTest::qWaitForWindowExposed(&anchor));
-
         {
             const auto modeGuard = overrideToken("DropdownListPlacement", "below");
             installFreshPopupStyle();
+
+            // Built after the style install, not before: GeometrySelectorWidget hands the
+            // FreeCADStyle singleton to its child buttons via setStyle(), which QWidget keeps
+            // as a raw pointer, so an anchor built while installFreshPopupStyle() is about to
+            // delete the previous singleton would be handed a dangling one.
+            Gui::GeometrySelectorWidget anchor(Gui::GeometryQuantity::Single);
+            anchor.move(200, 200);
+            anchor.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&anchor));
 
             auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), false, 1, &anchor);
             popup->resize(anchor.width(), popup->sizeHint().height());
@@ -193,6 +202,11 @@ private Q_SLOTS:
         {
             const auto modeGuard = overrideToken("DropdownListPlacement", "current");
             installFreshPopupStyle();
+
+            Gui::GeometrySelectorWidget anchor(Gui::GeometryQuantity::Single);
+            anchor.move(200, 200);
+            anchor.show();
+            QVERIFY(QTest::qWaitForWindowExposed(&anchor));
 
             auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), false, 1, &anchor);
             popup->resize(anchor.width(), popup->sizeHint().height());
@@ -257,22 +271,22 @@ private:
         QCoreApplication::processEvents();  // the placement correction is deferred by a zero timer
     }
 
-    // The pointer arriving over a row. Delivered to the viewport directly rather than through
-    // QTest::mouseMove, which for a widget with no button held warps the real desktop pointer
-    // via QCursor::setPos: on a live display that produces no move at all when the cursor
-    // already sits at that global position, and the row is then never hovered. Do not simplify.
-    static void hover(QListView& view, int row)
+    // The pointer arriving over a row. Routed through the popup's QWindow rather than the
+    // QWidget overload of QTest::mouseMove, which for a widget with no button held warps the
+    // real desktop pointer via QCursor::setPos: on a live display that produces no move at all
+    // when the cursor already sits at that global position, and the row is then never hovered.
+    // The QWindow overload has no such trap — the same reason keyClick above goes through
+    // popup.windowHandle() rather than the view. Routing through the window, rather than
+    // synthesizing a QMouseEvent straight at the viewport, also means the event passes through
+    // Qt's own mouse-tracking gate (QApplicationPrivate::sendMouseEvent) instead of skipping it
+    // outright — genuinely closer to what a real pointer move delivers, even though nothing in
+    // this popup currently drops mouse tracking in a way only that gate would catch. Do not
+    // simplify.
+    static void hover(Gui::GeometrySelectorPopup& popup, QListView& view, int row)
     {
-        const QPointF spot = view.visualRect(view.model()->index(row, 0)).center();
-        QMouseEvent arrival(
-            QEvent::MouseMove,
-            spot,
-            view.viewport()->mapToGlobal(spot),
-            Qt::NoButton,
-            Qt::NoButton,
-            Qt::NoModifier
-        );
-        QCoreApplication::sendEvent(view.viewport(), &arrival);
+        const QPoint spot = view.visualRect(view.model()->index(row, 0)).center();
+        const QPoint windowPos = view.viewport()->mapTo(&popup, spot);
+        QTest::mouseMove(popup.windowHandle(), windowPos);
         QCoreApplication::processEvents();
     }
 
