@@ -1407,6 +1407,27 @@ private Q_SLOTS:
         QCOMPARE(canvas.pixelColor(0, 0), surfaceBorderColor);
     }
 
+    // Without a token on the DropdownList -> List chain, PM_SmallIconSize falls through to the
+    // platform theme and a row's icon takes whatever size the desktop happens to use. The size is
+    // the theme's to state, so a dropdown has to resolve it from the token.
+    void test_aDropdownRowIconSizeComesFromTheToken()  // NOLINT
+    {
+        const auto iconGuard = overrideToken("DropdownListIconSize", "13px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        model->appendRow(new QStandardItem(QStringLiteral("only")));
+        view->setModel(model);
+
+        style.constrainDropdown(view);
+
+        QCOMPARE(style.pixelMetric(QStyle::PM_SmallIconSize, nullptr, view), 13);
+    }
+
     // The chosen row keeps its mark while the view's own selection moves. Without a combo box
     // the view's selection is still a cursor — the popup moves it under the pointer and under
     // the arrow keys — so the entry the control holds has to come from somewhere else.
