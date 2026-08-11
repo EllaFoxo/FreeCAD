@@ -65,7 +65,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(4), {}, /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -80,7 +81,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(4), {}, /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -106,7 +108,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(4), {}, /*allowCustom=*/false, /*currentIndex=*/2, nullptr);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -131,7 +134,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(4), {}, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -153,7 +157,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(4), /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(4), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -173,7 +178,8 @@ private Q_SLOTS:
     {
         installFreshPopupStyle();
 
-        Gui::GeometrySelectorPopup popup(optionsOf(3), /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
         showPopup(popup);
 
         const QImage canvas = renderOf(popup);
@@ -201,7 +207,8 @@ private Q_SLOTS:
         anchor.show();
         QVERIFY(QTest::qWaitForWindowExposed(&anchor));
 
-        Gui::GeometrySelectorPopup popup(optionsOf(40), /*allowCustom=*/false, /*currentIndex=*/0, &anchor);
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(40), {}, /*allowCustom=*/false, /*currentIndex=*/0, &anchor);
         showPopup(popup);
 
         QListView* view = viewOf(popup);
@@ -231,7 +238,7 @@ private Q_SLOTS:
             anchor.show();
             QVERIFY(QTest::qWaitForWindowExposed(&anchor));
 
-            auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), false, 1, &anchor);
+            auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), {}, false, 1, &anchor);
             popup->resize(anchor.width(), popup->sizeHint().height());
             popup->move(anchor.mapToGlobal(QPoint(0, anchor.height())));
             popup->show();
@@ -253,7 +260,7 @@ private Q_SLOTS:
             anchor.show();
             QVERIFY(QTest::qWaitForWindowExposed(&anchor));
 
-            auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), false, 1, &anchor);
+            auto* popup = new Gui::GeometrySelectorPopup(optionsOf(3), {}, false, 1, &anchor);
             popup->resize(anchor.width(), popup->sizeHint().height());
             popup->move(anchor.mapToGlobal(QPoint(0, anchor.height())));
             popup->show();
@@ -264,6 +271,171 @@ private Q_SLOTS:
             QCOMPARE(view->viewport()->mapToGlobal(rowTopLeft).y(), anchor.mapToGlobal(QPoint {}).y());
             popup->close();
         }
+    }
+
+    // The rule sits between groups and nowhere else: never first, never last, never doubled.
+    void test_separatorsDivideTheGroups()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, -1, nullptr);
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        // 2 options + rule + 3 history + rule + custom
+        QCOMPARE(view->model()->rowCount(), 8);
+        QVERIFY(isSeparatorRow(*view, 2));
+        QVERIFY(isSeparatorRow(*view, 6));
+        for (int row : {0, 1, 3, 4, 5, 7}) {
+            QVERIFY2(!isSeparatorRow(*view, row), qPrintable(QStringLiteral("row %1").arg(row)));
+        }
+    }
+
+    // With no history the two rules collapse into the single one that divides the options from
+    // Custom, and with neither history nor Custom there is no rule at all.
+    void test_aRuleNeedsANonEmptyGroupOnBothSides()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup withCustom(optionsOf(2), {}, /*allowCustom=*/true, -1, nullptr);
+        showPopup(withCustom);
+        QCOMPARE(viewOf(withCustom)->model()->rowCount(), 4);
+        QVERIFY(isSeparatorRow(*viewOf(withCustom), 2));
+
+        Gui::GeometrySelectorPopup optionsOnly(optionsOf(2), {}, /*allowCustom=*/false, -1, nullptr);
+        showPopup(optionsOnly);
+        QCOMPARE(viewOf(optionsOnly)->model()->rowCount(), 2);
+
+        // The group above a rule can be empty too — a popup with no predefined options must not
+        // open on a leading rule in front of its history or its Custom row.
+        Gui::GeometrySelectorPopup historyOnly({}, optionsOf(2), /*allowCustom=*/false, -1, nullptr);
+        showPopup(historyOnly);
+        QCOMPARE(viewOf(historyOnly)->model()->rowCount(), 2);
+        QVERIFY(!isSeparatorRow(*viewOf(historyOnly), 0));
+
+        Gui::GeometrySelectorPopup customOnly({}, {}, /*allowCustom=*/true, -1, nullptr);
+        showPopup(customOnly);
+        QCOMPARE(viewOf(customOnly)->model()->rowCount(), 1);
+        QVERIFY(!isSeparatorRow(*viewOf(customOnly), 0));
+    }
+
+    // A separator carries neither flag, which is what makes QListView::moveCursor step over it:
+    // it filters its candidates through removeCurrentAndDisabled().
+    void test_aSeparatorRowIsNeitherSelectableNorEnabled()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(2), {}, /*allowCustom=*/true, -1, nullptr);
+        showPopup(popup);
+
+        const Qt::ItemFlags flags = viewOf(popup)->model()->index(2, 0).flags();
+        QVERIFY(!flags.testFlag(Qt::ItemIsSelectable));
+        QVERIFY(!flags.testFlag(Qt::ItemIsEnabled));
+    }
+
+    // A row number is no longer an index. The first history row sits two rows below the last
+    // option but one index above it, and activating it must report the index.
+    void test_activatingAHistoryRowEmitsItsIndexNotItsRow()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, -1, nullptr);
+        showPopup(popup);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+        QListView* view = viewOf(popup);
+        const QPoint windowPos = view->viewport()->mapTo(&popup, rowCentre(*view, 3));
+        QTest::mouseClick(popup.windowHandle(), Qt::LeftButton, Qt::NoModifier, windowPos);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 2);  // row 3 is the first history entry: index 2
+    }
+
+    // The Custom row is the last index, above whatever history added.
+    void test_theCustomRowIsStillTheLastIndex()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, -1, nullptr);
+        showPopup(popup);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+        QListView* view = viewOf(popup);
+        const QPoint windowPos = view->viewport()->mapTo(&popup, rowCentre(*view, 7));
+        QTest::mouseClick(popup.windowHandle(), Qt::LeftButton, Qt::NoModifier, windowPos);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 5);  // 2 options + 3 history
+    }
+
+    // The pointer passing over a rule must not park the cursor there, or Enter would activate
+    // nothing the instant it crosses one.
+    void test_hoveringOverASeparatorDoesNotMoveTheCursorThere()  // NOLINT
+    {
+        // The fixture leaves the rule's own height token unset, so give it one: a zero-height
+        // row's centre coincides with its neighbour's edge and the hover would land ambiguously.
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "20px");
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        hover(popup, *view, 2);  // the rule between the options and the history
+
+        QCOMPARE(view->currentIndex().row(), 0);
+    }
+
+    // The popup opens with the cursor on the chosen entry's row, which is not its index once a
+    // separator sits above it — the number constrainDropdown() aligns the popup against.
+    void test_openingOnAHistoryPickPutsTheCursorOnItsRow()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, /*currentIndex=*/2, nullptr);
+        showPopup(popup);
+
+        QCOMPARE(viewOf(popup)->currentIndex().row(), 3);
+    }
+
+    // The "chosen" fill is keyed off the row the popup told FreeCADStyle it opened on, not off
+    // the cursor — it must survive the cursor moving away, and it must be the row a separator
+    // shifted, not the index constrainDropdown() was actually handed.
+    void test_theChosenFillStaysOnTheHistoryRowAfterArrowing()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, /*currentIndex=*/2, nullptr);
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        QTest::keyClick(popup.windowHandle(), Qt::Key_Down);
+        QCoreApplication::processEvents();
+
+        const QImage canvas = renderOf(*view->viewport());
+        QCOMPARE(canvas.pixelColor(rowCentre(*view, 3)), QColor(0xff, 0x00, 0x00));
+        QCOMPARE(canvas.pixelColor(rowCentre(*view, 4)), QColor(0x00, 0x00, 0xff));
+    }
+
+    // Arrow keys step over the rule rather than parking on it — the flags do this, but a change
+    // to how a separator is built could silently drop it.
+    void test_arrowKeysStepOverASeparator()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(2), optionsOf(3), /*allowCustom=*/true, /*currentIndex=*/1, nullptr);
+        showPopup(popup);
+
+        QTest::keyClick(popup.windowHandle(), Qt::Key_Down);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(viewOf(popup)->currentIndex().row(), 3);
     }
 
 private:
@@ -306,6 +478,12 @@ private:
     static QPoint rowCentre(const QListView& view, int row)
     {
         return view.visualRect(view.model()->index(row, 0)).center();
+    }
+
+    static bool isSeparatorRow(const QListView& view, int row)
+    {
+        return view.model()->index(row, 0).data(Qt::AccessibleDescriptionRole).toString()
+            == QLatin1String("separator");
     }
 
     static void showPopup(Gui::GeometrySelectorPopup& popup)

@@ -454,7 +454,7 @@ void GeometrySelectorWidget::activatePrimary()
 
 void GeometrySelectorWidget::openOptionsPopup()
 {
-    auto* popup = new GeometrySelectorPopup(m_options, m_allowCustom, m_currentIndex, this);
+    auto* popup = new GeometrySelectorPopup(m_options, {}, m_allowCustom, m_currentIndex, this);
     // Resized rather than fixed: the style widens a popup that grew a scroll bar, and trims one
     // whose last row is partly cut off, and a fixed width or height blocks both.
     popup->resize(width(), popup->sizeHint().height());

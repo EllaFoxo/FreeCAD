@@ -38,10 +38,11 @@ namespace Gui
 {
 
 /**
- * The geometry selector's dropdown: one selectable row per predefined option, with an optional
- * trailing "Custom…" row, painted and placed as any other dropdown. A top-level Qt::Popup
- * positioned under the control by the caller. Emits optionActivated(index) on mouse click or
- * keyboard activation; the Custom entry is the last index (== options.size()).
+ * The geometry selector's dropdown: one selectable row per predefined option, then one per recent
+ * history entry, then an optional trailing "Custom…" row, each group divided from its neighbours
+ * by a rule, painted and placed as any other dropdown. A top-level Qt::Popup positioned under the
+ * control by the caller. Emits optionActivated(index) on mouse click or keyboard activation; the
+ * index space is predefined options, then history, then Custom last.
  */
 class GuiExport GeometrySelectorPopup: public QFrame
 {
@@ -50,6 +51,7 @@ class GuiExport GeometrySelectorPopup: public QFrame
 public:
     GeometrySelectorPopup(
         std::vector<GeometrySelectorOption> options,
+        std::vector<GeometrySelectorOption> history,
         bool allowCustom,
         int currentIndex,
         QWidget* parent = nullptr
@@ -74,12 +76,22 @@ private:
     void buildModel();
     void adoptAsDropdown();
     bool handleViewKeyPress(QKeyEvent* event);
+    /// Appends one selectable row for @p option, recording the index it activates.
+    void appendOptionRow(const GeometrySelectorOption& option, int index);
+    /// Appends a rule, unless the model is empty — a rule needs a group on both sides.
+    void appendSeparatorRow();
+    /// The model row @p index occupies, or -1 when it is out of range.
+    int rowForIndex(int index) const;
 
     std::vector<GeometrySelectorOption> m_options;
+    std::vector<GeometrySelectorOption> m_history;
     bool m_allowCustom;
     int m_currentIndex;
     QListView* m_view = nullptr;
     QStandardItemModel* m_model = nullptr;
+    /// The index each model row activates, -1 for a separator. Row and index stop being the
+    /// same number as soon as a rule sits between two groups.
+    std::vector<int> m_rowToIndex;
 };
 
 }  // namespace Gui

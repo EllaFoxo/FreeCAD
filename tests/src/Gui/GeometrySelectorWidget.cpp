@@ -430,8 +430,9 @@ private Q_SLOTS:
         QCOMPARE(widget.currentIndex(), 0);
     }
 
-    // The popup builds one row per option, plus a Custom row when enabled. Rows are model rows
-    // now, not child widgets, so the count is read off the view's model.
+    // The popup builds one row per option, plus a Custom row when enabled — with a rule between
+    // the two groups. Rows are model rows now, not child widgets, so the count is read off the
+    // view's model.
     void test_popupRowCount()  // NOLINT
     {
         std::vector<Gui::GeometrySelectorOption> options = {
@@ -439,19 +440,20 @@ private Q_SLOTS:
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
         };
 
-        Gui::GeometrySelectorPopup closed(options, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        Gui::GeometrySelectorPopup closed(options, {}, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
         QCOMPARE(closed.optionCount(), 2);
         auto* closedView = closed.findChild<QListView*>();
         QVERIFY(closedView != nullptr);
         QCOMPARE(closedView->model()->rowCount(), 2);
 
-        Gui::GeometrySelectorPopup withCustom(options, /*allowCustom=*/true, /*currentIndex=*/-1, nullptr);
+        Gui::GeometrySelectorPopup
+            withCustom(options, {}, /*allowCustom=*/true, /*currentIndex=*/-1, nullptr);
         QCOMPARE(withCustom.optionCount(), 3);
         auto* customView = withCustom.findChild<QListView*>();
         QVERIFY(customView != nullptr);
-        QCOMPARE(customView->model()->rowCount(), 3);
+        QCOMPARE(customView->model()->rowCount(), 4);  // 2 options + rule + custom
         QCOMPARE(
-            customView->model()->index(2, 0).data(Qt::DisplayRole).toString(),
+            customView->model()->index(3, 0).data(Qt::DisplayRole).toString(),
             Gui::GeometrySelectorOption::customEntry().label
         );
     }
@@ -465,7 +467,7 @@ private Q_SLOTS:
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge3"}),
         };
-        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        Gui::GeometrySelectorPopup popup(options, {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
         popup.show();
         QVERIFY(QTest::qWaitForWindowExposed(&popup));
 
@@ -493,7 +495,7 @@ private Q_SLOTS:
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
         };
-        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/true, /*currentIndex=*/0, nullptr);
+        Gui::GeometrySelectorPopup popup(options, {}, /*allowCustom=*/true, /*currentIndex=*/0, nullptr);
         QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
 
         popup.activateIndex(1);
@@ -511,7 +513,7 @@ private Q_SLOTS:
         std::vector<Gui::GeometrySelectorOption> options = {
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
         };
-        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
+        Gui::GeometrySelectorPopup popup(options, {}, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
         QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
         popup.activateIndex(5);
         popup.activateIndex(-1);

@@ -23,6 +23,8 @@
 
 #include "GeometrySelectorPopup.h"
 
+#include <algorithm>
+
 #include <QEvent>
 #include <QKeyEvent>
 #include <QListView>
@@ -37,12 +39,14 @@ using namespace Gui;
 
 GeometrySelectorPopup::GeometrySelectorPopup(
     std::vector<GeometrySelectorOption> options,
+    std::vector<GeometrySelectorOption> history,
     bool allowCustom,
     int currentIndex,
     QWidget* parent
 )
     : QFrame(parent, Qt::Popup)
     , m_options(std::move(options))
+    , m_history(std::move(history))
     , m_allowCustom(allowCustom)
     , m_currentIndex(currentIndex)
 {
@@ -87,40 +91,81 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     adoptAsDropdown();
 
     connect(m_view, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
-        activateIndex(index.row());
+        // Qt never emits this signal for a disabled row, so index.row() always names a real
+        // entry — never a rule's.
+        activateIndex(m_rowToIndex[index.row()]);
     });
 }
 
 int GeometrySelectorPopup::optionCount() const
 {
-    return static_cast<int>(m_options.size()) + (m_allowCustom ? 1 : 0);
+    return static_cast<int>(m_options.size() + m_history.size()) + (m_allowCustom ? 1 : 0);
 }
 
 void GeometrySelectorPopup::buildModel()
 {
     m_model = new QStandardItemModel(this);
+    m_rowToIndex.clear();
 
-    const auto addRow = [this](const GeometrySelectorOption& option) {
-        auto* item = new QStandardItem(option.label);
-        item->setIcon(option.icon);
-        item->setEditable(false);
-        m_model->appendRow(item);
-    };
-
+    int index = 0;
     for (const GeometrySelectorOption& option : m_options) {
-        addRow(option);
+        appendOptionRow(option, index++);
     }
+
+    if (!m_history.empty()) {
+        appendSeparatorRow();
+        for (const GeometrySelectorOption& entry : m_history) {
+            appendOptionRow(entry, index++);
+        }
+    }
+
     if (m_allowCustom) {
-        addRow(GeometrySelectorOption::customEntry());
+        appendSeparatorRow();
+        appendOptionRow(GeometrySelectorOption::customEntry(), index++);
     }
 
     m_view->setModel(m_model);
 
     // Selects as well as moves the cursor, which is what paints the chosen entry and what the
-    // "current" placement measures its offset from.
-    if (m_currentIndex >= 0 && m_currentIndex < m_model->rowCount()) {
-        m_view->setCurrentIndex(m_model->index(m_currentIndex, 0));
+    // "current" placement measures its offset from. The row, not the index — a rule above the
+    // entry shifts one and not the other.
+    if (const int row = rowForIndex(m_currentIndex); row >= 0) {
+        m_view->setCurrentIndex(m_model->index(row, 0));
     }
+}
+
+void GeometrySelectorPopup::appendOptionRow(const GeometrySelectorOption& option, int index)
+{
+    auto* item = new QStandardItem(option.label);
+    item->setIcon(option.icon);
+    item->setEditable(false);
+    m_model->appendRow(item);
+    m_rowToIndex.push_back(index);
+}
+
+void GeometrySelectorPopup::appendSeparatorRow()
+{
+    // A rule needs a group on both sides. The groups above are the only ones that can be empty,
+    // so an empty model is the whole of that test.
+    if (m_model->rowCount() == 0) {
+        return;
+    }
+
+    auto* item = new QStandardItem();
+    // The marker QComboBox::insertSeparator() writes, which is what FreeCADStyle reads the row
+    // back as. Clearing the flags is what makes QListView::moveCursor step over the row.
+    item->setData(QStringLiteral("separator"), Qt::AccessibleDescriptionRole);
+    item->setFlags(item->flags() & ~(Qt::ItemIsSelectable | Qt::ItemIsEnabled));
+    m_model->appendRow(item);
+    m_rowToIndex.push_back(-1);
+}
+
+int GeometrySelectorPopup::rowForIndex(int index) const
+{
+    const auto found = std::ranges::find(m_rowToIndex, index);
+    return index < 0 || found == m_rowToIndex.end()
+        ? -1
+        : static_cast<int>(std::distance(m_rowToIndex.begin(), found));
 }
 
 void GeometrySelectorPopup::adoptAsDropdown()
@@ -135,7 +180,9 @@ void GeometrySelectorPopup::adoptAsDropdown()
     // and the rows inside it are painted by two different styles whenever the user's QtStyle
     // preference is not FreeCAD (the Classic pack, for one, removes it).
     m_view->setStyle(style);
-    style->constrainDropdown(m_view, m_currentIndex);
+    // The row, because that is what the style aligns the popup against, and a rule above the
+    // chosen entry shifts the row without shifting the index.
+    style->constrainDropdown(m_view, rowForIndex(m_currentIndex));
 }
 
 QSize GeometrySelectorPopup::sizeHint() const
@@ -173,7 +220,9 @@ bool GeometrySelectorPopup::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_view->viewport() && event->type() == QEvent::MouseMove) {
         // The row under the pointer becomes the cursor, so Enter picks what the pointer is on —
-        // the behaviour QComboBoxPrivateContainer gives a combo box's popup.
+        // the behaviour QComboBoxPrivateContainer gives a combo box's popup. A rule is disabled,
+        // so QAbstractItemView::setCurrentIndex() already refuses it on its own; the cursor
+        // stays where it was and Enter still activates something.
         const auto* move = static_cast<QMouseEvent*>(event);
         const QModelIndex under = m_view->indexAt(move->position().toPoint());
         if (under.isValid()) {
@@ -197,8 +246,8 @@ bool GeometrySelectorPopup::handleViewKeyPress(QKeyEvent* event)
     switch (event->key()) {
         case Qt::Key_Return:
         case Qt::Key_Enter:
-            if (m_view->currentIndex().isValid()) {
-                activateIndex(m_view->currentIndex().row());
+            if (const QModelIndex current = m_view->currentIndex(); current.isValid()) {
+                activateIndex(m_rowToIndex.at(current.row()));
             }
             return true;
         case Qt::Key_Escape:
