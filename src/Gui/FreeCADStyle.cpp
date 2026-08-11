@@ -3968,6 +3968,13 @@ void FreeCADStyle::constrainDropdown(QListView* listView, int chosenRow)
     listView->setProperty(comboDropdownProperty, true);
     listView->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
+    // On the viewport, not the view: mouse events are delivered to the viewport, and a filter on
+    // the scroll area around it never sees them. QObject::installEventFilter drops an earlier
+    // registration of the same filter, so re-adopting a view does not stack them up.
+    if (QWidget* viewport = listView->viewport()) {
+        viewport->installEventFilter(this);
+    }
+
     // Written even for -1, and even when a previous adoption already tagged this view. The tag's
     // presence is what says the view's own selection is a cursor rather than a choice, so a
     // dropdown holding nothing has to state that too — a combo box with no current index answers
@@ -4244,6 +4251,8 @@ bool FreeCADStyle::eventFilter(QObject* obj, QEvent* event)
     if (event->type() == QEvent::ChildAdded) {
         constrainReplacedComboDropdown(obj, static_cast<QChildEvent*>(event));
     }
+
+    repaintPressedDropdownRow(obj, event);
 
     if (event->type() == QEvent::Resize || event->type() == QEvent::Show) {
         if (auto* scrollArea = qobject_cast<QAbstractScrollArea*>(obj)) {
@@ -4604,6 +4613,56 @@ void FreeCADStyle::applyDropdownSelectionState(
     }
 }
 
+// Qt never says a row is being pressed. State_Sunken — the flag every other component's Pressed
+// state is read from — reaches no QStyleOptionViewItem: across Qt's item views only QHeaderView
+// sets it, and then on a section. So the press is read off the pointer instead, and a row holds
+// it for exactly as long as the pointer rests on it with the button down. That is also what the
+// release will act on, so the row that looks pressed is always the row that would be chosen.
+//
+// Added to the hover rather than put in its place: the fallback chain emits every active state
+// in priority order, so a pressed row still resolves the hovered fill underneath and a
+// PressedBackgroundEffect deepens that rather than landing on nothing.
+void FreeCADStyle::applyDropdownPressedState(StyleContext& context, const QStyleOption* option)
+{
+    // View items only. The view's own frame and the popup container resolve as DropdownList too,
+    // and a button held anywhere over the popup would otherwise press the whole surface.
+    if (qstyleoption_cast<const QStyleOptionViewItem*>(option) == nullptr) {
+        return;
+    }
+
+    if (!context.state.testFlag(StyleState::Hovered)) {
+        return;
+    }
+
+    if (QGuiApplication::mouseButtons() & Qt::LeftButton) {
+        context.state |= StyleState::Pressed;
+    }
+}
+
+// Neither half of a press repaints on its own. The hovered row does not change, and a dropdown
+// has already made the row under the pointer current and selected by the time the button goes
+// down, so the view and the selection model both have nothing to update. Left to them, the
+// pressed fill would appear only once something unrelated repainted the row.
+void FreeCADStyle::repaintPressedDropdownRow(QObject* viewport, const QEvent* event)
+{
+    if (event->type() != QEvent::MouseButtonPress && event->type() != QEvent::MouseButtonRelease) {
+        return;
+    }
+
+    if (static_cast<const QMouseEvent*>(event)->button() != Qt::LeftButton) {
+        return;
+    }
+
+    // The filter this arrives through is installed on many widgets; only a dropdown's viewport
+    // has rows whose appearance the button changes.
+    auto* view = qobject_cast<QListView*>(viewport->parent());
+    if (view == nullptr || !view->property(comboDropdownProperty).toBool()) {
+        return;
+    }
+
+    view->viewport()->update();
+}
+
 static bool isFlat(const QWidget* widget, const QStyleOption* option)
 {
     if (const auto* buttonOption = qstyleoption_cast<const QStyleOptionButton*>(option)) {
@@ -4960,6 +5019,9 @@ StyleContext FreeCADStyle::contextOf(
         }
         if (context.component == StyleComponent::DropdownList) {
             applyDropdownSelectionState(context, option, widget);
+            // After the selection handling, which is what settles whether this row counts as
+            // hovered — a dropdown's State_Selected is a cursor, and the fold happens there.
+            applyDropdownPressedState(context, option);
         }
         if (option->state & QStyle::State_HasFocus) {
             context.state |= StyleState::Focused;

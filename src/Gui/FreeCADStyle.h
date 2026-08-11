@@ -1338,6 +1338,20 @@ private:
     );
 
     /**
+     * @brief Marks a dropdown row the pointer is holding down as pressed.
+     *
+     * Additive to the hover it accompanies, so a press reads as that row's hover deepening.
+     * Qt states nothing about a pressed row, so this is read off the pointer instead.
+     */
+    static void applyDropdownPressedState(
+        StyleParameters::StyleContext& context,
+        const QStyleOption* option
+    );
+
+    /// Repaints the dropdown behind @p viewport when a button goes down on it or comes back up.
+    static void repaintPressedDropdownRow(QObject* viewport, const QEvent* event);
+
+    /**
      * @brief Tags @p widget itself with @p surface and notifies it, without touching children.
      *
      * The single implementation of the tag write, shared by updateTransparency() and polish().

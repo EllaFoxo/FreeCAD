@@ -24,10 +24,26 @@
 #include <QStyleOptionMenuItem>
 #include <QStyleOptionViewItem>
 #include <QTest>
+#include <QWindow>
 
 #include <Gui/ThemeReloadEvent.h>
 
 #include "DropdownStyleFixture.h"
+
+// Counts the paints arriving at whatever it is installed on, so a test can tell "the style asked
+// for a repaint" apart from "something repainted eventually".
+struct PaintCounter: QObject
+{
+    int paints = 0;
+
+    bool eventFilter(QObject* watched, QEvent* event) override
+    {
+        if (event->type() == QEvent::Paint) {
+            ++paints;
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
 
 class TestComboDropdown: public QObject, private DropdownStyleFixture
 {
@@ -54,6 +70,27 @@ private:
         view->resize(200, 200);
         container.show();
         return view;
+    }
+
+    // The pointer arriving over @p spot and the left button going down on it. Routed through the
+    // window rather than the widget: QTest::mouseMove's QWidget overload warps the real desktop
+    // pointer via QCursor::setPos and synthesises no move at all when the cursor already sits
+    // there, so the row would never be hovered — the same trap the popup suite documents.
+    //
+    // The returned guard lets the button up. A held button is application-global state, so a
+    // test that returned early without it would leave every later test pressing.
+    [[nodiscard]] static auto holdLeftButton(QWidget& container, const QPoint& spot)
+    {
+        QWindow* window = container.windowHandle();
+
+        QTest::mouseMove(window, spot);
+        QTest::mousePress(window, Qt::LeftButton, Qt::NoModifier, spot);
+        QCoreApplication::processEvents();
+
+        return qScopeGuard([window, spot] {
+            QTest::mouseRelease(window, Qt::LeftButton, Qt::NoModifier, spot);
+            QCoreApplication::processEvents();
+        });
     }
 
     // Where the first row's box started before every row was given a leading gap: the container
@@ -1665,6 +1702,174 @@ private Q_SLOTS:
         const QImage canvas = renderOf(*view);
 
         QCOMPARE(pixelsOfColour(canvas, canvas.rect(), QColor(0x00, 0xff, 0xff)), 0);
+    }
+
+    // Nothing in Qt tells a row it is being pressed. State_Sunken — the flag every other
+    // component's Pressed state is read from — never reaches a QStyleOptionViewItem: across
+    // src/widgets/itemviews only QHeaderView sets it, and then on a section. So a dropdown row's
+    // press has to be read off the pointer, and until it is, no DropdownListRowPressed* token is
+    // reachable at all: the theme can define one and the popup will never resolve it.
+    void test_aRowUnderAHeldButtonIsPressed()  // NOLINT
+    {
+        const auto pressedFill = overrideToken("DropdownListRowPressedBackground", "#00ff00");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        const QRect row = view->visualRect(view->model()->index(1, 0));
+        const QPoint spot = view->viewport()->mapTo(&container, row.center());
+
+        const auto buttonGuard = holdLeftButton(container, spot);
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        QCOMPARE(canvas.pixelColor(row.center()), QColor(0x00, 0xff, 0x00));
+
+        // The press belongs to the row under the pointer alone — a fill that leaked onto the
+        // whole view would satisfy the assertion above just as well.
+        const QRect neighbour = view->visualRect(view->model()->index(2, 0));
+        QVERIFY(canvas.pixelColor(neighbour.center()) != QColor(0x00, 0xff, 0x00));
+    }
+
+    // The press belongs to a row, not to the popup. The view's own frame and the container
+    // around it resolve as DropdownList too, and both report State_MouseOver whenever the
+    // pointer is anywhere inside them — so a press read without asking what is being painted
+    // would tint the whole surface along with the row under the pointer.
+    void test_aPressedRowDoesNotPressThePopupAroundIt()  // NOLINT
+    {
+        // Cyan: the fixture already paints the popup's edge in green, and a colour it uses
+        // elsewhere would be counted here whether the press produced it or not.
+        const auto surfacePressed = overrideToken("DropdownListPressedBackground", "#00ffff");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        const QRect row = view->visualRect(view->model()->index(1, 0));
+        const QPoint spot = view->viewport()->mapTo(&container, row.center());
+
+        const auto buttonGuard = holdLeftButton(container, spot);
+
+        // The whole view, so its frame and the surface behind the rows are both in the picture.
+        const QImage canvas = renderOf(*view);
+
+        QCOMPARE(pixelsOfColour(canvas, canvas.rect(), QColor(0x00, 0xff, 0xff)), 0);
+    }
+
+    // Pressed is additive to Hovered rather than a replacement for it: the fallback chain emits
+    // every active state in priority order, so a pressed row still resolves the hovered fill and
+    // a PressedBackgroundEffect has something to act on. That is the shape the shipped theme
+    // uses — it states an effect for the press and no background of its own — and it is what
+    // makes a press read as the hover deepening rather than as an unrelated colour.
+    void test_aPressedRowDeepensTheHoverFillRatherThanReplacingIt()  // NOLINT
+    {
+        // An effect large enough that the result cannot be confused with the hover fill it was
+        // derived from, yet short of the clamp at black — a press that painted nothing would
+        // otherwise be hard to tell from one that darkened all the way. No
+        // DropdownListRowPressedBackground at all, so a press resolving a background of its own
+        // rather than the hovered one has nothing to paint.
+        const auto effectGuard
+            = overrideToken("DropdownListRowPressedBackgroundEffect", "effect(darken: 0.2)");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        const QRect row = view->visualRect(view->model()->index(1, 0));
+        const QPoint spot = view->viewport()->mapTo(&container, row.center());
+
+        const auto buttonGuard = holdLeftButton(container, spot);
+
+        const QColor pressed = renderOf(*view->viewport()).pixelColor(row.center());
+
+        // Darker than the hover fill it came from, and still that fill's own hue: derived from
+        // it, not from the surface underneath and not from nothing at all.
+        const QColor hovered(0x00, 0x00, 0xff);
+        QVERIFY2(
+            pressed != hovered,
+            "the pressed row painted the plain hover fill, so the press never resolved"
+        );
+        QVERIFY(pressed.blue() > 0 && pressed.blue() < hovered.blue());
+        QVERIFY(pressed.blue() > pressed.red() && pressed.blue() > pressed.green());
+    }
+
+    // Letting go puts the row back. The state is read off the pointer at paint time, so this is
+    // really a test that the release repaints at all — see the press's own repaint below.
+    void test_releasingTheButtonPutsTheRowBack()  // NOLINT
+    {
+        const auto pressedFill = overrideToken("DropdownListRowPressedBackground", "#00ff00");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        const QRect row = view->visualRect(view->model()->index(1, 0));
+        const QPoint spot = view->viewport()->mapTo(&container, row.center());
+
+        // Pressed and let go again, with nothing in between: the guard's whole body is the
+        // release.
+        {
+            const auto buttonGuard = holdLeftButton(container, spot);
+        }
+
+        const QImage canvas = renderOf(*view->viewport());
+
+        // Back to the hover fill: the pointer has not moved, only the button came up.
+        QCOMPARE(canvas.pixelColor(row.center()), QColor(0x00, 0x00, 0xff));
+    }
+
+    // The press has to ask for the repaint itself. Nothing else will: the hovered row does not
+    // change, and a dropdown makes the row under the pointer current and selected before the
+    // button ever goes down, so neither the view nor the selection model has anything to
+    // update. Without the request the fill lands only when something unrelated repaints the row
+    // — which is to say, not while the owner is looking at it.
+    //
+    // renderOf() paints on demand and would hide exactly that, so the paint is counted where it
+    // arrives rather than asserted through a rendered pixel.
+    void test_pressingAndReleasingRepaintTheRow()  // NOLINT
+    {
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        const QRect row = view->visualRect(view->model()->index(1, 0));
+        const QPoint spot = view->viewport()->mapTo(&container, row.center());
+
+        // The pointer arrives first, so the hover change is spent before anything is counted.
+        // The row is made current too, which is the state a real dropdown's press lands in: Qt
+        // moves the current row under the pointer as it travels, so by the time the button goes
+        // down there is nothing left for the view or the selection model to update. Without
+        // this the press changes the current row and Qt repaints for its own reasons, and the
+        // count below would pass whether the style asked for anything or not.
+        QTest::mouseMove(container.windowHandle(), spot);
+        view->setCurrentIndex(view->model()->index(1, 0));
+        QCoreApplication::processEvents();
+
+        PaintCounter counter;
+        view->viewport()->installEventFilter(&counter);
+        const auto filterGuard = qScopeGuard([view, &counter] {
+            view->viewport()->removeEventFilter(&counter);
+        });
+
+        QTest::mousePress(container.windowHandle(), Qt::LeftButton, Qt::NoModifier, spot);
+        QCoreApplication::processEvents();
+        QVERIFY2(counter.paints > 0, "the press did not repaint the row it pressed");
+
+        counter.paints = 0;
+        QTest::mouseRelease(container.windowHandle(), Qt::LeftButton, Qt::NoModifier, spot);
+        QCoreApplication::processEvents();
+        QVERIFY2(counter.paints > 0, "the release left the row painted as pressed");
     }
 };
 
