@@ -36,6 +36,7 @@
 #include <QFont>
 #include <QLine>
 #include <QMarginsF>
+#include <QModelIndex>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
@@ -389,6 +390,24 @@ public:
         const StyleParameters::StyleComponentElement& element
         = StyleParameters::StyleComponentElement::Root
     );
+
+    /// Whether @p index is a row Qt marks as a separator — the marker
+    /// QComboBox::insertSeparator() writes and every separator-aware delegate reads back.
+    static bool isSeparatorIndex(const QModelIndex& index);
+
+    /**
+     * @brief The style context for a dropdown row that is a separator.
+     *
+     * Empty for anything else, which is every row of every other item view — a separator in a
+     * plain list or tree is not this style's to draw.
+     */
+    static std::optional<StyleParameters::StyleContext> dropdownSeparatorContext(
+        const QStyleOption* option,
+        const QWidget* widget
+    );
+
+    /// The extent a separator row occupies: its own Height, surrounded by its margins.
+    QSize dropdownSeparatorSizeFromContents(const StyleParameters::StyleContext& context) const;
 
     // Dynamic widget property names that drive style overrides.
     // clang-format off
@@ -932,6 +951,19 @@ private:
     ) const;
 
     void drawSeparatorLine(QPainter* painter, const QRect& rect, bool isHorizontal) const;
+
+    /**
+     * @brief Draws the rule of a separator resolved through a component and element context.
+     *
+     * The context-resolved counterpart of drawSeparatorLine(), which answers the global
+     * Separator* tokens for tool bar and frame lines. Used by the menu separator and the
+     * dropdown's, so both are the same line of pixels.
+     */
+    void drawSeparatorRule(
+        QPainter* painter,
+        const StyleParameters::StyleContext& context,
+        const QRect& ruleRect
+    ) const;
 
     /// Recomputes and applies the rounded-rect clip mask on a scroll area's viewport.
     /// Must be called after polish and on every viewport resize.

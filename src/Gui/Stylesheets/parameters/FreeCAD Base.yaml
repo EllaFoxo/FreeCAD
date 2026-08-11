@@ -381,6 +381,15 @@ DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
 DropdownListRowSelectedBackground: "@ListRowSelectedBackground"
 DropdownListRowPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 
+# ── Dropdown Separator ───────────────────────────────────────────────────────
+# The rule between groups of dropdown rows. Mirrors the MenuSeparator block: the height is the
+# band the rule is centred in, so the spacing above and below comes from the band rather than
+# from a margin. Set DropdownListSeparatorBorderThickness to reset() to drop the rule entirely.
+DropdownListSeparatorHeight: "@Spacing.100"
+DropdownListSeparatorMargin: "padding(horizontal: @Spacing.100)"
+DropdownListSeparatorBorderColor: "@SeparatorColor"
+DropdownListSeparatorBorderThickness: "@SeparatorThickness"
+
 # ── Tree Item ──────────────────────────────────────────────────────────────
 TreeItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100)"
 

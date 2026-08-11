@@ -1714,12 +1714,52 @@ QSize FreeCADStyle::toolButtonSizeFromContents(
     return geometry.sizeFromContents(contentSize);
 }
 
+bool FreeCADStyle::isSeparatorIndex(const QModelIndex& index)
+{
+    return index.data(Qt::AccessibleDescriptionRole).toString() == QLatin1String("separator");
+}
+
+std::optional<StyleContext> FreeCADStyle::dropdownSeparatorContext(
+    const QStyleOption* option,
+    const QWidget* widget
+)
+{
+    const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option);
+    if (vopt == nullptr || !isSeparatorIndex(vopt->index)) {
+        return std::nullopt;
+    }
+
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
+    // Both halves are load-bearing. contextOf() writes the element through only for the widgets
+    // whose cells this style lays out, so an element that came back unchanged means the row
+    // belongs to something else entirely.
+    if (context.component != StyleComponent::DropdownList
+        || context.element != StyleComponentElement::Separator) {
+        return std::nullopt;
+    }
+    return context;
+}
+
+QSize FreeCADStyle::dropdownSeparatorSizeFromContents(const StyleContext& context) const
+{
+    // resolveBoxGeometry() already resolves Height into geometry.height, which constrain()
+    // applies before the margin is added — a second, separate Height lookup here would only
+    // ever agree with it, never override it.
+    return resolveBoxGeometry(context).marginBox({0, 0});
+}
+
 QSize FreeCADStyle::itemViewItemSizeFromContents(
     const QStyleOption* option,
     const QSize& size,
     const QWidget* widget
 ) const
 {
+    // Before the row context is built: a separator is not a cell, and none of the icon, label or
+    // inter-row-gap arithmetic below describes one.
+    if (const auto separator = dropdownSeparatorContext(option, widget)) {
+        return dropdownSeparatorSizeFromContents(*separator);
+    }
+
     const StyleContext context = contextOf(widget, option, StyleComponentElement::Item);
     if (context.element != StyleComponentElement::Item) {
         return QProxyStyle::sizeFromContents(CT_ItemViewItem, option, size, widget);
@@ -2636,6 +2676,12 @@ void FreeCADStyle::drawControl(
     }
 
     if (element == CE_ItemViewItem) {
+        if (const auto separator = dropdownSeparatorContext(option, widget)) {
+            const BoxGeometryDefinition geometry = resolveBoxGeometry(*separator);
+            drawSeparatorRule(painter, *separator, geometry.borderRect(option->rect));
+            return;
+        }
+
         if (const auto* vopt = qstyleoption_cast<const QStyleOptionViewItem*>(option)) {
             // Patch HighlightedText so QCommonStyle uses the token-defined text color for
             // selected items rather than the palette's default (typically white/near-white).
@@ -3286,13 +3332,23 @@ void FreeCADStyle::drawMenuSeparator(
 {
     const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
     const BoxGeometryDefinition geometry = resolveBoxGeometry(context);
-    const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
 
     QRect ruleRect = geometry.borderRect(option->rect);
 
     if (!option->text.isEmpty()) {
         ruleRect = drawMenuSectionLabel(painter, option, widget, ruleRect);
     }
+
+    drawSeparatorRule(painter, context, ruleRect);
+}
+
+void FreeCADStyle::drawSeparatorRule(
+    QPainter* painter,
+    const StyleContext& context,
+    const QRect& ruleRect
+) const
+{
+    const BoxStyleDefinition boxStyle = resolveBoxStyle(context);
 
     const int thickness = static_cast<int>(boxStyle.borderThickness.value_or(QMarginsF()).top());
     const auto color = resolve<Base::Color>(context, StyleProperty::BorderColor);

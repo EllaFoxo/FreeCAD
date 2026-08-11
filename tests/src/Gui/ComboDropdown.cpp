@@ -72,6 +72,17 @@ private:
         return view;
     }
 
+    // A separator row, marked the way QComboBox::insertSeparator() marks one: the role Qt reads
+    // it back from, and the flags that make QListView::moveCursor step over the row.
+    static void markAsSeparator(QListView& view, int row)
+    {
+        auto* model = qobject_cast<QStandardItemModel*>(view.model());
+        Q_ASSERT(model != nullptr);
+        QStandardItem* item = model->item(row);
+        item->setData(QStringLiteral("separator"), Qt::AccessibleDescriptionRole);
+        item->setFlags(item->flags() & ~(Qt::ItemIsSelectable | Qt::ItemIsEnabled));
+    }
+
     // The pointer arriving over @p spot and the left button going down on it. Routed through the
     // window rather than the widget: QTest::mouseMove's QWidget overload warps the real desktop
     // pointer via QCursor::setPos and synthesises no move at all when the cursor already sits
@@ -526,6 +537,70 @@ private Q_SLOTS:
         const auto guard = qScopeGuard([&box] { box.hidePopup(); });
 
         QCOMPARE(popupOf(box)->visualRect(box.model()->index(1, 0)).height(), 1);
+    }
+
+    // A separator row is sized by its own token, not by the row pitch and not by Qt's
+    // PM_DefaultFrameWidth. Asserted through visualRect — what the view actually laid out —
+    // because a pixelMetric() return value only proves that a token resolves, never that Qt
+    // asked for that metric.
+    void test_aSeparatorRowTakesItsHeightFromTheToken()  // NOLINT
+    {
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "9px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QFrame container;
+        QListView* view = buildAdoptedDropdown(container, style);
+        markAsSeparator(*view, 1);
+        view->doItemsLayout();
+
+        QCOMPARE(view->visualRect(view->model()->index(1, 0)).height(), 9);
+    }
+
+    // The rows around a separator keep their own pitch: a separator that changed its neighbours'
+    // height would mean the size hook is answering for rows it does not own.
+    void test_aSeparatorDoesNotResizeTheRowsAroundIt()  // NOLINT
+    {
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "9px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QFrame container;
+        QListView* view = buildAdoptedDropdown(container, style);
+        const int pitchBefore = view->visualRect(view->model()->index(0, 0)).height();
+
+        markAsSeparator(*view, 1);
+        view->doItemsLayout();
+
+        QCOMPARE(view->visualRect(view->model()->index(0, 0)).height(), pitchBefore);
+        QCOMPARE(view->visualRect(view->model()->index(2, 0)).height(), pitchBefore);
+    }
+
+    // The rule is painted, in the token's colour, inside the separator's band. Cyan because the
+    // fixture already paints the popup edge #00ff00 and the hover fill #0000ff — either would
+    // count as a hit with nothing drawn at all.
+    void test_aSeparatorRowPaintsTheTokenRule()  // NOLINT
+    {
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "9px");
+        const auto colourGuard = overrideToken("DropdownListSeparatorBorderColor", "#00ffff");
+        const auto thicknessGuard = overrideToken("DropdownListSeparatorBorderThickness", "1px");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QFrame container;
+        QListView* view = buildAdoptedDropdown(container, style);
+        markAsSeparator(*view, 1);
+        view->doItemsLayout();
+
+        const QImage canvas = renderOf(*view->viewport());
+        const QRect band = view->visualRect(view->model()->index(1, 0));
+
+        QVERIFY2(
+            pixelsOfColour(canvas, band, QColor(0x00, 0xff, 0xff)) > 0,
+            "no rule was painted in the separator's band"
+        );
+        // And nowhere else: a rule leaking into a neighbour would mean the row rect is wrong.
+        QCOMPARE(
+            pixelsOfColour(canvas, view->visualRect(view->model()->index(0, 0)), QColor(0x00, 0xff, 0xff)),
+            0
+        );
     }
 
     // A rounded scroll area is clipped to its border radius so the compositor does not show the
