@@ -73,6 +73,7 @@ protected:
 private:
     void buildModel();
     void adoptAsDropdown();
+    bool handleViewKeyPress(QKeyEvent* event);
 
     std::vector<GeometrySelectorOption> m_options;
     bool m_allowCustom;

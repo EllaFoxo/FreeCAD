@@ -69,7 +69,10 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     outerLayout->addWidget(m_view);
 
     // Keyboard reaches the view rather than the popup, so QListView's own navigation applies.
+    // setFocus() is what actually resolves through the proxy onto the view; without it the
+    // popup itself stays the focus widget and the view never sees a key.
     setFocusProxy(m_view);
+    setFocus();
 
     buildModel();
     adoptAsDropdown();
@@ -165,24 +168,31 @@ bool GeometrySelectorPopup::eventFilter(QObject* watched, QEvent* event)
         return false;
     }
 
-    if (watched == m_view && event->type() == QEvent::KeyPress) {
-        auto* key = static_cast<QKeyEvent*>(event);
-        switch (key->key()) {
-            case Qt::Key_Return:
-            case Qt::Key_Enter:
-                if (m_view->currentIndex().isValid()) {
-                    activateIndex(m_view->currentIndex().row());
-                }
-                return true;
-            case Qt::Key_Escape:
-                close();
-                return true;
-            default:
-                break;
-        }
+    if (watched == m_view && event->type() == QEvent::KeyPress
+        && handleViewKeyPress(static_cast<QKeyEvent*>(event))) {
+        return true;
     }
 
     return QFrame::eventFilter(watched, event);
+}
+
+/// Handles the keys a dropdown must answer for itself. Returns whether @p event was consumed;
+/// an unconsumed key falls back to the base class through the caller.
+bool GeometrySelectorPopup::handleViewKeyPress(QKeyEvent* event)
+{
+    switch (event->key()) {
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            if (m_view->currentIndex().isValid()) {
+                activateIndex(m_view->currentIndex().row());
+            }
+            return true;
+        case Qt::Key_Escape:
+            close();
+            return true;
+        default:
+            return false;
+    }
 }
 
 void GeometrySelectorPopup::mousePressEvent(QMouseEvent* event)

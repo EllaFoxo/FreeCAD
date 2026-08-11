@@ -475,10 +475,13 @@ private Q_SLOTS:
 
         QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
 
-        QTest::keyClick(view, Qt::Key_Down);
+        // Routed through the QWindow, not the widget directly, so real focus dispatch
+        // participates — QTest::keyClick(QWidget*, ...) delivers straight to the named widget
+        // and never consults which widget actually has focus.
+        QTest::keyClick(popup.windowHandle(), Qt::Key_Down);
         QCOMPARE(view->currentIndex().row(), 1);
 
-        QTest::keyClick(view, Qt::Key_Return);
+        QTest::keyClick(popup.windowHandle(), Qt::Key_Return);
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.takeFirst().at(0).toInt(), 1);
     }
