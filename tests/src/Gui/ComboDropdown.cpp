@@ -34,6 +34,28 @@ class TestComboDropdown: public QObject, private DropdownStyleFixture
     Q_OBJECT
 
 private:
+    // A dropdown that is not a combo box's: a bare view adopted through the public entry point,
+    // laid out and shown so its rows have real geometry to point at. Left unexposed on purpose —
+    // the caller waits for that, because only a caller can QVERIFY.
+    static QListView* buildAdoptedDropdown(QFrame& container, Gui::FreeCADStyle& style)
+    {
+        container.setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
+        auto* view = new QListView(&container);
+        auto* model = new QStandardItemModel(&container);
+        for (const QString& label :
+             {QStringLiteral("first"), QStringLiteral("second"), QStringLiteral("third")}) {
+            model->appendRow(new QStandardItem(label));
+        }
+        view->setModel(model);
+
+        style.constrainDropdown(view);
+
+        container.resize(200, 200);
+        view->resize(200, 200);
+        container.show();
+        return view;
+    }
+
     // Where the first row's box started before every row was given a leading gap: the container
     // inset and nothing else, because row 0 alone reserved no gap above itself. The change adds
     // that gap to row 0 and takes the same amount off the top inset, so this must not move.
@@ -1620,6 +1642,29 @@ private Q_SLOTS:
             canvas.pixelColor(view->visualRect(model->index(2, 0)).center()),
             QColor(0x00, 0xff, 0x00)
         );
+    }
+
+    // A dropdown nobody is touching is not pressed. Every scroll area takes QFrame::Sunken as
+    // its default shadow, and QFrame::initStyleOption reports that as State_Sunken — the same
+    // flag a button raises while it is held down. A view that reads the flag as a press
+    // therefore wears its pressed tokens permanently, whole surface included, from the moment it
+    // is built.
+    void test_anUntouchedDropdownIsNotPressed()  // NOLINT
+    {
+        // Cyan: the fixture already paints the popup's edge in green, and a colour it uses
+        // elsewhere would be counted here whether the state produced it or not.
+        const auto surfacePressed = overrideToken("DropdownListPressedBackground", "#00ffff");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+
+        QFrame container;
+        auto* view = buildAdoptedDropdown(container, style);
+        QVERIFY(QTest::qWaitForWindowExposed(&container));
+
+        // The whole view, so its frame and the surface behind the rows are both in the picture.
+        const QImage canvas = renderOf(*view);
+
+        QCOMPARE(pixelsOfColour(canvas, canvas.rect(), QColor(0x00, 0xff, 0xff)), 0);
     }
 };
 

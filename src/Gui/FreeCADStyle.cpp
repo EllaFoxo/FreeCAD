@@ -4924,18 +4924,22 @@ StyleContext FreeCADStyle::contextOf(
             context.state |= StyleState::Disabled;
         }
 
-        // State_Sunken means "button is being pressed" for buttons, but "has a sunken
-        // frame appearance" for input widgets (QLineEdit always sets it). Only map it
-        // to Pressed for button-like and item-view components to avoid masking the
-        // Focused state on inputs.
+        // State_Sunken means "button is being pressed" for buttons, but "has a sunken frame
+        // appearance" for input widgets (QLineEdit always sets it). Only map it to Pressed for
+        // button-like components to avoid masking the Focused state on inputs.
+        //
+        // Item views are not on this list, and must not be: nothing in Qt's item views sets
+        // State_Sunken on a row — only QHeaderView does, on a section — while every scroll area
+        // takes QFrame::Sunken as its default shadow and therefore reports the flag on its own
+        // frame for as long as it exists. A view named here reads as pressed permanently, whole
+        // surface included. A row's press is read from the pointer instead, in
+        // applyDropdownPressedState().
         const bool isButton = context.component == StyleComponent::PushButton
             || context.component == StyleComponent::ToolButton
             || context.component == StyleComponent::Select
             || context.component == StyleComponent::CheckBox
             || context.component == StyleComponent::RadioButton
-            || context.component == StyleComponent::Header
-            || context.component == StyleComponent::List || context.component == StyleComponent::Tree
-            || context.component == StyleComponent::DropdownList;
+            || context.component == StyleComponent::Header;
         if (isButton && (option->state & QStyle::State_Sunken)) {
             context.state |= StyleState::Pressed;
         }
