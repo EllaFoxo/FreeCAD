@@ -586,7 +586,7 @@ MenuOverlap: 0px
 # so the check column resolves against CheckBox*/RadioButton*.
 # The icon and the check indicator share one leading column, sized to the wider of MenuIconSize
 # and CheckBoxWidth: a checkable item shows its indicator, any other item shows its icon.
-MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.100, right: @Spacing.300)"
+MenuItemPadding: "padding(horizontal: @Spacing.150, vertical: @Spacing.075, right: @Spacing.300)"
 MenuItemIconSpacing: "@ListItemIconSpacing"
 MenuItemSpacing: "@Spacing.050"
 MenuItemMargin: "padding(0px)"
@@ -613,7 +613,7 @@ MenuShortcutTextColor: "@BaseDisabledTextColor"
 # uses MenuSeparatorPadding, MenuSeparatorTextColor and MenuSeparatorIconSpacing (the gap
 # between the section label and the rule that fills the rest of the row). Set
 # MenuSeparatorBorderThickness to reset() to drop the rule entirely.
-MenuSeparatorHeight: "@Spacing.200"
+MenuSeparatorHeight: "@Spacing.100"
 MenuSeparatorMargin: "padding(horizontal: @Spacing.100)"
 MenuSeparatorBorderColor: "@SeparatorColor"
 MenuSeparatorBorderThickness: "@SeparatorThickness"
