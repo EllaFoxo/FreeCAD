@@ -57,6 +57,11 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
+    // The default constraint pins this top-level widget's minimum height to the layout's — once
+    // Qt has activated it that floor never comes back down, which silently defeats the style's
+    // own trim: a capped, scrolled popup can no longer shrink to a whole number of rows and ends
+    // with a sliver of the next one showing (see FreeCADStyle::snapComboPopupToWholeRows).
+    outerLayout->setSizeConstraint(QLayout::SetNoConstraint);
 
     m_view = new QListView(this);
     m_view->setFrameShape(QFrame::NoFrame);
