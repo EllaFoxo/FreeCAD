@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <QAbstractItemModel>
 #include <QEvent>
 #include <QLayout>
+#include <QListView>
 #include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
@@ -428,21 +430,57 @@ private Q_SLOTS:
         QCOMPARE(widget.currentIndex(), 0);
     }
 
-    // The popup builds one row per option, plus a Custom row when enabled.
+    // The popup builds one row per option, plus a Custom row when enabled. Rows are model rows
+    // now, not child widgets, so the count is read off the view's model.
     void test_popupRowCount()  // NOLINT
     {
         std::vector<Gui::GeometrySelectorOption> options = {
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
             Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
         };
+
         Gui::GeometrySelectorPopup closed(options, /*allowCustom=*/false, /*currentIndex=*/-1, nullptr);
         QCOMPARE(closed.optionCount(), 2);
-        QCOMPARE(closed.findChildren<QWidget*>(QStringLiteral("gsw_option_row")).size(), 2);
-        QVERIFY(closed.findChild<QWidget*>(QStringLiteral("gsw_option_custom")) == nullptr);
+        auto* closedView = closed.findChild<QListView*>();
+        QVERIFY(closedView != nullptr);
+        QCOMPARE(closedView->model()->rowCount(), 2);
 
         Gui::GeometrySelectorPopup withCustom(options, /*allowCustom=*/true, /*currentIndex=*/-1, nullptr);
         QCOMPARE(withCustom.optionCount(), 3);
-        QVERIFY(withCustom.findChild<QWidget*>(QStringLiteral("gsw_option_custom")) != nullptr);
+        auto* customView = withCustom.findChild<QListView*>();
+        QVERIFY(customView != nullptr);
+        QCOMPARE(customView->model()->rowCount(), 3);
+        QCOMPARE(
+            customView->model()->index(2, 0).data(Qt::DisplayRole).toString(),
+            Gui::GeometrySelectorOption::customEntry().label
+        );
+    }
+
+    // Navigation and activation come from the view, so the popup must still answer the keys a
+    // dropdown answers — with no Gui::Application, and therefore no FreeCADStyle, at all.
+    void test_popupKeyboardNavigatesAndActivates()  // NOLINT
+    {
+        std::vector<Gui::GeometrySelectorOption> options = {
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge2"}),
+            Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge3"}),
+        };
+        Gui::GeometrySelectorPopup popup(options, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        popup.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&popup));
+
+        auto* view = popup.findChild<QListView*>();
+        QVERIFY(view != nullptr);
+        QCOMPARE(view->currentIndex().row(), 0);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionActivated);
+
+        QTest::keyClick(view, Qt::Key_Down);
+        QCOMPARE(view->currentIndex().row(), 1);
+
+        QTest::keyClick(view, Qt::Key_Return);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 1);
     }
 
     // Activating an index emits optionActivated with that index (Custom == options.size()).

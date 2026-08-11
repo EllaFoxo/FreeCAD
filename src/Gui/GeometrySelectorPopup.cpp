@@ -23,121 +23,17 @@
 
 #include "GeometrySelectorPopup.h"
 
-#include <functional>
-
-#include <QHBoxLayout>
+#include <QEvent>
 #include <QKeyEvent>
-#include <QLabel>
+#include <QListView>
 #include <QMouseEvent>
-#include <QPainter>
+#include <QStandardItemModel>
 #include <QVBoxLayout>
 
 #include "Application.h"
-#include "ElideLabel.h"
 #include "FreeCADStyle.h"
-#include "IconManager.h"
 
 using namespace Gui;
-
-namespace
-{
-constexpr int IconSize = 16;
-constexpr QMargins RowPadding {6, 4, 6, 4};
-constexpr int RowSpacing = 6;
-
-/// One selectable option row: icon + label, an optional trailing check for the current row,
-/// a hovered background painted through the shared List box painting, and a click callback.
-class OptionRow: public QWidget
-{
-public:
-    OptionRow(
-        const GeometrySelectorOption& option,
-        bool isCurrent,
-        std::function<void()> onActivate,
-        std::function<void()> onHover,
-        QWidget* parent
-    )
-        : QWidget(parent)
-        , m_activate(std::move(onActivate))
-        , m_hover(std::move(onHover))
-    {
-        setProperty("component", "List");
-        auto* rowLayout = new QHBoxLayout(this);
-        rowLayout->setContentsMargins(RowPadding);
-        rowLayout->setSpacing(RowSpacing);
-
-        if (!option.icon.isNull()) {
-            auto* iconLabel = new QLabel(this);
-            iconLabel->setPixmap(option.icon.pixmap(IconSize, IconSize));
-            rowLayout->addWidget(iconLabel);
-        }
-
-        auto* label = new ElideLabel(this);
-        label->setText(option.label);
-        label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        rowLayout->addWidget(label, 1);
-
-        if (isCurrent) {
-            auto* check = new QLabel(this);
-            check->setObjectName(QStringLiteral("gsw_option_check"));
-            check->setPixmap(
-                IconManager::instance()
-                    .icon(QStringLiteral(":/icons/tabler/outline/check.svg"))
-                    .pixmap(IconSize, IconSize)
-            );
-            rowLayout->addWidget(check);
-        }
-    }
-
-    void setHighlighted(bool on)
-    {
-        if (m_highlighted != on) {
-            m_highlighted = on;
-            update();
-        }
-    }
-
-protected:
-    void enterEvent(QEnterEvent* /*event*/) override
-    {
-        if (m_hover) {
-            m_hover();
-        }
-    }
-    void paintEvent(QPaintEvent* /*event*/) override
-    {
-        if (!m_highlighted || !Application::Instance) {
-            return;
-        }
-        StyleParameters::StyleContext context = FreeCADStyle::contextOf(this);
-        context.element = StyleParameters::StyleComponentElement::Row;
-        context.state |= StyleParameters::StyleState::Hovered;
-        QPainter painter(this);
-        Application::Instance->freeCADStyle()->paintBox(&painter, rect(), context);
-    }
-    void mousePressEvent(QMouseEvent* event) override
-    {
-        // Accept the press so the matching release is delivered to this row; the child
-        // labels do not accept events, so without this the release could be lost.
-        if (event->button() == Qt::LeftButton) {
-            event->accept();
-            return;
-        }
-        QWidget::mousePressEvent(event);
-    }
-    void mouseReleaseEvent(QMouseEvent* event) override
-    {
-        if (event->button() == Qt::LeftButton && m_activate) {
-            m_activate();
-        }
-    }
-
-private:
-    std::function<void()> m_activate;
-    std::function<void()> m_hover;
-    bool m_highlighted = false;
-};
-}  // namespace
 
 GeometrySelectorPopup::GeometrySelectorPopup(
     std::vector<GeometrySelectorOption> options,
@@ -145,29 +41,42 @@ GeometrySelectorPopup::GeometrySelectorPopup(
     int currentIndex,
     QWidget* parent
 )
-    : QWidget(parent, Qt::Popup)
+    : QFrame(parent, Qt::Popup)
     , m_options(std::move(options))
     , m_allowCustom(allowCustom)
     , m_currentIndex(currentIndex)
 {
     setObjectName(QStringLiteral("gsw_options_popup"));
+    // The frame style a combo popup takes, which is what routes the surface through PE_Frame
+    // and the contents inset through SE_ShapedFrameContents.
+    setFrameStyle(QFrame::StyledPanel | QFrame::Plain);
     // Any close() — Escape or an outside click — schedules deletion, so a dismissed popup
     // never lingers as a hidden child of the widget.
     setAttribute(Qt::WA_DeleteOnClose);
-    if (Application::Instance) {
-        setStyle(Application::Instance->freeCADStyle());
-    }
 
     auto* outerLayout = new QVBoxLayout(this);
     outerLayout->setContentsMargins(0, 0, 0, 0);
     outerLayout->setSpacing(0);
 
-    m_rowsLayout = new QVBoxLayout;
-    m_rowsLayout->setContentsMargins(0, 0, 0, 0);
-    m_rowsLayout->setSpacing(0);
-    outerLayout->addLayout(m_rowsLayout);
+    m_view = new QListView(this);
+    m_view->setFrameShape(QFrame::NoFrame);
+    m_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    // Qt sets no WA_Hover on an item view's viewport, so a row is only told the pointer is over
+    // it once the view sees plain moves — the same line Tree and the property editor carry.
+    m_view->viewport()->setMouseTracking(true);
+    m_view->viewport()->installEventFilter(this);
+    m_view->installEventFilter(this);
+    outerLayout->addWidget(m_view);
 
-    buildRows();
+    // Keyboard reaches the view rather than the popup, so QListView's own navigation applies.
+    setFocusProxy(m_view);
+
+    buildModel();
+    adoptAsDropdown();
+
+    connect(m_view, &QAbstractItemView::clicked, this, [this](const QModelIndex& index) {
+        activateIndex(index.row());
+    });
 }
 
 int GeometrySelectorPopup::optionCount() const
@@ -175,56 +84,64 @@ int GeometrySelectorPopup::optionCount() const
     return static_cast<int>(m_options.size()) + (m_allowCustom ? 1 : 0);
 }
 
-void GeometrySelectorPopup::buildRows()
+void GeometrySelectorPopup::buildModel()
 {
-    const auto addRow = [this](const GeometrySelectorOption& option, int index, const QString& name) {
-        auto* row = new OptionRow(
-            option,
-            /*isCurrent=*/index == m_currentIndex,
-            [this, index] { activateIndex(index); },
-            [this, index] { setHighlight(index); },
-            this
-        );
-        row->setObjectName(name);
-        m_rowsLayout->addWidget(row);
-        m_rows.push_back(row);
+    m_model = new QStandardItemModel(this);
+
+    const auto addRow = [this](const GeometrySelectorOption& option) {
+        auto* item = new QStandardItem(option.label);
+        item->setIcon(option.icon);
+        item->setEditable(false);
+        m_model->appendRow(item);
     };
 
-    for (std::size_t index = 0; index < m_options.size(); ++index) {
-        addRow(m_options[index], static_cast<int>(index), QStringLiteral("gsw_option_row"));
+    for (const GeometrySelectorOption& option : m_options) {
+        addRow(option);
     }
     if (m_allowCustom) {
-        addRow(
-            GeometrySelectorOption::customEntry(),
-            static_cast<int>(m_options.size()),
-            QStringLiteral("gsw_option_custom")
-        );
+        addRow(GeometrySelectorOption::customEntry());
+    }
+
+    m_view->setModel(m_model);
+
+    // Selects as well as moves the cursor, which is what paints the chosen entry and what the
+    // "current" placement measures its offset from.
+    if (m_currentIndex >= 0 && m_currentIndex < m_model->rowCount()) {
+        m_view->setCurrentIndex(m_model->index(m_currentIndex, 0));
     }
 }
 
-void GeometrySelectorPopup::setHighlight(int index)
+void GeometrySelectorPopup::adoptAsDropdown()
 {
-    if (index < 0 || index >= static_cast<int>(m_rows.size())) {
-        return;
+    if (!Application::Instance) {
+        return;  // headless: the popup still builds, navigates and activates
     }
-    if (m_highlight >= 0 && m_highlight < static_cast<int>(m_rows.size())) {
-        static_cast<OptionRow*>(m_rows[m_highlight])->setHighlighted(false);
-    }
-    m_highlight = index;
-    static_cast<OptionRow*>(m_rows[index])->setHighlighted(true);
+    FreeCADStyle* style = Application::Instance->freeCADStyle();
+    setStyle(style);
+    style->constrainDropdown(m_view, m_currentIndex);
 }
 
-void GeometrySelectorPopup::moveHighlight(int delta)
+QSize GeometrySelectorPopup::sizeHint() const
 {
-    const int count = optionCount();
-    if (count == 0) {
-        return;
+    // Adding the view to the layout activates it, and an activating layout asks for this before
+    // the model exists.
+    if (!m_model) {
+        return QFrame::sizeHint();
     }
-    int start = m_highlight;
-    if (start < 0) {
-        start = (delta > 0) ? -1 : count;
+
+    // QListView reports a fixed default extent, so the popup measures its own rows instead.
+    // The frame's margins are the styled inset QFrame derives from SE_ShapedFrameContents.
+    const QMargins frame = contentsMargins();
+
+    int rowsHeight = 0;
+    for (int row = 0; row < m_model->rowCount(); ++row) {
+        rowsHeight += m_view->sizeHintForRow(row);
     }
-    setHighlight((start + delta + count) % count);
+
+    return {
+        m_view->sizeHintForColumn(0) + frame.left() + frame.right(),
+        rowsHeight + frame.top() + frame.bottom()
+    };
 }
 
 void GeometrySelectorPopup::activateIndex(int index)
@@ -235,27 +152,37 @@ void GeometrySelectorPopup::activateIndex(int index)
     Q_EMIT optionActivated(index);
 }
 
-void GeometrySelectorPopup::keyPressEvent(QKeyEvent* event)
+bool GeometrySelectorPopup::eventFilter(QObject* watched, QEvent* event)
 {
-    switch (event->key()) {
-        case Qt::Key_Down:
-            moveHighlight(1);
-            return;
-        case Qt::Key_Up:
-            moveHighlight(-1);
-            return;
-        case Qt::Key_Return:
-        case Qt::Key_Enter:
-            if (m_highlight >= 0) {
-                activateIndex(m_highlight);
-            }
-            return;
-        case Qt::Key_Escape:
-            close();
-            return;
-        default:
-            QWidget::keyPressEvent(event);
+    if (watched == m_view->viewport() && event->type() == QEvent::MouseMove) {
+        // The row under the pointer becomes the cursor, so Enter picks what the pointer is on —
+        // the behaviour QComboBoxPrivateContainer gives a combo box's popup.
+        const auto* move = static_cast<QMouseEvent*>(event);
+        const QModelIndex under = m_view->indexAt(move->position().toPoint());
+        if (under.isValid()) {
+            m_view->setCurrentIndex(under);
+        }
+        return false;
     }
+
+    if (watched == m_view && event->type() == QEvent::KeyPress) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        switch (key->key()) {
+            case Qt::Key_Return:
+            case Qt::Key_Enter:
+                if (m_view->currentIndex().isValid()) {
+                    activateIndex(m_view->currentIndex().row());
+                }
+                return true;
+            case Qt::Key_Escape:
+                close();
+                return true;
+            default:
+                break;
+        }
+    }
+
+    return QFrame::eventFilter(watched, event);
 }
 
 void GeometrySelectorPopup::mousePressEvent(QMouseEvent* event)
@@ -266,5 +193,5 @@ void GeometrySelectorPopup::mousePressEvent(QMouseEvent* event)
         close();
         return;
     }
-    QWidget::mousePressEvent(event);
+    QFrame::mousePressEvent(event);
 }

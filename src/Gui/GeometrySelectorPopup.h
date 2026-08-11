@@ -25,24 +25,25 @@
 
 #include <vector>
 
-#include <QWidget>
+#include <QFrame>
 
 #include <FCGlobal.h>
 
 #include "GeometrySelectorWidget.h"  // GeometrySelectorOption
 
-class QVBoxLayout;
+class QListView;
+class QStandardItemModel;
 
 namespace Gui
 {
 
 /**
- * The geometry selector's dropdown: one selectable row per predefined option, painted
- * through the List token chain, with an optional trailing "Custom…" row. A top-level
- * Qt::Popup positioned under the control by the caller. Emits optionActivated(index) on
- * mouse click or keyboard activation; the Custom entry is the last index (== options.size()).
+ * The geometry selector's dropdown: one selectable row per predefined option, with an optional
+ * trailing "Custom…" row, painted and placed as any other dropdown. A top-level Qt::Popup
+ * positioned under the control by the caller. Emits optionActivated(index) on mouse click or
+ * keyboard activation; the Custom entry is the last index (== options.size()).
  */
-class GuiExport GeometrySelectorPopup: public QWidget
+class GuiExport GeometrySelectorPopup: public QFrame
 {
     Q_OBJECT
 
@@ -59,24 +60,25 @@ public:
     /// Validates @p index and emits optionActivated; ignored when out of range.
     void activateIndex(int index);
 
+    /// The extent every row needs, so a caller can size the popup before showing it.
+    QSize sizeHint() const override;
+
 Q_SIGNALS:
     void optionActivated(int index);
 
 protected:
-    void keyPressEvent(QKeyEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
 
 private:
-    void buildRows();
-    void setHighlight(int index);
-    void moveHighlight(int delta);
+    void buildModel();
+    void adoptAsDropdown();
 
     std::vector<GeometrySelectorOption> m_options;
     bool m_allowCustom;
     int m_currentIndex;
-    int m_highlight = -1;
-    QVBoxLayout* m_rowsLayout = nullptr;
-    std::vector<QWidget*> m_rows;
+    QListView* m_view = nullptr;
+    QStandardItemModel* m_model = nullptr;
 };
 
 }  // namespace Gui
