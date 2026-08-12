@@ -32,6 +32,8 @@
 #include <QVariant>
 #include <QWidget>
 
+#include <fastsignals/signal.h>
+
 #include <FCGlobal.h>
 
 #include "GeometrySelection.h"
@@ -81,6 +83,7 @@ class GuiExport GeometrySelectorWidget: public QWidget
 {
     Q_OBJECT
     Q_PROPERTY(Gui::GeometryQuantity quantity READ quantity WRITE setQuantity)
+    Q_PROPERTY(int historyLength READ historyLength WRITE setHistoryLength)
 
 public:
     explicit GeometrySelectorWidget(GeometryQuantity mode, QWidget* parent = nullptr);
@@ -115,6 +118,13 @@ public:
     QString currentText() const;
     /// The current predefined option, or nullptr at the Custom index / when nothing is current.
     const GeometrySelectorOption* currentOption() const;
+
+    /// How many recent custom picks the dropdown offers between the predefined options and the
+    /// Custom entry. Defaults to the user's preference; 0 leaves the group out entirely.
+    int historyLength() const;
+    void setHistoryLength(int length);
+    /// How many picks are currently remembered.
+    int historySize() const;
 
     /// The rendered states, derived from references + session + current combo option.
     enum class VisualState
@@ -183,6 +193,29 @@ private:
     /// True while setCurrentIndex is applying references, so the referencesChanged reaction
     /// does not clobber the just-set index.
     bool m_applyingChoice = false;
+
+    /// Remembers the reference set a finished picking session produced, unless it is one the
+    /// dropdown already offers.
+    void captureHistoryEntry();
+    /// Drops every remembered pick that names @p deleted, so a dead object is never dereferenced
+    /// when the dropdown is built.
+    void forgetHistoryFor(const App::DocumentObject* deleted);
+    /// Drops the entries beyond the configured length.
+    void truncateHistory();
+    /// Pulls the current index back into range, emitting when it had to move.
+    void clampCurrentIndex();
+    /// The last index a caller may set: the Custom entry, or the final remembered pick.
+    int lastValidIndex() const;
+    /// The offset into the history that @p index names, or -1 when it names something else.
+    int historyOffsetOf(int index) const;
+
+    /// Recent custom picks, most recent first. Never holds a set a predefined option stands for.
+    std::vector<GeometrySelectorOption> m_history;
+    /// References held when the current picking session began, so a cancelled session — which
+    /// restores them — is told apart from one that picked something.
+    std::vector<GeometryReference> m_referencesAtSessionStart;
+    int m_historyLength;
+    fastsignals::scoped_connection m_objectDeletedConnection;
 
     /// Primary activation for a click on the frame/rows/prompt: opens the options popup in
     /// combo mode, otherwise starts a free-pick session (the pre-combo behaviour).

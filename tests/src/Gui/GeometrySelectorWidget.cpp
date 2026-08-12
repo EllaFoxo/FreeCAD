@@ -4,6 +4,7 @@
 #include <QEvent>
 #include <QLayout>
 #include <QListView>
+#include <QScopeGuard>
 #include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
@@ -12,6 +13,7 @@
 #include <App/Application.h>
 #include <App/Document.h>
 #include <App/DocumentObject.h>
+#include <Base/Parameter.h>
 
 #include <Gui/GeometrySelectorPopup.h>
 #include <Gui/GeometrySelectorWidget.h>
@@ -673,7 +675,285 @@ private Q_SLOTS:
         selection.stopSelecting();
     }
 
+    // A finished pick is remembered, and lands at the front of the group — the first index after
+    // the predefined options.
+    void test_aFinishedCustomPickIsRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.historySize(), 1);
+        QCOMPARE(widget.currentIndex(), 2);
+        QCOMPARE(widget.currentText(), labelOf("Edge1"));
+    }
+
+    // A cancelled session restores what it started from, so there is nothing new to remember.
+    void test_aCancelledPickIsNotRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        widget.selection()->cancelSelecting();
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.historySize(), 0);
+    }
+
+    // A cancel that starts and ends on an existing, unlisted selection (not merely on nothing)
+    // must be recognised the same way: by comparing the session's end state to its start, not by
+    // asking whether either happens to be empty.
+    void test_aCancelledPickFromAnExistingSelectionIsNotRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge2"}});
+        widget.selection()->cancelSelecting();
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.historySize(), 0);
+    }
+
+    // A pick a predefined option already stands for is on screen above; remembering it would
+    // offer the same choice twice.
+    void test_aPickMatchingAPredefinedOptionIsNotRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(
+            {Gui::GeometrySelectorOption::fromReference({.object = m_object, .subName = "Edge1"})}
+        );
+        widget.setAllowCustom(true);
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.historySize(), 0);
+    }
+
+    // Picking the same thing twice moves its entry rather than adding a second one.
+    void test_repeatingAPickMovesItToTheFront()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+
+        pick(widget, "Edge1");
+        pick(widget, "Edge2");
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.historySize(), 2);
+        widget.setCurrentIndex(1);
+        QCOMPARE(widget.currentText(), labelOf("Edge1"));
+        widget.setCurrentIndex(2);
+        QCOMPARE(widget.currentText(), labelOf("Edge2"));
+    }
+
+    // The oldest entry falls off the end.
+    void test_historyIsTruncatedToItsLength()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        widget.setHistoryLength(2);
+
+        pick(widget, "Edge1");
+        pick(widget, "Edge2");
+        pick(widget, "Edge3");
+
+        QCOMPARE(widget.historySize(), 2);
+        widget.setCurrentIndex(1);
+        QCOMPARE(widget.currentText(), labelOf("Edge3"));
+        widget.setCurrentIndex(2);
+        QCOMPARE(widget.currentText(), labelOf("Edge2"));
+    }
+
+    // Zero disables the group outright: nothing is remembered and Custom keeps its old index.
+    void test_aZeroLengthDisablesHistory()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        widget.setHistoryLength(0);
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.historySize(), 0);
+        QCOMPARE(widget.currentIndex(), 2);  // the Custom index, unmoved
+    }
+
+    // A remembered pick is not a predefined option, and a caller that reads currentOption() to
+    // decide a mode must see that: TaskTransform maps a null option to its Custom mode, and an
+    // entry with empty userData would otherwise decode as the first enumerator.
+    void test_currentOptionIsNullAtAHistoryIndex()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.currentIndex(), 2);
+        QVERIFY(widget.currentOption() == nullptr);
+        QVERIFY(!widget.currentData().isValid());
+    }
+
+    // Choosing a remembered pick applies its references without reopening a picking session.
+    void test_choosingARememberedPickAppliesItWithoutSelecting()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        pick(widget, "Edge1");
+
+        widget.setCurrentIndex(0);
+        QCOMPARE(widget.selection()->references().size(), std::size_t {0});
+
+        widget.setCurrentIndex(2);
+
+        QVERIFY(!widget.selection()->isSelecting());
+        QCOMPARE(widget.selection()->references().size(), std::size_t {1});
+        QCOMPARE(widget.selection()->references().front().subName, std::string("Edge1"));
+    }
+
+    // Deleting the object a remembered pick names drops the entry, so building the dropdown never
+    // reaches through a dangling pointer.
+    void test_deletingAnObjectForgetsThePicksThatNameIt()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        App::DocumentObject* second = m_doc->addObject("App::FeatureTest", "OtherObj");
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = second, .subName = "Edge1"}});
+        widget.selection()->stopSelecting();
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.historySize(), 1);
+
+        m_doc->removeObject("OtherObj");
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.historySize(), 0);
+        QVERIFY(widget.currentIndex() <= 2);
+    }
+
+    // Deleting the object behind one history entry can shift a different, still-selected entry
+    // into its place; the current index must follow that shift by re-deriving from the
+    // unaffected references, not merely fall back to Custom because the old index happens to
+    // still be in range.
+    void test_deletingAnObjectShiftsTheSurvivingSelectionsIndex()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        App::DocumentObject* second = m_doc->addObject("App::FeatureTest", "SecondObj");
+        App::DocumentObject* third = m_doc->addObject("App::FeatureTest", "ThirdObj");
+
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = second, .subName = "Edge1"}});
+        widget.selection()->stopSelecting();
+        QCoreApplication::processEvents();
+
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = third, .subName = "Edge1"}});
+        widget.selection()->stopSelecting();
+        QCoreApplication::processEvents();
+
+        // history is now [third, second]; select the older, surviving entry explicitly.
+        widget.setCurrentIndex(3);
+        QCOMPARE(widget.selection()->references().front().object, second);
+
+        m_doc->removeObject("ThirdObj");
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.historySize(), 1);
+        QCOMPARE(widget.currentIndex(), 2);  // the surviving entry moved to the front
+    }
+
+    // The length a selector starts with comes from the user's preference, so one setting reaches
+    // every selector without a caller doing anything.
+    void test_theLengthDefaultsToThePreference()  // NOLINT
+    {
+        ParameterGrp::handle group = App::GetApplication().GetParameterGroupByPath(
+            "User parameter:BaseApp/Preferences/Selection"
+        );
+        const long previous = group->GetInt("GeometrySelectorHistoryLength", 5);
+        const auto guard = qScopeGuard([group, previous] {
+            group->SetInt("GeometrySelectorHistoryLength", previous);
+        });
+        group->SetInt("GeometrySelectorHistoryLength", 2);
+
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+
+        QCOMPARE(widget.historyLength(), 2);
+    }
+
+    // Shrinking the length below the current index cannot leave that index pointing past the end.
+    void test_shrinkingTheLengthPullsTheIndexBack()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        widget.setHistoryLength(3);
+        pick(widget, "Edge1");
+        pick(widget, "Edge2");
+        pick(widget, "Edge3");
+        widget.setCurrentIndex(3);  // the oldest remembered pick
+
+        widget.setHistoryLength(1);
+
+        QCOMPARE(widget.historySize(), 1);
+        QVERIFY(widget.currentIndex() <= widget.historySize() + 1);
+        // Pinned exactly: pulled all the way back to the Custom entry, not merely to some index
+        // that happens to still be in range.
+        QCOMPARE(widget.currentIndex(), widget.historySize() + 1);
+    }
+
 private:
+    // Predefined options that carry no geometry, the way TaskTransform's do: their meaning is in
+    // userData, so none of them can ever match a picked reference set.
+    std::vector<Gui::GeometrySelectorOption> logicalOptions(int count) const
+    {
+        std::vector<Gui::GeometrySelectorOption> options;
+        for (int index = 0; index < count; ++index) {
+            options.push_back({
+                .icon = {},
+                .label = QStringLiteral("Logical %1").arg(index),
+                .references = {},
+                .userData = index,
+            });
+        }
+        return options;
+    }
+
+    // One complete pick: a session that ends holding @p subName.
+    void pick(Gui::GeometrySelectorWidget& widget, const char* subName) const
+    {
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = m_object, .subName = subName}});
+        widget.selection()->stopSelecting();
+        QCoreApplication::processEvents();
+    }
+
+    // The label the widget derives for a reference, asked for the same way it derives it, so the
+    // assertion pins the entry rather than a hardcoded naming scheme.
+    QString labelOf(const char* subName) const
+    {
+        return Gui::GeometrySelectorOption::fromReferences(
+                   {{.object = m_object, .subName = subName}}
+        ).label;
+    }
+
     std::string m_docName;
     App::Document* m_doc = nullptr;
     App::DocumentObject* m_object = nullptr;

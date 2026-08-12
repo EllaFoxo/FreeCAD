@@ -26,8 +26,11 @@
 #include <algorithm>
 #include <fstream>
 #include <functional>
+#include <ranges>
 
+#include <App/Application.h>
 #include <Base/Console.h>
+#include <Base/Parameter.h>
 
 #include <QCoreApplication>
 #include <QEnterEvent>
@@ -100,6 +103,15 @@ bool referencesEqualAsSet(
     return std::ranges::is_permutation(left, right);
 }
 
+/// The number of picks a selector remembers unless a caller says otherwise.
+int defaultHistoryLength()
+{
+    const ParameterGrp::handle group = App::GetApplication().GetParameterGroupByPath(
+        "User parameter:BaseApp/Preferences/Selection"
+    );
+    return static_cast<int>(group->GetInt("GeometrySelectorHistoryLength", 5));
+}
+
 /// A compact, flat (auto-raise) icon button styled by the ambient QStyle.
 QToolButton* makeActionButton(QWidget* parent, const QIcon& icon)
 {
@@ -145,6 +157,7 @@ QToolButton* makeInternalTextButton(QWidget* parent, const QString& text, bool p
 
 GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* parent)
     : QWidget(parent)
+    , m_historyLength {defaultHistoryLength()}
     , m_selection(new GeometrySelection(mode, this))
     , m_contentLayout(nullptr)
 {
@@ -169,6 +182,22 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
         &GeometrySelection::referencesChanged,
         this,
         &GeometrySelectorWidget::reconcileIndexFromReferences
+    );
+    // Captured on the way in and compared on the way out: cancelSelecting() restores what the
+    // session started from, so an unchanged set is how a cancel is recognised.
+    connect(m_selection, &GeometrySelection::selectionModeEntered, this, [this] {
+        m_referencesAtSessionStart = m_selection->references();
+    });
+    connect(
+        m_selection,
+        &GeometrySelection::selectionModeExited,
+        this,
+        &GeometrySelectorWidget::captureHistoryEntry
+    );
+    // A remembered pick outlives the object it names. Nothing else prunes it, and building the
+    // dropdown reads the object for its icon and label.
+    m_objectDeletedConnection = App::GetApplication().signalDeletedObject.connect(
+        [this](const App::DocumentObject& deleted) { forgetHistoryFor(&deleted); }
     );
     // React to model changes — every signal simply rebuilds the visible rows.
     connect(m_selection, &GeometrySelection::referencesChanged, this, &GeometrySelectorWidget::rebuildRows);
@@ -250,7 +279,7 @@ bool GeometrySelectorWidget::isComboMode() const
 
 int GeometrySelectorWidget::customIndex() const
 {
-    return m_allowCustom ? static_cast<int>(m_options.size()) : -1;
+    return m_allowCustom ? static_cast<int>(m_options.size() + m_history.size()) : -1;
 }
 
 bool GeometrySelectorWidget::isCustomIndex(int index) const
@@ -265,10 +294,9 @@ int GeometrySelectorWidget::currentIndex() const
 
 void GeometrySelectorWidget::setCurrentIndex(int index)
 {
-    // Ignore out-of-range indices (QComboBox-like). Valid: -1, any predefined option, and the
-    // Custom index only when Custom is enabled.
-    const int lastValid = m_allowCustom ? customIndex() : static_cast<int>(m_options.size()) - 1;
-    if (index < -1 || index > lastValid) {
+    // Ignore out-of-range indices (QComboBox-like). Valid: -1, any predefined option, any
+    // remembered pick, and the Custom index only when Custom is enabled.
+    if (index < -1 || index > lastValidIndex()) {
         return;
     }
     if (index == m_currentIndex) {
@@ -283,6 +311,10 @@ void GeometrySelectorWidget::setCurrentIndex(int index)
     }
     else if (index >= 0 && index < static_cast<int>(m_options.size())) {
         m_selection->setReferences(m_options[index].references);
+    }
+    else if (const int offset = historyOffsetOf(index); offset >= 0) {
+        // A remembered pick is a finished one: apply it, never restart the session it came from.
+        m_selection->setReferences(m_history[offset].references);
     }
     m_applyingChoice = false;
 
@@ -305,6 +337,9 @@ QString GeometrySelectorWidget::currentText() const
 {
     if (m_currentIndex >= 0 && m_currentIndex < static_cast<int>(m_options.size())) {
         return m_options[m_currentIndex].label;
+    }
+    if (const int offset = historyOffsetOf(m_currentIndex); offset >= 0) {
+        return m_history[offset].label;
     }
     if (isCustomIndex(m_currentIndex)) {
         return GeometrySelectorOption::customEntry().label;
@@ -338,6 +373,14 @@ void GeometrySelectorWidget::reconcileIndexFromReferences()
         }
     }
     if (resolved < 0) {
+        for (std::size_t entry = 0; entry < m_history.size(); ++entry) {
+            if (referencesEqualAsSet(m_history[entry].references, references)) {
+                resolved = static_cast<int>(m_options.size() + entry);
+                break;
+            }
+        }
+    }
+    if (resolved < 0) {
         resolved = m_allowCustom ? customIndex() : m_currentIndex;
     }
 
@@ -345,6 +388,108 @@ void GeometrySelectorWidget::reconcileIndexFromReferences()
         m_currentIndex = resolved;
         Q_EMIT currentIndexChanged(resolved);
     }
+}
+
+int GeometrySelectorWidget::historyLength() const
+{
+    return m_historyLength;
+}
+
+void GeometrySelectorWidget::setHistoryLength(int length)
+{
+    const int clamped = std::max(0, length);
+    if (clamped == m_historyLength) {
+        return;
+    }
+    m_historyLength = clamped;
+    truncateHistory();
+    clampCurrentIndex();
+    rebuildRows();
+}
+
+int GeometrySelectorWidget::historySize() const
+{
+    return static_cast<int>(m_history.size());
+}
+
+void GeometrySelectorWidget::captureHistoryEntry()
+{
+    if (!isComboMode() || m_historyLength <= 0) {
+        return;
+    }
+
+    const std::vector<GeometryReference> picked = m_selection->references();
+    if (picked.empty() || referencesEqualAsSet(picked, m_referencesAtSessionStart)) {
+        return;
+    }
+    const auto standsForPicked = [&picked](const GeometrySelectorOption& option) {
+        return referencesEqualAsSet(option.references, picked);
+    };
+    if (std::ranges::any_of(m_options, standsForPicked)) {
+        return;
+    }
+
+    std::erase_if(m_history, standsForPicked);
+    m_history.insert(m_history.begin(), GeometrySelectorOption::fromReferences(picked));
+    truncateHistory();
+
+    // Set rather than applied: the references are already in place, and setCurrentIndex would
+    // put them there again — and restart the pick if the index it replaced was Custom.
+    m_currentIndex = static_cast<int>(m_options.size());
+    Q_EMIT currentIndexChanged(m_currentIndex);
+}
+
+void GeometrySelectorWidget::forgetHistoryFor(const App::DocumentObject* deleted)
+{
+    const std::size_t before = m_history.size();
+    std::erase_if(m_history, [deleted](const GeometrySelectorOption& entry) {
+        return std::ranges::any_of(entry.references, [deleted](const GeometryReference& reference) {
+            return reference.object == deleted;
+        });
+    });
+    if (m_history.size() == before) {
+        return;
+    }
+
+    // Re-derived rather than shifted: an entry that survived may have moved, and the references
+    // are what says which one is current. Comparison only — nothing here reads through a
+    // reference's object, which is what makes it safe to run from a deletion.
+    reconcileIndexFromReferences();
+    clampCurrentIndex();
+    // Deliberately no rebuildRows(). The visible rows come from the selection's own references,
+    // which this does not touch, and the dropdown is built fresh every time it opens — so there
+    // is nothing to redraw. Rebuilding would instead re-read the references through the object
+    // being deleted: App::Document emits this signal before the object is freed, so the read
+    // would happen to work here and dangle everywhere else.
+}
+
+void GeometrySelectorWidget::truncateHistory()
+{
+    const auto limit = static_cast<std::size_t>(std::max(0, m_historyLength));
+    if (m_history.size() > limit) {
+        m_history.resize(limit);
+    }
+}
+
+void GeometrySelectorWidget::clampCurrentIndex()
+{
+    if (m_currentIndex <= lastValidIndex()) {
+        return;
+    }
+    m_currentIndex = m_allowCustom ? customIndex() : -1;
+    Q_EMIT currentIndexChanged(m_currentIndex);
+}
+
+int GeometrySelectorWidget::lastValidIndex() const
+{
+    return m_allowCustom ? customIndex() : static_cast<int>(m_options.size() + m_history.size()) - 1;
+}
+
+int GeometrySelectorWidget::historyOffsetOf(int index) const
+{
+    const int first = static_cast<int>(m_options.size());
+    const int offset = index - first;
+    return offset >= 0 && offset < historySize() ? offset : -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,7 +599,7 @@ void GeometrySelectorWidget::activatePrimary()
 
 void GeometrySelectorWidget::openOptionsPopup()
 {
-    auto* popup = new GeometrySelectorPopup(m_options, {}, m_allowCustom, m_currentIndex, this);
+    auto* popup = new GeometrySelectorPopup(m_options, m_history, m_allowCustom, m_currentIndex, this);
     // Resized rather than fixed: the style widens a popup that grew a scroll bar, and trims one
     // whose last row is partly cut off, and a fixed width or height blocks both.
     popup->resize(width(), popup->sizeHint().height());
