@@ -249,13 +249,17 @@ void GeometrySelection::cancelSelecting()
     if (!_selecting) {
         return;
     }
-    // Restored before the session ends, so selectionModeExited() always observes the references
-    // the session started from — the only way a listener can tell a cancel from a finished pick
-    // without a second signal.
+    // Set for the duration of stopSelecting() below, so its selectionModeExited emission lets a
+    // listener ask wasCancelled() directly. The references are restored only after: stopSelecting()
+    // is what detaches the selection observer and removes the gate, and doing that unwind before
+    // mutating _references keeps a recompute triggered by the restore from re-entering
+    // onSelectionChanged() while the session still looks armed.
+    _cancelling = true;
+    stopSelecting();
+    _cancelling = false;
     if (_references != _referencesBeforeSelecting) {
         updateReferences(_referencesBeforeSelecting);
     }
-    stopSelecting();
 }
 
 bool GeometrySelection::appendRequested() const

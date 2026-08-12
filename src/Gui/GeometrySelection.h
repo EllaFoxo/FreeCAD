@@ -97,6 +97,13 @@ public:
     {
         return _selecting;
     }
+    /// True for the duration of a cancelSelecting() call, so a selectionModeExited listener can
+    /// tell a cancelled session from a finished one directly, without inferring it from whether
+    /// the references changed.
+    bool wasCancelled() const
+    {
+        return _cancelling;
+    }
 
     void bind(App::Property& prop);
     void unbind();
@@ -144,6 +151,8 @@ private:
     bool _selecting = false;
     /// References captured at startSelecting(), restored by cancelSelecting().
     std::vector<GeometryReference> _referencesBeforeSelecting;
+    /// True only while cancelSelecting() is unwinding the session; backs wasCancelled().
+    bool _cancelling = false;
 
     /// Mirrors the current references into the 3D selection so they appear picked
     /// and can be toggled off with Ctrl (AllowMultiple only).
