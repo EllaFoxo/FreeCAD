@@ -15,6 +15,7 @@
 #include <App/DocumentObject.h>
 #include <Base/Parameter.h>
 
+#include <Gui/GeometryHighlighter.h>
 #include <Gui/GeometrySelectorPopup.h>
 #include <Gui/GeometrySelectorWidget.h>
 
@@ -974,6 +975,115 @@ private Q_SLOTS:
         // Pulled all the way back to the Custom entry, not merely to some index that happens to
         // still be in range.
         QCOMPARE(widget.currentIndex(), widget.historySize() + 1);
+    }
+
+    // A predefined option that carries geometry offers it for preview.
+    void test_hoveringAPredefinedOptionHighlightsItsReferences()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({{
+            .icon = {},
+            .label = QStringLiteral("Top face"),
+            .references = {{.object = m_object, .subName = "Face1"}},
+            .userData = {},
+        }});
+
+        widget.hoverOption(0);
+
+        const auto hovered = widget.selection()->highlighter()->model().effective(
+            Gui::HighlightRole::Hovered
+        );
+        QCOMPARE(static_cast<int>(hovered.size()), 1);
+        QCOMPARE(QString::fromStdString(hovered.front().subName), QStringLiteral("Face1"));
+    }
+
+    // A remembered pick is a real pick, so it previews like one.
+    void test_hoveringAHistoryEntryHighlightsItsReferences()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        widget.setHistoryLength(3);
+        pick(widget, "Edge7");
+
+        widget.hoverOption(2);  // first history slot: 2 predefined options precede it
+
+        const auto hovered = widget.selection()->highlighter()->model().effective(
+            Gui::HighlightRole::Hovered
+        );
+        QCOMPARE(static_cast<int>(hovered.size()), 1);
+        QCOMPARE(QString::fromStdString(hovered.front().subName), QStringLiteral("Edge7"));
+    }
+
+    // The Custom entry stands for a gesture, not for geometry.
+    void test_hoveringTheCustomEntryHighlightsNothing()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({{
+            .icon = {},
+            .label = QStringLiteral("Top face"),
+            .references = {{.object = m_object, .subName = "Face1"}},
+            .userData = {},
+        }});
+        widget.setAllowCustom(true);
+        widget.hoverOption(0);
+
+        widget.hoverOption(1);  // the Custom entry
+
+        QVERIFY(
+            widget.selection()->highlighter()->model().effective(Gui::HighlightRole::Hovered).empty()
+        );
+    }
+
+    // A logical option — "Document origin" and friends — carries no geometry either.
+    void test_hoveringAnOptionWithNoGeometryHighlightsNothing()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+
+        widget.hoverOption(1);
+
+        QVERIFY(
+            widget.selection()->highlighter()->model().effective(Gui::HighlightRole::Hovered).empty()
+        );
+    }
+
+    // -1 is what the popup sends on leave, on hide and over a rule.
+    void test_hoveringNothingWithdrawsTheHighlight()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions({{
+            .icon = {},
+            .label = QStringLiteral("Top face"),
+            .references = {{.object = m_object, .subName = "Face1"}},
+            .userData = {},
+        }});
+        widget.hoverOption(0);
+        QCOMPARE(
+            static_cast<int>(
+                widget.selection()->highlighter()->model().effective(Gui::HighlightRole::Hovered).size()
+            ),
+            1
+        );
+
+        widget.hoverOption(-1);
+
+        QVERIFY(
+            widget.selection()->highlighter()->model().effective(Gui::HighlightRole::Hovered).empty()
+        );
+    }
+
+    // An index past the end must not read off the end of either vector.
+    void test_hoveringAnOutOfRangeIndexHighlightsNothing()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+
+        widget.hoverOption(99);
+
+        QVERIFY(
+            widget.selection()->highlighter()->model().effective(Gui::HighlightRole::Hovered).empty()
+        );
     }
 
 private:

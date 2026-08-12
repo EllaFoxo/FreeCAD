@@ -503,6 +503,23 @@ int GeometrySelectorWidget::historyOffsetOf(int index) const
     return offset >= 0 && offset < historySize() ? offset : -1;
 }
 
+std::vector<GeometryReference> GeometrySelectorWidget::referencesForIndex(int index) const
+{
+    if (index >= 0 && index < static_cast<int>(m_options.size())) {
+        return m_options[index].references;
+    }
+    if (const int offset = historyOffsetOf(index); offset >= 0) {
+        return m_history[offset].references;
+    }
+    // The Custom entry, -1, and anything past the end alike: nothing to preview.
+    return {};
+}
+
+void GeometrySelectorWidget::hoverOption(int index)
+{
+    m_selection->setHoveredReferences(referencesForIndex(index));
+}
+
 // ---------------------------------------------------------------------------
 // Painting — frame drawn via ambient QStyle so every theme works.
 // ---------------------------------------------------------------------------
@@ -620,6 +637,7 @@ void GeometrySelectorWidget::openOptionsPopup()
         onOptionActivated(index);
         popup->close();  // WA_DeleteOnClose frees the popup; also the outside-click/Escape path
     });
+    connect(popup, &GeometrySelectorPopup::optionHovered, this, &GeometrySelectorWidget::hoverOption);
     popup->show();
 }
 

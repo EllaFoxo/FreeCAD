@@ -131,6 +131,11 @@ public:
     /// How many picks are currently remembered.
     int historySize() const;
 
+    /// Previews the geometry at dropdown index @p index in the 3D view, or withdraws the
+    /// preview when @p index names nothing — -1, the Custom entry, an option that carries no
+    /// geometry, or an index out of range.
+    void hoverOption(int index);
+
     /// The rendered states, derived from references + session + current combo option.
     enum class VisualState
     {
@@ -213,6 +218,8 @@ private:
     int lastValidIndex() const;
     /// The offset into the history that @p index names, or -1 when it names something else.
     int historyOffsetOf(int index) const;
+    /// The references dropdown index @p index stands for; empty when it stands for none.
+    std::vector<GeometryReference> referencesForIndex(int index) const;
 
     /// Recent custom picks, most recent first. A pick matching a predefined option is filtered
     /// out when it would be captured; an option added afterwards via setOptions()/addOption()
