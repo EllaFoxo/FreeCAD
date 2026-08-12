@@ -249,10 +249,13 @@ void GeometrySelection::cancelSelecting()
     if (!_selecting) {
         return;
     }
-    stopSelecting();
+    // Restored before the session ends, so selectionModeExited() always observes the references
+    // the session started from — the only way a listener can tell a cancel from a finished pick
+    // without a second signal.
     if (_references != _referencesBeforeSelecting) {
         updateReferences(_referencesBeforeSelecting);
     }
+    stopSelecting();
 }
 
 bool GeometrySelection::appendRequested() const

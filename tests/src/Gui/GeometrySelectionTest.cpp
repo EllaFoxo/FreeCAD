@@ -211,6 +211,25 @@ TEST_F(GeometrySelectionTest, cancelSelectingRestoresPreviousReference)
     EXPECT_FALSE(selection.isSelecting());
 }
 
+TEST_F(GeometrySelectionTest, cancelSelectingRestoresReferencesBeforeEmittingExited)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.startSelecting();
+    selection.setReferences({{.object = _objectA, .subName = "Edge1"}});
+
+    std::vector<GeometryReference> referencesAtExit;
+    QObject::connect(&selection, &GeometrySelection::selectionModeExited, [&] {
+        referencesAtExit = selection.references();
+    });
+
+    selection.cancelSelecting();
+
+    // selectionModeExited must observe the already-restored (empty) references, not the ones the
+    // session was about to discard: that ordering is what lets a listener tell a cancel from a
+    // finished pick without a second signal.
+    EXPECT_TRUE(referencesAtExit.empty());
+}
+
 TEST_F(GeometrySelectionTest, cancelSelectingRevertsAppendedPicks)
 {
     AppendingSelection selection;
