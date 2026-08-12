@@ -378,7 +378,7 @@ DropdownListIconSize: "@MenuIconSize"
 # react to the pointer.
 DropdownListRowBorderRadius: "@MenuItemBorderRadius"
 DropdownListRowHoveredBackground: "@MenuItemHoveredBackground"
-DropdownListRowSelectedBackground: "@ListRowSelectedBackground"
+DropdownListRowSelectedBackground: "@Background.100"
 DropdownListRowPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 
 # ── Dropdown Separator ───────────────────────────────────────────────────────
