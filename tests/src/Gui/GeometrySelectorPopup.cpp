@@ -216,9 +216,53 @@ private Q_SLOTS:
         QVERIFY(view->verticalScrollBar()->maximum() > 0);
 
         // The cap is a pixel count, not a whole number of rows, so what it leaves over is a
-        // partial row. The style trims that back off, and a scrolled popup must therefore end
-        // exactly on a row edge rather than showing a sliver of the next one.
-        QCOMPARE(view->viewport()->height() % view->sizeHintForRow(0), 0);
+        // partial row. The style trims that back off, so a scrolled popup must end exactly on a
+        // row edge: the row straddling the viewport's bottom edge is shown in full, not a sliver.
+        // Asserted directly against that row rather than through view->sizeHintForRow(0) modulo
+        // the viewport height — that modulo assumes every row shares one pitch, which no longer
+        // holds once a popup can also hold a separator row of its own height.
+        const int bottom = view->viewport()->height() - 1;
+        const QModelIndex lastRow = view->indexAt({0, bottom});
+        QVERIFY(lastRow.isValid());
+        QCOMPARE(view->visualRect(lastRow).bottom(), bottom);
+    }
+
+    // The shape that exercises the separator sizing, the popup trim, the model construction and
+    // the rule placement together: a capped, scrolling popup holding options, history and Custom
+    // — so two rules — that still ends on a row edge rather than a wrong modulo. Unlike the
+    // options-only cap test above, FreeCADStyle::snapComboPopupToWholeRows() cannot lean on a
+    // single row pitch here at all.
+    void test_aCappedPopupWithHistoryAndRulesEndsOnARowEdge()  // NOLINT
+    {
+        const auto capGuard = overrideToken("DropdownListMaxHeight", "80px");
+
+        installFreshPopupStyle();
+
+        QWidget anchor;
+        anchor.move(200, 200);
+        anchor.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&anchor));
+
+        Gui::GeometrySelectorPopup popup(
+            optionsOf(20),
+            optionsOf(20),
+            /*allowCustom=*/true,
+            /*currentIndex=*/0,
+            &anchor
+        );
+        showPopup(popup);
+
+        QListView* view = viewOf(popup);
+        QVERIFY(popup.height() <= 80);
+        QVERIFY2(
+            view->verticalScrollBar()->maximum() > 0,
+            "the popup was not capped, so there was nothing to trim"
+        );
+
+        const int bottom = view->viewport()->height() - 1;
+        const QModelIndex lastRow = view->indexAt({0, bottom});
+        QVERIFY(lastRow.isValid());
+        QCOMPARE(view->visualRect(lastRow).bottom(), bottom);
     }
 
     // "current" places the chosen row on the control; "below" meets its bottom edge. Both are
