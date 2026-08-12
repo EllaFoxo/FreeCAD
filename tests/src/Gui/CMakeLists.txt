@@ -22,6 +22,7 @@ add_executable(Gui_tests_run
         TreeBranchGeometryTest.cpp
         InputHintTest.cpp
         SelectionTest.cpp
+        SelectionContextTest.cpp
         GeometrySelectionTest.cpp
         GeometryHighlighterTest.cpp
         TemporaryVisibilityTest.cpp
