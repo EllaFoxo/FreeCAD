@@ -1748,6 +1748,23 @@ QSize FreeCADStyle::dropdownSeparatorSizeFromContents(const StyleContext& contex
     return resolveBoxGeometry(context).marginBox({0, 0});
 }
 
+QRect FreeCADStyle::dropdownSeparatorRuleBand(
+    const QStyleOption* option,
+    const QWidget* widget,
+    const BoxGeometryDefinition& geometry
+) const
+{
+    // The Item element, not the Separator one: dropdownSeparatorSizeFromContents() deliberately
+    // does not add this gap to the separator's own size (it isn't a row like the others), so it
+    // has to be looked up again here through the context that does carry it.
+    const int trailingGap
+        = resolveBoxGeometry(contextOf(widget, option, StyleComponentElement::Item)).spacing;
+
+    QRect band = geometry.borderRect(option->rect);
+    band.setHeight(band.height() + trailingGap);
+    return band;
+}
+
 QSize FreeCADStyle::itemViewItemSizeFromContents(
     const QStyleOption* option,
     const QSize& size,
@@ -2678,7 +2695,7 @@ void FreeCADStyle::drawControl(
     if (element == CE_ItemViewItem) {
         if (const auto separator = dropdownSeparatorContext(option, widget)) {
             const BoxGeometryDefinition geometry = resolveBoxGeometry(*separator);
-            drawSeparatorRule(painter, *separator, geometry.borderRect(option->rect));
+            drawSeparatorRule(painter, *separator, dropdownSeparatorRuleBand(option, widget, geometry));
             return;
         }
 

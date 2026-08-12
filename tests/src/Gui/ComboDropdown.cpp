@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
+#include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
+#include <utility>
 
 #include <QAbstractItemModel>
 #include <QApplication>
@@ -600,6 +603,118 @@ private Q_SLOTS:
         QCOMPARE(
             pixelsOfColour(canvas, view->visualRect(view->model()->index(0, 0)), QColor(0x00, 0xff, 0xff)),
             0
+        );
+    }
+
+    // The topmost and bottommost row, within @p rect, at which @p canvas paints @p colour —
+    // or nullopt if it never does. Used to find where a rule actually landed rather than
+    // asserting against a computed pixel position.
+    static std::optional<std::pair<int, int>> verticalSpanOfColour(
+        const QImage& canvas,
+        const QRect& rect,
+        const QColor& colour
+    )
+    {
+        std::optional<int> top;
+        int bottom = 0;
+        for (int y = rect.top(); y <= rect.bottom(); ++y) {
+            for (int x = rect.left(); x <= rect.right(); ++x) {
+                if (canvas.rect().contains(x, y) && canvas.pixelColor(x, y) == colour) {
+                    if (!top) {
+                        top = y;
+                    }
+                    bottom = y;
+                    break;
+                }
+            }
+        }
+        if (!top) {
+            return std::nullopt;
+        }
+        return std::make_pair(*top, bottom);
+    }
+
+    // A dropdown row carries its whole inter-row gap at its own top: the space above a
+    // separator's rule is the band's top half alone, but the space below it is the band's
+    // bottom half plus the next row's full leading gap. Centring the rule within its own band
+    // therefore puts it high by roughly that gap. This is the symmetry invariant: with tokens
+    // chosen so `height + itemSpacing - thickness` is even (an exact split exists), the rule
+    // must land with equal background above and below it, measured between the two
+    // neighbouring rows' actual content — not merely within the separator's own band.
+    //
+    // h=8, using the fixture's own DropdownListItemSpacing (g=3), t=1: h+g-t=10 is even, split
+    // k=5 balances exactly (5 above, 4+3=... (8-5-1)+3=5 below). Deliberately not the value the
+    // token is set to in production — this proves the placement rule generally, independent of
+    // which specific numbers ship.
+    void test_theSeparatorRuleIsCentredBetweenItsNeighbours()  // NOLINT
+    {
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "8px");
+        const auto thicknessGuard = overrideToken("DropdownListSeparatorBorderThickness", "1px");
+        const auto colourGuard = overrideToken("DropdownListSeparatorBorderColor", "#00ffff");
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QFrame container;
+        QListView* view = buildAdoptedDropdown(container, style);
+        markAsSeparator(*view, 1);
+        view->doItemsLayout();
+
+        const QImage canvas = renderOf(*view->viewport());
+        const QColor probe(0x00, 0xff, 0xff);
+        const QRect band = view->visualRect(view->model()->index(1, 0));
+
+        const auto rule = verticalSpanOfColour(canvas, band, probe);
+        QVERIFY2(rule.has_value(), "no rule was painted in the separator's band");
+
+        const int rowAboveContentBottom = view->visualRect(view->model()->index(0, 0)).bottom();
+        const int rowBelowContentTop = view->visualRect(view->model()->index(2, 0)).top()
+            + itemSpacing;
+
+        const int gapAbove = rule->first - rowAboveContentBottom - 1;
+        const int gapBelow = rowBelowContentTop - rule->second - 1;
+
+        QCOMPARE(gapAbove, gapBelow);
+    }
+
+    // The regression pin for the reported bug, built from the numbers production actually ships
+    // (DropdownListSeparatorHeight, the resolved DropdownListItemSpacing, SeparatorThickness):
+    // this fixture cannot reach "FreeCAD Base.yaml" itself, so those three are restated here as
+    // literals instead of left to the fixture's own (different) defaults; only the rule colour is
+    // overridden beyond that, to make the rule findable in the render. This is the assertion the
+    // user's screenshot would have failed: the previous placement (centred within the separator's
+    // own band) put the rule a whole item spacing too high.
+    void test_theSeparatorRuleIsNotBiasedTowardTheTopRow()  // NOLINT
+    {
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "5px");
+        const auto spacingGuard = overrideToken("DropdownListItemSpacing", "2px");
+        const auto thicknessGuard = overrideToken("DropdownListSeparatorBorderThickness", "1px");
+        const auto colourGuard = overrideToken("DropdownListSeparatorBorderColor", "#00ffff");
+        constexpr int shippedItemSpacing = 2;
+
+        Gui::FreeCADStyle& style = installFreshApplicationStyle();
+        QFrame container;
+        QListView* view = buildAdoptedDropdown(container, style);
+        markAsSeparator(*view, 1);
+        view->doItemsLayout();
+
+        const QImage canvas = renderOf(*view->viewport());
+        const QColor probe(0x00, 0xff, 0xff);
+        const QRect band = view->visualRect(view->model()->index(1, 0));
+
+        const auto rule = verticalSpanOfColour(canvas, band, probe);
+        QVERIFY2(rule.has_value(), "no rule was painted in the separator's band");
+
+        const int rowAboveContentBottom = view->visualRect(view->model()->index(0, 0)).bottom();
+        const int rowBelowContentTop = view->visualRect(view->model()->index(2, 0)).top()
+            + shippedItemSpacing;
+
+        const int gapAbove = rule->first - rowAboveContentBottom - 1;
+        const int gapBelow = rowBelowContentTop - rule->second - 1;
+
+        QVERIFY2(
+            std::abs(gapAbove - gapBelow) <= 1,
+            qPrintable(
+                QStringLiteral("gap above (%1) vs below (%2) the rule").arg(gapAbove).arg(gapBelow)
+            )
         );
     }
 

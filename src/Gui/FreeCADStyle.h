@@ -409,6 +409,20 @@ public:
     /// The extent a separator row occupies: its own Height, surrounded by its margins.
     QSize dropdownSeparatorSizeFromContents(const StyleParameters::StyleContext& context) const;
 
+    /**
+     * @brief The band a dropdown separator's rule is centred in.
+     *
+     * A row reserves its whole inter-row gap at its own top, so the separator's own rect has
+     * none above it but is followed by the next row's full leading gap below. The band this
+     * returns is extended by that trailing gap, so centring within it lands the rule centred
+     * between the two rows' actual content rather than merely within the separator's own rect.
+     */
+    QRect dropdownSeparatorRuleBand(
+        const QStyleOption* option,
+        const QWidget* widget,
+        const BoxGeometryDefinition& geometry
+    ) const;
+
     // Dynamic widget property names that drive style overrides.
     // clang-format off
     /// Prefix of a property declaring an override, e.g. "fcStyleCurrentPaneBackground"

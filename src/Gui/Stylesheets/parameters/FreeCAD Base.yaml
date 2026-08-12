@@ -383,9 +383,13 @@ DropdownListRowPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 
 # ── Dropdown Separator ───────────────────────────────────────────────────────
 # The rule between groups of dropdown rows. Mirrors the MenuSeparator block: the height is the
-# band the rule is centred in, so the spacing above and below comes from the band rather than
-# from a margin. Set DropdownListSeparatorBorderThickness to reset() to drop the rule entirely.
-DropdownListSeparatorHeight: "@Spacing.100"
+# band the rule is centred in, extended by the next row's leading gap (DropdownListItemSpacing)
+# so the rule centres between rows rather than within its own band — see
+# FreeCADStyle::dropdownSeparatorRuleBand(). That split only comes out even when
+# Height + DropdownListItemSpacing - SeparatorThickness is even; with the even spacing scale and
+# an odd SeparatorThickness, Height must be odd, hence the +1px the scale itself cannot express.
+# Set DropdownListSeparatorBorderThickness to reset() to drop the rule entirely.
+DropdownListSeparatorHeight: "@Spacing.100 + 1px"
 DropdownListSeparatorMargin: "padding(horizontal: @Spacing.100)"
 DropdownListSeparatorBorderColor: "@SeparatorColor"
 DropdownListSeparatorBorderThickness: "@SeparatorThickness"
