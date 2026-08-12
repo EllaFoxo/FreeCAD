@@ -507,6 +507,145 @@ private Q_SLOTS:
         QCOMPARE(viewOf(popup)->currentIndex().row(), 3);
     }
 
+    // The pointer over a predefined option names that option.
+    void test_hoveringAnOptionRowReportsItsIndex()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        // A popup with no anchor always opens at the same screen position, so a fresh popup's
+        // row can sit exactly where an earlier test in this run left the pointer: with no actual
+        // change in global position, QTest::mouseMove synthesises no move at all (the same trap
+        // hover()'s own comment describes for the QWidget overload). Landing here first, before
+        // the spy is listening, guarantees the coming hover() is a genuine move regardless of
+        // where the previous test's popup ended.
+        hoverAt(popup, *view, QPoint(0, 0));
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+
+        hover(popup, *view, 2);
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
+    }
+
+    // A remembered pick sits past the predefined options in the index space, and the rule
+    // between the groups shifts its row without shifting its index.
+    void test_hoveringAHistoryRowReportsItsIndex()  // NOLINT
+    {
+        // The fixture leaves the rule's own height token unset, so give it one: a zero-height
+        // rule row sits flush against its neighbour, and hovering the row right after it would
+        // land ambiguously (see test_hoveringOverASeparatorDoesNotMoveTheCursorThere).
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "20px");
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(
+            optionsOf(2),
+            optionsOf(1),
+            /*allowCustom=*/false,
+            /*currentIndex=*/0,
+            nullptr
+        );
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        // See test_hoveringAnOptionRowReportsItsIndex: without this anchor, this popup's row can
+        // coincidentally sit where an earlier test left the pointer and the coming move would be
+        // synthesised as no move at all.
+        hoverAt(popup, *view, QPoint(0, 0));
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+
+        // Rows: 0,1 options · 2 rule · 3 history. Index 2 is the history entry.
+        hover(popup, *view, 3);
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
+    }
+
+    // A rule names nothing. It is not selectable, but a pointer still travels over it.
+    void test_hoveringARuleReportsNothing()  // NOLINT
+    {
+        // The fixture leaves the rule's own height token unset, so give it one: a zero-height
+        // row's centre coincides with its neighbour's edge and the hover would land ambiguously
+        // (see test_hoveringOverASeparatorDoesNotMoveTheCursorThere).
+        const auto heightGuard = overrideToken("DropdownListSeparatorHeight", "20px");
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup popup(
+            optionsOf(2),
+            optionsOf(1),
+            /*allowCustom=*/false,
+            /*currentIndex=*/0,
+            nullptr
+        );
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        // See test_hoveringAnOptionRowReportsItsIndex: without this anchor, this popup's row can
+        // coincidentally sit where an earlier test left the pointer and the coming move would be
+        // synthesised as no move at all.
+        hoverAt(popup, *view, QPoint(0, 0));
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+
+        hover(popup, *view, 2);  // the rule between the two groups
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), -1);
+    }
+
+    // Moving within one row must not re-publish: the highlight would be rebuilt on every
+    // pointer move, in every 3D view.
+    void test_stayingOnOneRowReportsOnlyOnce()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+
+        hover(popup, *view, 1);
+        hoverAt(popup, *view, offsetWithinRow(*view, 1, 2));
+        hoverAt(popup, *view, offsetWithinRow(*view, 1, -2));
+
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // Hiding the popup withdraws the hover; otherwise a dismissed dropdown leaves the
+    // 3D view highlighted with nothing on screen to explain it.
+    void test_hidingThePopupWithdrawsTheHover()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        hover(popup, *view, 1);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+        popup.hide();
+
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), -1);
+    }
+
+    // Nothing was hovered, so hiding has nothing to withdraw.
+    void test_hidingAnUnhoveredPopupReportsNothing()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+        popup.hide();
+
+        QCOMPARE(spy.count(), 0);
+    }
+
 private:
     // GeometrySelectorPopup::adoptAsDropdown() constrains itself through
     // Application::Instance->freeCADStyle() directly, not through whatever style
@@ -577,6 +716,23 @@ private:
     static void hover(Gui::GeometrySelectorPopup& popup, QListView& view, int row)
     {
         const QPoint spot = view.visualRect(view.model()->index(row, 0)).center();
+        const QPoint windowPos = view.viewport()->mapTo(&popup, spot);
+        QTest::mouseMove(popup.windowHandle(), windowPos);
+        QCoreApplication::processEvents();
+    }
+
+    // A point inside row @p row, @p dy pixels from its centre.
+    static QPoint offsetWithinRow(QListView& view, int row, int dy)
+    {
+        QPoint spot = view.visualRect(view.model()->index(row, 0)).center();
+        spot.ry() += dy;
+        return spot;
+    }
+
+    // The pointer arriving at an exact viewport position. Same routing as hover(): through
+    // the popup's QWindow, never the QWidget overload of QTest::mouseMove.
+    static void hoverAt(Gui::GeometrySelectorPopup& popup, QListView& view, const QPoint& spot)
+    {
         const QPoint windowPos = view.viewport()->mapTo(&popup, spot);
         QTest::mouseMove(popup.windowHandle(), windowPos);
         QCoreApplication::processEvents();

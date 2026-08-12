@@ -26,6 +26,7 @@
 #include <algorithm>
 
 #include <QEvent>
+#include <QHideEvent>
 #include <QKeyEvent>
 #include <QListView>
 #include <QMouseEvent>
@@ -217,6 +218,29 @@ void GeometrySelectorPopup::activateIndex(int index)
     Q_EMIT optionActivated(index);
 }
 
+void GeometrySelectorPopup::setHoveredIndex(int index)
+{
+    if (index == m_hoveredIndex) {
+        return;
+    }
+    m_hoveredIndex = index;
+    Q_EMIT optionHovered(index);
+}
+
+void GeometrySelectorPopup::leaveEvent(QEvent* event)
+{
+    setHoveredIndex(-1);
+    QFrame::leaveEvent(event);
+}
+
+void GeometrySelectorPopup::hideEvent(QHideEvent* event)
+{
+    // Escape, an outside click and an activation all end here, so this is the one place a
+    // dismissed dropdown is guaranteed to withdraw its highlight.
+    setHoveredIndex(-1);
+    QFrame::hideEvent(event);
+}
+
 bool GeometrySelectorPopup::eventFilter(QObject* watched, QEvent* event)
 {
     if (watched == m_view->viewport() && event->type() == QEvent::MouseMove) {
@@ -229,6 +253,9 @@ bool GeometrySelectorPopup::eventFilter(QObject* watched, QEvent* event)
         if (under.isValid()) {
             m_view->setCurrentIndex(under);
         }
+        // The cursor cannot land on a rule, but the hover can: it reports what the pointer is
+        // actually over, and below the last row it is over nothing.
+        setHoveredIndex(under.isValid() ? m_rowToIndex.at(under.row()) : -1);
         return false;
     }
 

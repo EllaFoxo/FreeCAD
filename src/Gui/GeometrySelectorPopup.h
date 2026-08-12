@@ -33,6 +33,7 @@
 
 class QListView;
 class QStandardItemModel;
+class QHideEvent;
 
 namespace Gui
 {
@@ -67,10 +68,15 @@ public:
 
 Q_SIGNALS:
     void optionActivated(int index);
+    /// The option index under the pointer, or -1 when it names nothing — a rule, empty
+    /// space below the rows, the pointer leaving, or the popup hiding.
+    void optionHovered(int index);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void leaveEvent(QEvent* event) override;
+    void hideEvent(QHideEvent* event) override;
 
 private:
     void buildModel();
@@ -82,6 +88,9 @@ private:
     void appendSeparatorRow();
     /// The model row @p index occupies, or -1 when it is out of range.
     int rowForIndex(int index) const;
+    /// Publishes @p index as hovered unless it is already what was published, so a pointer
+    /// moving within one row does not rebuild the 3D highlight on every move.
+    void setHoveredIndex(int index);
 
     std::vector<GeometrySelectorOption> m_options;
     std::vector<GeometrySelectorOption> m_history;
@@ -92,6 +101,8 @@ private:
     /// The index each model row activates, -1 for a separator. Row and index stop being the
     /// same number as soon as a rule sits between two groups.
     std::vector<int> m_rowToIndex;
+    /// The last index handed to optionHovered().
+    int m_hoveredIndex = -1;
 };
 
 }  // namespace Gui
