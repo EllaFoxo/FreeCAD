@@ -24,12 +24,10 @@
 #include "GeometrySelectorWidget.h"
 
 #include <algorithm>
-#include <fstream>
 #include <functional>
 #include <ranges>
 
 #include <App/Application.h>
-#include <Base/Console.h>
 #include <Base/Parameter.h>
 
 #include <QCoreApplication>
@@ -1226,18 +1224,8 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
             /*showRemove=*/!isComboMode(),
             [this] { activatePrimary(); },
             [this, index] { m_selection->removeReference(index); },
-            [this, index] {
-                Base::Console().message("[HLDBG] row hover ENTER index=%d\n", static_cast<int>(index));
-                std::ofstream("/tmp/hldbg.log", std::ios::app)
-                    << "[HLDBG] row hover ENTER index=" << index << std::endl;
-                m_selection->setHoveredReference(static_cast<int>(index));
-            },
-            [this, index] {
-                Base::Console().message("[HLDBG] row hover LEAVE index=%d\n", static_cast<int>(index));
-                std::ofstream("/tmp/hldbg.log", std::ios::app)
-                    << "[HLDBG] row hover LEAVE index=" << index << std::endl;
-                m_selection->setHoveredReference(-1);
-            },
+            [this, index] { m_selection->setHoveredReference(static_cast<int>(index)); },
+            [this] { m_selection->setHoveredReference(-1); },
             rowsContainer
         );
         // Pin every row to the resolved row height so the list matches other list-like

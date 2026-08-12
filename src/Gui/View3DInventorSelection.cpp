@@ -29,8 +29,6 @@
 #include <Inventor/nodes/SoSeparator.h>
 
 #include <algorithm>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -65,12 +63,6 @@ const char* highlightRoleName(HighlightRole role)
             break;
     }
     return "Highlight";
-}
-
-void hldbg(const std::string& message)
-{
-    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
-    stream << message << std::endl;  // flush every line: the process may be killed
 }
 
 /// Whether an annotation already replays exactly @p candidate, and so can carry
@@ -524,61 +516,30 @@ void View3DInventorSelection::addHighlight(
     const char* subName
 )
 {
-    const char* roleName = highlightRoleName(role);
-    const char* displaySubName = (subName && subName[0]) ? subName : "<whole-object>";
-    const char* objName = object ? object->getNameInDocument() : "<null>";
-    std::ostringstream msg;
-    msg << "[HLDBG] addHighlight: role=" << roleName << ", subName=" << displaySubName
-        << ", object=" << objName;
-    std::string msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
     HighlightRoleNodes* nodes = highlightRole(role);
     if (!nodes) {
-        msgStr = "[HLDBG]   returning early: highlightRole returned null";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     if (!object) {
-        msgStr = "[HLDBG]   returning early: object is null";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     if (!object->isAttachedToDocument()) {
-        msgStr = "[HLDBG]   returning early: object not attached to document";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     if (!Application::Instance) {
-        msgStr = "[HLDBG]   returning early: Application::Instance is null";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
 
     auto vp = freecad_cast<ViewProviderDocumentObject*>(Application::Instance->getViewProvider(object));
     if (!vp) {
-        msgStr = "[HLDBG]   returning early: no view provider";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     // A hidden object contributes nothing: the stored path runs through its mode
     // switch, and Coin's in-path traversal honours whichChild.
     if (!vp->isSelectable()) {
-        msgStr = "[HLDBG]   returning early: view provider not selectable";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     if (!vp->isShow()) {
-        msgStr = "[HLDBG]   returning early: view provider not shown";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     // Public API, so the document is checked rather than assumed. An annotation holds
@@ -586,40 +547,13 @@ void View3DInventorSelection::addHighlight(
     // it would render that document's geometry here and expose its nodes to this
     // viewer's traversals.
     if (!guiDocument) {
-        msgStr = "[HLDBG]   returning early: guiDocument is null";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
     if (vp->getDocument() != guiDocument) {
-        msgStr = "[HLDBG]   returning early: document mismatch";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return;
     }
 
-    // Log the quoted subName and view provider type name before boundary loop (NEW DIAGNOSTIC 3)
-    std::ostringstream quotedMsg;
-    quotedMsg << "[HLDBG] addHighlight boundary loop: subName='" << (subName ? subName : "") << "'"
-              << " vp type=" << vp->getTypeId().getName();
-    msgStr = quotedMsg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
     auto boundaryElements = vp->getBoundaryElements(subName);
-    std::ostringstream elemMsg;
-    elemMsg << "[HLDBG]   getBoundaryElements returned " << boundaryElements.size() << " elements";
-    msgStr = elemMsg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
-    for (size_t i = 0; i < boundaryElements.size(); ++i) {
-        std::ostringstream elemItem;
-        elemItem << "[HLDBG]     [" << i << "]: " << boundaryElements[i];
-        msgStr = elemItem.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-    }
     // A face drawn alone leaves its boundary invisible: edges live on a node of their
     // own, separate from faces. Its boundary elements are drawn alongside it, under the
     // same owner and role, so a highlighted face still reads as a face rather than a
@@ -641,9 +575,6 @@ void View3DInventorSelection::addHighlightElements(
     const std::vector<std::string>& elements
 )
 {
-    std::ostringstream msg;
-    std::string msgStr;
-
     // Every annotation made for this reference so far. An element whose path is
     // already covered joins that annotation rather than getting one of its own:
     // annotations that replay the same path share their nodes' secondary
@@ -656,24 +587,12 @@ void View3DInventorSelection::addHighlightElements(
     SoGroup* ownerGroup = nullptr;
 
     for (const std::string& element : elements) {
-        msg.str("");
-        msg << "[HLDBG] addHighlightElement: subName=" << element;
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-
         SoTempPath path(10);
         path.ref();
         if (!appendGroupPath(&vp, path)) {
-            msgStr = "[HLDBG]   appendGroupPath failed";
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
             path.unrefNoDelete();
             continue;
         }
-        msgStr = "[HLDBG]   appendGroupPath succeeded";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
 
         SoDetail* det = nullptr;
         // The annotation holds a plain SoPath into the view provider's live nodes. A
@@ -682,14 +601,6 @@ void View3DInventorSelection::addHighlightElements(
         // rendering until the next refresh. checkGroupOnTop() has exactly the same
         // exposure.
         const bool resolved = vp.getDetailPath(element.c_str(), &path, true, det);
-
-        msg.str("");
-        msg << "[HLDBG]   getDetailPath returned " << (resolved ? "true" : "false")
-            << ", path.getLength()=" << path.getLength()
-            << ", det=" << (det ? det->getTypeId().getName().getString() : "null");
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
 
         if (!resolved || !path.getLength()) {
             delete det;
@@ -708,9 +619,6 @@ void View3DInventorSelection::addHighlightElements(
             node->setPath(&path);
             grp->addChild(node);
             annotations.push_back(node);
-            msgStr = "[HLDBG]   created SoFCPathAnnotation and added to group";
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
 
             applyHighlightDetail(nodes.group, grp, node, path, det, nodes.color);
             // The annotation frees exactly one detail, and it is this one: the first
@@ -721,17 +629,11 @@ void View3DInventorSelection::addHighlightElements(
             det = nullptr;
         }
         else if ((*found)->getDetail()) {
-            msgStr = "[HLDBG]   appending detail to the annotation already on this path";
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
             applyHighlightDetail(nodes.group, grp, *found, path, det, nodes.color);
         }
         else {
             // The annotation on this path already draws the whole object; appending
             // an element would narrow it back down to that element alone.
-            msgStr = "[HLDBG]   skipped: the annotation on this path covers the whole object";
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
         }
 
         delete det;
@@ -742,12 +644,6 @@ void View3DInventorSelection::addHighlightElements(
     // into contexts the nodes below hold, and each teardown drops them.
     if (ownerGroup) {
         applyHighlightColor(nodes.group, ownerGroup, nodes.color);
-        msg.str("");
-        msg << "[HLDBG]   applied primary selection colour " << nodes.color[0] << ","
-            << nodes.color[1] << "," << nodes.color[2] << " to the owner subgroup";
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
     }
 }
 

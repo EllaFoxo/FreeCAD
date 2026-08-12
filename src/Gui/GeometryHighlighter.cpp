@@ -22,26 +22,6 @@
 
 #include "GeometryHighlighter.h"
 
-#include <fstream>
-#include <sstream>
-#include <Base/Console.h>
-
-namespace
-{
-// TEMPORARY diagnostics, reverted with the rest of the [HLDBG] instrumentation.
-void hldbgHighlighter(const std::string& message)
-{
-    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
-    stream << message << std::endl;
-    Base::Console().message("%s\n", message.c_str());
-}
-
-const char* hldbgRoleName(Gui::HighlightRole role)
-{
-    return role == Gui::HighlightRole::Hovered ? "Hovered" : "Reference";
-}
-}  // namespace
-
 using namespace Gui;
 
 std::vector<GeometryReference>& GeometryHighlightModel::slot(HighlightRole role)
@@ -243,29 +223,13 @@ GeometryHighlighter::~GeometryHighlighter()
 
 void GeometryHighlighter::setHighlighted(HighlightRole role, std::vector<GeometryReference> references)
 {
-    const std::size_t incoming = references.size();
     _model.setHighlighted(role, std::move(references));
-    {
-        std::ostringstream message;
-        message << "[HLDBG] highlighter setHighlighted role=" << hldbgRoleName(role)
-                << " incoming=" << incoming
-                << " effectiveReference=" << _model.effective(HighlightRole::Reference).size()
-                << " effectiveHovered=" << _model.effective(HighlightRole::Hovered).size();
-        hldbgHighlighter(message.str());
-    }
     refresh();
 }
 
 void GeometryHighlighter::clear(HighlightRole role)
 {
     _model.clear(role);
-    {
-        std::ostringstream message;
-        message << "[HLDBG] highlighter clear role=" << hldbgRoleName(role)
-                << " effectiveReference=" << _model.effective(HighlightRole::Reference).size()
-                << " effectiveHovered=" << _model.effective(HighlightRole::Hovered).size();
-        hldbgHighlighter(message.str());
-    }
     refresh();
 }
 

@@ -23,7 +23,6 @@
  ***************************************************************************/
 
 #include <algorithm>
-#include <fstream>
 #include <string>
 
 #include <Bnd_Box.hxx>
@@ -101,16 +100,6 @@
 FC_LOG_LEVEL_INIT("Part", true, true)
 
 using namespace PartGui;
-
-namespace
-{
-void hldbg(const std::string& message)
-{
-    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
-    stream << message << std::endl;  // flush every line: the process may be killed
-}
-
-}  // namespace
 
 PROPERTY_SOURCE(PartGui::ViewProviderPartExt, Gui::ViewProviderGeometryObject)
 
@@ -731,18 +720,7 @@ std::vector<std::string> ViewProviderPartExt::boundaryEdgeNames(
 
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
-    std::ostringstream msg;
-    std::string msgStr;
-
-    msg << "[HLDBG] getBoundaryElements: subName=" << (subName ? subName : "<null>");
-    msgStr = msg.str();
-    Base::Console().message("%s\n", msgStr.c_str());
-    hldbg(msgStr);
-
     if (!subName || !subName[0]) {
-        msgStr = "[HLDBG]   returning early: subName is null or empty";
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
         return {};
     }
 
@@ -757,56 +735,21 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
             subName
         );
         if (element.isNull() || element.getShape().ShapeType() != TopAbs_FACE) {
-            msg.str("");
-            msg << "[HLDBG]   returning early: not a face (null=" << (element.isNull() ? 1 : 0)
-                << ")";
-            msgStr = msg.str();
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
             return {};
         }
 
         const Part::TopoShape rendered = getRenderedShape();
         if (rendered.isNull()) {
-            msgStr = "[HLDBG]   returning early: rendered shape is null";
-            Base::Console().message("%s\n", msgStr.c_str());
-            hldbg(msgStr);
             return {};
         }
 
         // The rendered shape is the namespace getDetailPath() resolves against, and
         // the face is one of its own faces, so every boundary edge is in its map.
-        const std::vector<std::string> boundaryElements
-            = boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
-
-        std::string edgeList;
-        for (const std::string& name : boundaryElements) {
-            if (!edgeList.empty()) {
-                edgeList += ",";
-            }
-            edgeList += name;
-        }
-        msg.str("");
-        msg << "[HLDBG]   success: edges=[" << edgeList << "], count=" << boundaryElements.size();
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
-
-        return boundaryElements;
+        return boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
     }
-    catch (const Base::Exception& exception) {
-        msg.str("");
-        msg << "[HLDBG]   returning early: " << exception.what();
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
+    catch (const Base::Exception&) {
     }
-    catch (const Standard_Failure& failure) {
-        msg.str("");
-        msg << "[HLDBG]   returning early: " << failure.GetMessageString();
-        msgStr = msg.str();
-        Base::Console().message("%s\n", msgStr.c_str());
-        hldbg(msgStr);
+    catch (const Standard_Failure&) {
     }
     return {};
 }

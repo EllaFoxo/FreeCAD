@@ -22,11 +22,8 @@
  ******************************************************************************/
 
 #include <algorithm>
-#include <fstream>
 #include <limits>
-#include <map>
 #include <set>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <Inventor/SoPickedPoint.h>
@@ -66,51 +63,6 @@ SO_NODE_SOURCE(SoBrepFaceSet)
 namespace
 {
 
-// [HLDBG] Temporary highlight diagnostics, matching the ones in
-// Gui/View3DInventorSelection.cpp. Reverted together with them.
-void hldbg(const std::string& message)
-{
-    static std::ofstream stream("/tmp/hldbg.log", std::ios::app);
-    stream << message << std::endl;  // flush every line: the process may be killed
-}
-
-/// Reports the render-time state of one face set the first time it is seen and on
-/// every change afterwards, so a highlighted node can be compared frame over frame
-/// without flooding the log.
-void hldbgRender(
-    const void* node,
-    const Gui::SoFCSelectionContextExPtr& ctx,
-    std::size_t secondaryCount,
-    bool hasSecondary,
-    int partCount,
-    int materialBinding,
-    bool pushed
-)
-{
-    static std::map<const void*, std::string> reported;
-
-    std::ostringstream msg;
-    msg << "[HLDBG] SoBrepFaceSet::GLRender node=" << node << " parts=" << partCount
-        << " ctx=" << (ctx ? "yes" : "no") << " ctx2=" << (hasSecondary ? "yes" : "no")
-        << " ctx2Selected=" << secondaryCount << " materialBinding=" << materialBinding
-        << " narrowed=" << (pushed ? "yes" : "no");
-    // The colour the face is actually painted in: the primary context is the only
-    // place overrideMaterialBinding() takes it from once it selects everything.
-    if (ctx) {
-        msg << " ctxSelectAll=" << (ctx->isSelectAll() ? "yes" : "no")
-            << " ctxColor=" << ctx->selectionColor[0] << "," << ctx->selectionColor[1] << ","
-            << ctx->selectionColor[2];
-    }
-    std::string message = msg.str();
-
-    std::string& last = reported[node];
-    if (last == message) {
-        return;
-    }
-    last = message;
-    hldbg(message);
-}
-
 /// Tells whether a selection overlay has to ignore the depth buffer for the pass it
 /// is drawn in.
 ///
@@ -120,22 +72,6 @@ void hldbgRender(
 bool selectionRendersOnTop(const SoGLRenderAction* action)
 {
     return action && action->isRenderingDelayedPaths();
-}
-
-// [HLDBG] Temporary highlight diagnostics, matching the ones in
-// Gui/View3DInventorSelection.cpp. Reverted together with them.
-void hldbgDepthMode(const char* site, const void* node, bool onTop, bool delayedPaths)
-{
-    static std::set<std::string> reported;
-
-    std::ostringstream msg;
-    msg << "[HLDBG] " << site << " node=" << node
-        << " delayedPaths=" << (delayedPaths ? "yes" : "no")
-        << " depthMode=" << (onTop ? "DrawOnTop" : "RespectDepth");
-
-    if (reported.insert(msg.str()).second) {
-        hldbg(msg.str());
-    }
 }
 
 static void buildOverlayCoordIndex(
@@ -491,7 +427,6 @@ void SoBrepFaceSet::renderHighlight(SoGLRenderAction* action, SelContextPtr ctx)
     // design's selection contexts, so it keeps deciding on the clarify state alone.
     const bool onTop = Gui::Selection().isClarifySelectionActive()
         && Gui::SoDelayedAnnotationsElement::isProcessingDelayedPaths;
-    hldbgDepthMode("SoBrepFaceSet::renderHighlight", this, onTop, action->isRenderingDelayedPaths());
 
     renderOverlayFaces(action, overlayFaceSet, overlayCoordIndex, ctx->highlightColor, onTop);
 }
@@ -508,7 +443,6 @@ void SoBrepFaceSet::renderSelection(SoGLRenderAction* action, SelContextPtr ctx,
     const int ciCount = this->coordIndex.getNum();
 
     const bool onTop = selectionRendersOnTop(action);
-    hldbgDepthMode("SoBrepFaceSet::renderSelection", this, onTop, action->isRenderingDelayedPaths());
 
     if (ctx->isSelectAll()) {
         std::set<int> dummy;
@@ -792,17 +726,7 @@ void SoBrepFaceSet::GLRender(SoGLRenderAction* action)
 
     SoMaterialBundle mb(action);
     mb.sendFirst();
-    const auto materialBinding = SoMaterialBindingElement::get(state);
     const bool pushed = overrideMaterialBinding(action, ctx, ctx2);
-    hldbgRender(
-        this,
-        ctx,
-        ctx2 ? ctx2->selectionIndex.size() : 0U,
-        static_cast<bool>(ctx2),
-        partIndex.getNum(),
-        static_cast<int>(materialBinding),
-        pushed
-    );
     if (!this->shouldGLRender(action)) {
         if (pushed) {
             state->pop();
