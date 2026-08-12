@@ -96,6 +96,23 @@
 #include "SoBrepPointSet.h"
 #include "TaskFaceAppearances.h"
 
+// ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION (diagnosis only, do not commit) ----
+#include <fstream>
+#include <set>
+
+namespace
+{
+void edgedbgLog(const std::string& line)
+{
+    static std::ofstream stream("/tmp/edgedbg.log", std::ios::app);
+    static std::set<std::string> reported;
+    if (reported.insert(line).second) {
+        stream << "[EDGEDBG] " << line << std::endl;
+    }
+}
+}  // namespace
+// ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
+
 
 FC_LOG_LEVEL_INIT("Part", true, true)
 
@@ -721,35 +738,82 @@ std::vector<std::string> ViewProviderPartExt::boundaryEdgeNames(
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
     if (!subName || !subName[0]) {
+        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+        edgedbgLog("getBoundaryElements: EXIT null/empty subName");
+        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
         return {};
     }
 
     try {
-        // Resolved through the object's own sub-element handling rather than parsed
-        // here, so an element name this class does not itself model - a sketch's
-        // InternalFace, say - resolves exactly as a plain Face does.
-        const Part::TopoShape element = Part::Feature::getTopoShape(
-            getObject(),
-            Part::ShapeOption::ResolveLink | Part::ShapeOption::Transform
-                | Part::ShapeOption::NeedSubElement,
-            subName
-        );
-        if (element.isNull() || element.getShape().ShapeType() != TopAbs_FACE) {
-            return {};
-        }
-
+        // The rendered shape is the namespace getDetailPath() resolves against. The
+        // face is looked up as one of its own sub-elements - rather than through a
+        // second, independent getTopoShape() call - so both share the same TopoDS_Shape
+        // instance: sub-shape identity (TShape + Location) then holds by construction,
+        // which is what boundaryEdgeNames()'s edge lookup relies on. Going through
+        // getSubTopoShape() is also what resolves an element name this class does not
+        // itself model - a sketch's InternalFace, say - exactly as a plain Face, since
+        // it is the same resolution the object's own sub-element handling uses.
         const Part::TopoShape rendered = getRenderedShape();
         if (rendered.isNull()) {
+            // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+            {
+                std::ostringstream oss;
+                oss << "getBoundaryElements: EXIT null rendered shape subName=\"" << subName << "\"";
+                edgedbgLog(oss.str());
+            }
+            // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
             return {};
         }
 
-        // The rendered shape is the namespace getDetailPath() resolves against, and
-        // the face is one of its own faces, so every boundary edge is in its map.
-        return boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
+        const Part::TopoShape element = rendered.getSubTopoShape(subName, /*silent=*/true);
+        if (element.isNull() || element.getShape().ShapeType() != TopAbs_FACE) {
+            // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+            {
+                std::ostringstream oss;
+                oss << "getBoundaryElements: EXIT not-a-face subName=\"" << subName
+                    << "\" element.isNull()=" << element.isNull() << " shapeType="
+                    << (element.isNull() ? -1 : static_cast<int>(element.getShape().ShapeType()));
+                edgedbgLog(oss.str());
+            }
+            // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
+            return {};
+        }
+
+        auto result = boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
+
+        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+        {
+            std::ostringstream oss;
+            oss << "getBoundaryElements: EXIT success subName=\"" << subName
+                << "\" result.size()=" << result.size();
+            for (const std::string& name : result) {
+                oss << " [" << name << "]";
+            }
+            edgedbgLog(oss.str());
+        }
+        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
+
+        return result;
     }
-    catch (const Base::Exception&) {
+    catch (const Base::Exception& exception) {
+        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+        {
+            std::ostringstream oss;
+            oss << "getBoundaryElements: EXIT Base::Exception subName=\"" << subName
+                << "\" what()=" << exception.what();
+            edgedbgLog(oss.str());
+        }
+        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
     }
-    catch (const Standard_Failure&) {
+    catch (const Standard_Failure& failure) {
+        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
+        {
+            std::ostringstream oss;
+            oss << "getBoundaryElements: EXIT Standard_Failure subName=\"" << subName
+                << "\" GetMessageString()=" << failure.GetMessageString();
+            edgedbgLog(oss.str());
+        }
+        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
     }
     return {};
 }
