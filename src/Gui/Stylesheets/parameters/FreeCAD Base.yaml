@@ -388,7 +388,8 @@ DropdownListRowPressedBackgroundEffect: "@ButtonPressedBackgroundEffect"
 # FreeCADStyle::dropdownSeparatorRuleBand(). That split only comes out even when
 # Height + DropdownListItemSpacing - SeparatorThickness is even; with the even spacing scale and
 # an odd SeparatorThickness, Height must be odd, hence the +1px the scale itself cannot express.
-# Set DropdownListSeparatorBorderThickness to reset() to drop the rule entirely.
+# Set DropdownListSeparatorBorderThickness to reset() to hide the rule's line only — the row
+# still reserves DropdownListSeparatorHeight as a blank gap; it does not remove the separator row.
 DropdownListSeparatorHeight: "@Spacing.100 + 1px"
 DropdownListSeparatorMargin: "padding(horizontal: @Spacing.100)"
 DropdownListSeparatorBorderColor: "@SeparatorColor"

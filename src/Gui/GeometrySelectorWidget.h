@@ -110,13 +110,18 @@ public:
     /// True while a non-empty options list is set.
     bool isComboMode() const;
 
-    /// QComboBox-like read-back. currentIndex() is -1 when nothing is current; the Custom
-    /// entry (when enabled) is the last index, == the number of predefined options.
+    /// QComboBox-like read-back. currentIndex() is -1 when nothing is current. The index space
+    /// has three segments, in order: predefined options [0, n), history [n, n+h), and — when
+    /// enabled — the Custom entry at n+h.
     int currentIndex() const;
     void setCurrentIndex(int index);
     QVariant currentData() const;
     QString currentText() const;
-    /// The current predefined option, or nullptr at the Custom index / when nothing is current.
+    /// The current predefined option, or nullptr at a history index, the Custom index, or when
+    /// nothing is current. The history case is deliberate, not an oversight: a history entry
+    /// carries no meaningful userData, so returning it here instead of nullptr would let a
+    /// caller that decodes userData silently treat a custom pick as whatever the first
+    /// enumerator means.
     const GeometrySelectorOption* currentOption() const;
 
     /// How many recent custom picks the dropdown offers between the predefined options and the

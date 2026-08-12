@@ -1730,9 +1730,10 @@ std::optional<StyleContext> FreeCADStyle::dropdownSeparatorContext(
     }
 
     const StyleContext context = contextOf(widget, option, StyleComponentElement::Separator);
-    // Both halves are load-bearing. contextOf() writes the element through only for the widgets
-    // whose cells this style lays out, so an element that came back unchanged means the row
-    // belongs to something else entirely.
+    // The component check is load-bearing: contextOf() only resolves DropdownList for the
+    // widgets whose popup rows this style actually lays out. The element check is defensive
+    // rather than reachable today — every branch that sets DropdownList also assigns element
+    // unconditionally — kept in case that stops being true later.
     if (context.component != StyleComponent::DropdownList
         || context.element != StyleComponentElement::Separator) {
         return std::nullopt;
