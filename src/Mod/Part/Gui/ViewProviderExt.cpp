@@ -23,6 +23,7 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <set>
 #include <string>
 
 #include <Bnd_Box.hxx>
@@ -95,24 +96,6 @@
 #include "SoBrepFaceSet.h"
 #include "SoBrepPointSet.h"
 #include "TaskFaceAppearances.h"
-
-// ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION (diagnosis only, do not commit) ----
-#include <fstream>
-#include <set>
-
-namespace
-{
-void edgedbgLog(const std::string& line)
-{
-    static std::ofstream stream("/tmp/edgedbg.log", std::ios::app);
-    static std::set<std::string> reported;
-    if (reported.insert(line).second) {
-        stream << "[EDGEDBG] " << line << std::endl;
-    }
-}
-}  // namespace
-// ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
-
 
 FC_LOG_LEVEL_INIT("Part", true, true)
 
@@ -738,9 +721,6 @@ std::vector<std::string> ViewProviderPartExt::boundaryEdgeNames(
 std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* subName) const
 {
     if (!subName || !subName[0]) {
-        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-        edgedbgLog("getBoundaryElements: EXIT null/empty subName");
-        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
         return {};
     }
 
@@ -755,65 +735,19 @@ std::vector<std::string> ViewProviderPartExt::getBoundaryElements(const char* su
         // it is the same resolution the object's own sub-element handling uses.
         const Part::TopoShape rendered = getRenderedShape();
         if (rendered.isNull()) {
-            // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-            {
-                std::ostringstream oss;
-                oss << "getBoundaryElements: EXIT null rendered shape subName=\"" << subName << "\"";
-                edgedbgLog(oss.str());
-            }
-            // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
             return {};
         }
 
         const Part::TopoShape element = rendered.getSubTopoShape(subName, /*silent=*/true);
         if (element.isNull() || element.getShape().ShapeType() != TopAbs_FACE) {
-            // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-            {
-                std::ostringstream oss;
-                oss << "getBoundaryElements: EXIT not-a-face subName=\"" << subName
-                    << "\" element.isNull()=" << element.isNull() << " shapeType="
-                    << (element.isNull() ? -1 : static_cast<int>(element.getShape().ShapeType()));
-                edgedbgLog(oss.str());
-            }
-            // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
             return {};
         }
 
-        auto result = boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
-
-        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-        {
-            std::ostringstream oss;
-            oss << "getBoundaryElements: EXIT success subName=\"" << subName
-                << "\" result.size()=" << result.size();
-            for (const std::string& name : result) {
-                oss << " [" << name << "]";
-            }
-            edgedbgLog(oss.str());
-        }
-        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
-
-        return result;
+        return boundaryEdgeNames(element.getShape(), rendered.getShape(), {});
     }
-    catch (const Base::Exception& exception) {
-        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-        {
-            std::ostringstream oss;
-            oss << "getBoundaryElements: EXIT Base::Exception subName=\"" << subName
-                << "\" what()=" << exception.what();
-            edgedbgLog(oss.str());
-        }
-        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
+    catch (const Base::Exception&) {
     }
-    catch (const Standard_Failure& failure) {
-        // ---- BEGIN TEMPORARY EDGEDBG INSTRUMENTATION ----
-        {
-            std::ostringstream oss;
-            oss << "getBoundaryElements: EXIT Standard_Failure subName=\"" << subName
-                << "\" GetMessageString()=" << failure.GetMessageString();
-            edgedbgLog(oss.str());
-        }
-        // ---- END TEMPORARY EDGEDBG INSTRUMENTATION ----
+    catch (const Standard_Failure&) {
     }
     return {};
 }

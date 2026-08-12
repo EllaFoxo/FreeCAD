@@ -29,6 +29,7 @@
 #include <Inventor/nodes/SoSeparator.h>
 
 #include <algorithm>
+#include <set>
 #include <string>
 #include <vector>
 
