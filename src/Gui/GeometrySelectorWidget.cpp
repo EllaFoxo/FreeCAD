@@ -183,8 +183,10 @@ GeometrySelectorWidget::GeometrySelectorWidget(GeometryQuantity mode, QWidget* p
         this,
         &GeometrySelectorWidget::reconcileIndexFromReferences
     );
-    // Captured on the way in and compared on the way out: cancelSelecting() restores what the
-    // session started from, so an unchanged set is how a cancel is recognised.
+    // Captured on the way in and compared on the way out: a cancel is told apart directly via
+    // GeometrySelection::wasCancelled(), but a session that finishes unchanged — nothing new was
+    // ever picked — is recognised the same way a fresh custom pick's novelty is: by comparing
+    // what came out to what went in.
     connect(m_selection, &GeometrySelection::selectionModeEntered, this, [this] {
         m_referencesAtSessionStart = m_selection->references();
     });
@@ -269,6 +271,9 @@ void GeometrySelectorWidget::setAllowCustom(bool on)
     }
     m_allowCustom = on;
     reconcileIndexFromReferences();
+    // Turning Custom off can strand the index at the old Custom slot (n+h), which
+    // reconcileIndexFromReferences() leaves alone when nothing matches and Custom is disabled.
+    clampCurrentIndex();
     rebuildRows();
 }
 
@@ -414,11 +419,16 @@ int GeometrySelectorWidget::historySize() const
 
 void GeometrySelectorWidget::captureHistoryEntry()
 {
-    if (!isComboMode() || m_historyLength <= 0) {
+    if (!isComboMode() || m_historyLength <= 0 || m_selection->wasCancelled()) {
         return;
     }
 
     const std::vector<GeometryReference> picked = m_selection->references();
+    // Nothing new to remember: either the session ended with nothing committed, or it ended
+    // exactly where it began (e.g. Done pressed without picking anything further). A re-pick of
+    // the very set the session started from is caught here too, so it is not additionally
+    // promoted to the front of the history it may already be part of — its position is simply
+    // left where it was.
     if (picked.empty() || referencesEqualAsSet(picked, m_referencesAtSessionStart)) {
         return;
     }
@@ -482,7 +492,10 @@ void GeometrySelectorWidget::clampCurrentIndex()
 
 int GeometrySelectorWidget::lastValidIndex() const
 {
-    return m_allowCustom ? customIndex() : static_cast<int>(m_options.size() + m_history.size()) - 1;
+    if (m_allowCustom) {
+        return customIndex();
+    }
+    return static_cast<int>(m_options.size() + m_history.size()) - 1;
 }
 
 int GeometrySelectorWidget::historyOffsetOf(int index) const
@@ -599,7 +612,8 @@ void GeometrySelectorWidget::activatePrimary()
 
 void GeometrySelectorWidget::openOptionsPopup()
 {
-    auto* popup = new GeometrySelectorPopup(m_options, m_history, m_allowCustom, m_currentIndex, this);
+    GeometrySelectorPopup* popup
+        = new GeometrySelectorPopup(m_options, m_history, m_allowCustom, m_currentIndex, this);
     // Resized rather than fixed: the style widens a popup that grew a scroll bar, and trims one
     // whose last row is partly cut off, and a fixed width or height blocks both.
     popup->resize(width(), popup->sizeHint().height());

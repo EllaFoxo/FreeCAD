@@ -365,6 +365,24 @@ private Q_SLOTS:
         QVERIFY(widget.currentOption() == nullptr);
     }
 
+    // Turning Custom off while sitting on the Custom index (past both the predefined options and
+    // the history) must not strand the index there — reconcileIndexFromReferences() alone leaves
+    // it unchanged when nothing matches and Custom is now disabled, so clampCurrentIndex() has to
+    // pull it back in.
+    void test_disablingCustomClampsAStrandedIndex()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        pick(widget, "Edge1");  // history now holds one entry
+        widget.selection()->setReferences({{.object = m_object, .subName = "Face9"}});
+        QCOMPARE(widget.currentIndex(), 2);  // the Custom index: 1 option + 1 history entry
+
+        widget.setAllowCustom(false);
+
+        QCOMPARE(widget.currentIndex(), -1);
+    }
+
     // Custom disabled ⇒ no Custom index; a non-matching load leaves the index unchanged.
     void test_reverseMatchNoCustomLeavesIndex()  // NOLINT
     {
@@ -705,9 +723,9 @@ private Q_SLOTS:
         QCOMPARE(widget.historySize(), 0);
     }
 
-    // A cancel that starts and ends on an existing, unlisted selection (not merely on nothing)
-    // must be recognised the same way: by comparing the session's end state to its start, not by
-    // asking whether either happens to be empty.
+    // A cancel is recognised via GeometrySelection::wasCancelled() regardless of what the session
+    // started from — starting on an existing, unlisted (not merely empty) selection must not
+    // change that.
     void test_aCancelledPickFromAnExistingSelectionIsNotRemembered()  // NOLINT
     {
         Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
@@ -719,6 +737,24 @@ private Q_SLOTS:
         widget.selection()->startSelecting();
         widget.selection()->setReferences({{.object = m_object, .subName = "Edge2"}});
         widget.selection()->cancelSelecting();
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.historySize(), 0);
+    }
+
+    // A session that finishes (not cancels) exactly where it started — nothing new was ever
+    // picked — has nothing new to remember either; this is the scenario the reference-equality
+    // guard still exists for, now that cancellation itself is read from wasCancelled().
+    void test_aFinishedSessionWithNoNetChangeIsNotRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+
+        widget.selection()->startSelecting();
+        widget.selection()->stopSelecting();  // no pick in between
         QCoreApplication::processEvents();
 
         QCOMPARE(widget.historySize(), 0);
@@ -913,9 +949,8 @@ private Q_SLOTS:
         widget.setHistoryLength(1);
 
         QCOMPARE(widget.historySize(), 1);
-        QVERIFY(widget.currentIndex() <= widget.historySize() + 1);
-        // Pinned exactly: pulled all the way back to the Custom entry, not merely to some index
-        // that happens to still be in range.
+        // Pulled all the way back to the Custom entry, not merely to some index that happens to
+        // still be in range.
         QCOMPARE(widget.currentIndex(), widget.historySize() + 1);
     }
 

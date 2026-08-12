@@ -209,10 +209,13 @@ private:
     /// The offset into the history that @p index names, or -1 when it names something else.
     int historyOffsetOf(int index) const;
 
-    /// Recent custom picks, most recent first. Never holds a set a predefined option stands for.
+    /// Recent custom picks, most recent first. A pick matching a predefined option is filtered
+    /// out when it would be captured; an option added afterwards via setOptions()/addOption()
+    /// that happens to match an existing entry does not retroactively remove it.
     std::vector<GeometrySelectorOption> m_history;
-    /// References held when the current picking session began, so a cancelled session — which
-    /// restores them — is told apart from one that picked something.
+    /// References held when the current picking session began, so a session that ends exactly
+    /// where it started — nothing new was picked — is told apart from one that picked something.
+    /// Cancellation itself is read directly from GeometrySelection::wasCancelled().
     std::vector<GeometryReference> m_referencesAtSessionStart;
     int m_historyLength;
     fastsignals::scoped_connection m_objectDeletedConnection;
