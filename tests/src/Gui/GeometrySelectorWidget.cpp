@@ -742,6 +742,28 @@ private Q_SLOTS:
         QCOMPARE(widget.historySize(), 0);
     }
 
+    // GeometrySelection::cancelSelecting() sets _cancelling for the duration of stopSelecting()
+    // and clears it again before returning. A fresh instance cannot tell "correctly cleared"
+    // apart from "never contaminated", so this reuses the same widget for a cancel and then a
+    // completed pick: if the clear ever went missing, the later, genuine pick would read as
+    // cancelled too and never reach history.
+    void test_aPickAfterACancelledSessionIsStillRemembered()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+
+        widget.selection()->startSelecting();
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        widget.selection()->cancelSelecting();
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.historySize(), 0);  // sanity: the cancelled pick itself is not remembered
+
+        pick(widget, "Edge2");
+
+        QCOMPARE(widget.historySize(), 1);
+    }
+
     // A session that finishes (not cancels) exactly where it started — nothing new was ever
     // picked — has nothing new to remember either; this is the scenario the reference-equality
     // guard still exists for, now that cancellation itself is read from wasCancelled().
