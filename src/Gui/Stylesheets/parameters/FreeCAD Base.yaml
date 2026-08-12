@@ -655,3 +655,12 @@ HighlightOverlayBorderColor: "@Accent.500"
 HighlightOverlayBorderThickness: 2px
 HighlightOverlayBorderRadius: "@BaseRadius.medium"
 HighlightOverlayMargin: "@Spacing.100"
+
+# 3D-view geometry highlight. A face is see-through so the surface under it still reads;
+# its boundary stays solid so the outline stays crisp.
+GeometryHighlightHoveredFaceColor: "opacity(@Accent.300, 55%)"
+GeometryHighlightHoveredEdgeColor: "@Accent.300"
+GeometryHighlightHoveredPointColor: "@Accent.300"
+GeometryHighlightReferenceFaceColor: "opacity(@Accent.500, 35%)"
+GeometryHighlightReferenceEdgeColor: "@Accent.500"
+GeometryHighlightReferencePointColor: "@Accent.500"

@@ -51,6 +51,15 @@ class SoFCUnifiedSelection;
 class So3DAnnotation;
 class ViewProviderDocumentObject;
 
+/// One highlight role's colours, one per primitive kind, so a face can be see-through
+/// while the edges and vertices bounding it stay solid.
+struct GuiExport HighlightRoleColors
+{
+    Base::Color face;
+    Base::Color edge;
+    Base::Color point;
+};
+
 class GuiExport View3DInventorSelection
 {
 public:
@@ -69,8 +78,8 @@ public:
     void checkGroupOnTop(const SelectionChanges& Reason);
     void clearGroupOnTop();
 
-    /// Sets the colour and line width every subsequent highlight of @p role uses.
-    void setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth);
+    /// Sets the colours and line width every subsequent highlight of @p role uses.
+    void setHighlightStyle(HighlightRole role, const HighlightRoleColors& colors, float lineWidth);
     /// Renders @p object's @p subName on top in @p role's style, attributed to
     /// @p owner so it can be withdrawn without disturbing anyone else's. A
     /// whole-object reference passes an empty @p subName. Silently does nothing
@@ -99,7 +108,11 @@ private:
     {
         SoGroup* group = nullptr;
         SoDrawStyle* style = nullptr;
-        SbColor color {0.20F, 0.55F, 1.00F};
+        HighlightRoleColors colors {
+            .face = Base::Color(0.20F, 0.55F, 1.00F, 0.35F),
+            .edge = Base::Color(0.20F, 0.55F, 1.00F),
+            .point = Base::Color(0.20F, 0.55F, 1.00F),
+        };
         std::map<const void*, SoGroup*> owners;
     };
 

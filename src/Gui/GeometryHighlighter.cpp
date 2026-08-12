@@ -310,22 +310,30 @@ void GeometryHighlighter::refresh()
     struct RoleStyle
     {
         HighlightRole role;
-        Base::Color color;
+        HighlightRoleColors colors;
         float lineWidth;
     };
-    // resolve(ParameterDefinition<T>) returns T, so the colour arrives as a
-    // Base::Color and the width as a Numeric — no Value unwrapping here.
+    // resolve(ParameterDefinition<T>) returns T, so each colour arrives as a
+    // Base::Color — alpha included — and the width as a Numeric.
     const std::array<RoleStyle, highlightRoleCount> styles {
         RoleStyle {
             .role = HighlightRole::Reference,
-            .color = parameters->resolve(StyleParameters::GeometryHighlightReferenceColor),
+            .colors = {
+                .face = parameters->resolve(StyleParameters::GeometryHighlightReferenceFaceColor),
+                .edge = parameters->resolve(StyleParameters::GeometryHighlightReferenceEdgeColor),
+                .point = parameters->resolve(StyleParameters::GeometryHighlightReferencePointColor),
+            },
             .lineWidth = static_cast<float>(
                 parameters->resolve(StyleParameters::GeometryHighlightReferenceLineWidth).value
             )
         },
         RoleStyle {
             .role = HighlightRole::Hovered,
-            .color = parameters->resolve(StyleParameters::GeometryHighlightHoveredColor),
+            .colors = {
+                .face = parameters->resolve(StyleParameters::GeometryHighlightHoveredFaceColor),
+                .edge = parameters->resolve(StyleParameters::GeometryHighlightHoveredEdgeColor),
+                .point = parameters->resolve(StyleParameters::GeometryHighlightHoveredPointColor),
+            },
             .lineWidth = static_cast<float>(
                 parameters->resolve(StyleParameters::GeometryHighlightHoveredLineWidth).value
             )
@@ -339,7 +347,7 @@ void GeometryHighlighter::refresh()
                 continue;
             }
             for (const RoleStyle& style : styles) {
-                selection->setHighlightStyle(style.role, style.color, style.lineWidth);
+                selection->setHighlightStyle(style.role, style.colors, style.lineWidth);
                 for (const GeometryReference& reference :
                      references.at(highlightRoleIndex(style.role))) {
                     selection

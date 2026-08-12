@@ -140,6 +140,58 @@ void applyHighlightColor(SoGroup* roleGroup, SoGroup* ownerGroup, const SbColor&
     action.setColor(color);
     applyToOwnerGroup(roleGroup, ownerGroup, action);
 }
+
+/// The colour @p colors gives an element named @p elementName, chosen by its kind.
+Base::Color colorForElement(const HighlightRoleColors& colors, const std::string& elementName)
+{
+    if (elementName.starts_with("Edge")) {
+        return colors.edge;
+    }
+    if (elementName.starts_with("Vertex")) {
+        return colors.point;
+    }
+    return colors.face;
+}
+
+/// The per-element colour map @p elements resolve to. A named element takes the colour of
+/// its kind. A whole-object reference — an empty name — becomes one bare prefix per kind,
+/// which each shape node reads as "all of mine", so the three kinds keep their own alphas
+/// instead of sharing one wildcard.
+std::map<std::string, Base::Color> highlightColorMap(
+    const std::vector<std::string>& elements,
+    const HighlightRoleColors& colors
+)
+{
+    std::map<std::string, Base::Color> byElement;
+    for (const std::string& element : elements) {
+        if (element.empty()) {
+            byElement.emplace("Face", colors.face);
+            byElement.emplace("Edge", colors.edge);
+            byElement.emplace("Vertex", colors.point);
+            continue;
+        }
+        byElement.emplace(element, colorForElement(colors, element));
+    }
+    return byElement;
+}
+
+/// Writes a per-element colour, alpha included, into the secondary context of every node
+/// this owner replays. Must run after the Append/All actions that narrow the render: the
+/// shape nodes' Color handlers create a select-all context when none exists yet, and a
+/// select-all context renders the whole object rather than the picked element.
+void applyHighlightElementColors(
+    SoGroup* roleGroup,
+    SoGroup* ownerGroup,
+    const std::map<std::string, Base::Color>& byElement
+)
+{
+    if (byElement.empty()) {
+        return;
+    }
+    SoSelectionElementAction action(SoSelectionElementAction::Color, true);
+    action.setColors(byElement);
+    applyToOwnerGroup(roleGroup, ownerGroup, action);
+}
 }  // namespace
 
 View3DInventorSelection::View3DInventorSelection(SoFCUnifiedSelection* root)
@@ -481,14 +533,18 @@ View3DInventorSelection::HighlightRoleNodes* View3DInventorSelection::highlightR
     return index < highlightRoles.size() ? &highlightRoles.at(index) : nullptr;
 }
 
-void View3DInventorSelection::setHighlightStyle(HighlightRole role, const Base::Color& color, float lineWidth)
+void View3DInventorSelection::setHighlightStyle(
+    HighlightRole role,
+    const HighlightRoleColors& colors,
+    float lineWidth
+)
 {
     HighlightRoleNodes* nodes = highlightRole(role);
     if (!nodes) {
         return;
     }
     nodes->style->lineWidth = lineWidth;
-    nodes->color = color.asValue<SbColor>();
+    nodes->colors = colors;
 }
 
 SoGroup* View3DInventorSelection::highlightOwnerGroup(HighlightRoleNodes& nodes, const void* owner)
@@ -585,6 +641,9 @@ void View3DInventorSelection::addHighlightElements(
     // Left null until an element actually resolves, so an owner whose elements all
     // fail to resolve does not leave an empty subgroup behind.
     SoGroup* ownerGroup = nullptr;
+    // Only the elements that resolved get a colour: an unresolved name would still map onto
+    // an index and tint whatever geometry happens to sit there.
+    std::vector<std::string> resolvedElements;
 
     for (const std::string& element : elements) {
         SoTempPath path(10);
@@ -608,6 +667,8 @@ void View3DInventorSelection::addHighlightElements(
             continue;
         }
 
+        resolvedElements.push_back(element);
+
         auto found = std::ranges::find_if(annotations, [&path](SoFCPathAnnotation* candidate) {
             return sameNodes(candidate->getPath(), path);
         });
@@ -620,7 +681,7 @@ void View3DInventorSelection::addHighlightElements(
             grp->addChild(node);
             annotations.push_back(node);
 
-            applyHighlightDetail(nodes.group, grp, node, path, det, nodes.color);
+            applyHighlightDetail(nodes.group, grp, node, path, det, nodes.colors.face.asValue<SbColor>());
             // The annotation frees exactly one detail, and it is this one: the first
             // element to reach this path is the one whose detail decides how the
             // annotation renders — with a detail it replays the geometry, without one
@@ -629,7 +690,14 @@ void View3DInventorSelection::addHighlightElements(
             det = nullptr;
         }
         else if ((*found)->getDetail()) {
-            applyHighlightDetail(nodes.group, grp, *found, path, det, nodes.color);
+            applyHighlightDetail(
+                nodes.group,
+                grp,
+                *found,
+                path,
+                det,
+                nodes.colors.face.asValue<SbColor>()
+            );
         }
         else {
             // The annotation on this path already draws the whole object; appending
@@ -643,7 +711,13 @@ void View3DInventorSelection::addHighlightElements(
     // After the annotations exist, and again on every rebuild: the colour is written
     // into contexts the nodes below hold, and each teardown drops them.
     if (ownerGroup) {
-        applyHighlightColor(nodes.group, ownerGroup, nodes.color);
+        applyHighlightColor(nodes.group, ownerGroup, nodes.colors.face.asValue<SbColor>());
+        // Last, and after every Append/All above — see applyHighlightElementColors().
+        applyHighlightElementColors(
+            nodes.group,
+            ownerGroup,
+            highlightColorMap(resolvedElements, nodes.colors)
+        );
     }
 }
 

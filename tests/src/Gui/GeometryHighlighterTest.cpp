@@ -140,3 +140,41 @@ TEST_F(GeometryHighlighterTest, clearEmptiesEveryRole)
     EXPECT_TRUE(model.effective(HighlightRole::Reference).empty());
     EXPECT_TRUE(model.effective(HighlightRole::Hovered).empty());
 }
+
+#include <Base/ServiceProvider.h>
+#include <Gui/StyleParameters.h>
+#include <Gui/StyleParameters/ParameterManager.h>
+
+// The six colours the highlighter resolves. A face is see-through so the surface under
+// it still reads; an edge and a vertex stay solid so the outline stays crisp.
+TEST_F(GeometryHighlighterTest, theSixHighlightColourTokensResolve)
+{
+    auto* parameters = Base::provideService<Gui::StyleParameters::ParameterManager>();
+    ASSERT_NE(parameters, nullptr);
+
+    const Base::Color referenceFace = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightReferenceFaceColor
+    );
+    const Base::Color referenceEdge = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightReferenceEdgeColor
+    );
+    const Base::Color referencePoint = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightReferencePointColor
+    );
+    const Base::Color hoveredFace = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredFaceColor
+    );
+    const Base::Color hoveredEdge = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredEdgeColor
+    );
+    const Base::Color hoveredPoint = parameters->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredPointColor
+    );
+
+    EXPECT_LT(referenceFace.a, 1.0F);
+    EXPECT_LT(hoveredFace.a, 1.0F);
+    EXPECT_FLOAT_EQ(referenceEdge.a, 1.0F);
+    EXPECT_FLOAT_EQ(referencePoint.a, 1.0F);
+    EXPECT_FLOAT_EQ(hoveredEdge.a, 1.0F);
+    EXPECT_FLOAT_EQ(hoveredPoint.a, 1.0F);
+}

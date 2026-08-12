@@ -33,9 +33,15 @@ DEFINE_STYLE_PARAMETER(ExpressionButtonSize, Numeric(18, "px"));  // green for t
                                                                   // (right to left)
 
 // Reference highlighting in the 3D view. Blue so it reads as distinct from
-// selection green, preselection yellow, and the PartDesign preview colours.
-DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceColor, Base::Color(0.20F, 0.55F, 1.00F));
+// selection green, preselection yellow, and the PartDesign preview colours. Each
+// primitive kind carries its own alpha: a face is see-through so the surface under
+// it still reads, while its boundary stays solid so the outline stays crisp.
+DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceFaceColor, Base::Color(0.20F, 0.55F, 1.00F, 0.35F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceEdgeColor, Base::Color(0.20F, 0.55F, 1.00F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightReferencePointColor, Base::Color(0.20F, 0.55F, 1.00F));
 DEFINE_STYLE_PARAMETER(GeometryHighlightReferenceLineWidth, Numeric(3));
-DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredColor, Base::Color(0.45F, 0.78F, 1.00F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredFaceColor, Base::Color(0.45F, 0.78F, 1.00F, 0.55F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredEdgeColor, Base::Color(0.45F, 0.78F, 1.00F));
+DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredPointColor, Base::Color(0.45F, 0.78F, 1.00F));
 DEFINE_STYLE_PARAMETER(GeometryHighlightHoveredLineWidth, Numeric(4));
 }  // namespace Gui::StyleParameters
