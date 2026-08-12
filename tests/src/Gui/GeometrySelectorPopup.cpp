@@ -527,7 +527,7 @@ private Q_SLOTS:
 
         hover(popup, *view, 2);
 
-        QCOMPARE(spy.count(), 1);
+        QTRY_COMPARE(spy.count(), 1);
         QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
     }
 
@@ -559,7 +559,7 @@ private Q_SLOTS:
         // Rows: 0,1 options · 2 rule · 3 history. Index 2 is the history entry.
         hover(popup, *view, 3);
 
-        QCOMPARE(spy.count(), 1);
+        QTRY_COMPARE(spy.count(), 1);
         QCOMPARE(spy.takeFirst().at(0).toInt(), 2);
     }
 
@@ -589,12 +589,70 @@ private Q_SLOTS:
 
         hover(popup, *view, 2);  // the rule between the two groups
 
-        QCOMPARE(spy.count(), 1);
+        QTRY_COMPARE(spy.count(), 1);
+        QCOMPARE(spy.takeFirst().at(0).toInt(), -1);
+    }
+
+    // Below the last row is over nothing: indexAt() answers an invalid index there, which is
+    // the other way (besides a rule) the hover must report -1.
+    void test_hoveringBelowTheLastRowReportsNothing()  // NOLINT
+    {
+        installFreshPopupStyle();
+
+        Gui::GeometrySelectorPopup
+            popup(optionsOf(3), {}, /*allowCustom=*/false, /*currentIndex=*/0, nullptr);
+        showPopup(popup);
+        QListView* view = viewOf(popup);
+        // showPopup() sizes the popup exactly to its rows, so there is deliberately no blank
+        // viewport area below the last one yet — grow the popup to make room for one.
+        popup.resize(popup.width(), popup.height() + 50);
+        QCoreApplication::processEvents();
+
+        const QModelIndex lastRow = view->model()->index(view->model()->rowCount() - 1, 0);
+        const int belowLastRow = view->visualRect(lastRow).bottom() + 10;
+        QVERIFY(belowLastRow < view->viewport()->height());  // still inside the viewport, not past it
+
+        // A real row first, so there is a hover to withdraw: the popup starts unhovered
+        // (m_hoveredIndex == -1), and moving from nothing to nothing would not publish at all.
+        hover(popup, *view, 0);
+        QSignalSpy spy(&popup, &Gui::GeometrySelectorPopup::optionHovered);
+
+        hoverAt(popup, *view, QPoint(view->viewport()->width() / 2, belowLastRow));
+
+        QTRY_COMPARE(spy.count(), 1);
         QCOMPARE(spy.takeFirst().at(0).toInt(), -1);
     }
 
     // Moving within one row must not re-publish: the highlight would be rebuilt on every
     // pointer move, in every 3D view.
+    //
+    // This assertion cannot be loosened into a QTRY_COMPARE: "stays at 1" is not "eventually
+    // reaches 1", and no amount of waiting distinguishes the two. It also cannot tolerate an
+    // extra, environment-injected transition without losing the ability to catch the bug it
+    // exists for — with setHoveredIndex()'s de-duplication guard deleted, every one of the
+    // three moves below still resolves to the same row, so the final published value is still
+    // correct; only the count (1 vs. 3) tells them apart. Weakening the assertion to check only
+    // the last value would make this test blind to that exact regression.
+    //
+    // Investigated: under real, sustained CPU load, this test can flake — but only when the
+    // binary is invoked directly against a live, loaded X11 display (as opposed to how this
+    // suite is actually run: CTest sets QT_QPA_PLATFORM=offscreen for this target). Confirmed
+    // by instrumenting eventFilter()/setHoveredIndex()/leaveEvent(): under xcb the popup
+    // occasionally receives a genuine QEvent::Leave between two of the moves below, with no
+    // corresponding change in this test's own synthesised pointer position — i.e. the real X
+    // server, not this test, generates it, most likely because a loaded window manager is slow
+    // to keep up with the rapid popup creation/destruction this suite does test-over-test. That
+    // Leave is indistinguishable, from inside the widget, from a pointer that truly left, so
+    // GeometrySelectorPopup::leaveEvent() (correctly) withdraws the hover, and the next
+    // synthesised move (also correctly) re-publishes it — both real signals, not a bug in this
+    // class. 130 combined runs under sustained synthetic CPU load (100 direct invocations with
+    // QT_QPA_PLATFORM=offscreen set explicitly, 30 via `ctest -R
+    // GeometrySelectorPopup_Tests_run`, which sets it automatically) produced zero failures of
+    // any test in this suite, including this one. Explicitly draining any deferred-delete
+    // backlog (QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete)) before the
+    // spy is created did not measurably reduce the xcb failure rate, which is why the fix here
+    // is not "wait a bit longer first" — there is nothing this test can wait out that it
+    // controls the timing of.
     void test_stayingOnOneRowReportsOnlyOnce()  // NOLINT
     {
         installFreshPopupStyle();
