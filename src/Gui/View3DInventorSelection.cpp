@@ -711,13 +711,19 @@ void View3DInventorSelection::addHighlightElements(
     // After the annotations exist, and again on every rebuild: the colour is written
     // into contexts the nodes below hold, and each teardown drops them.
     if (ownerGroup) {
-        applyHighlightColor(nodes.group, ownerGroup, nodes.colors.face.asValue<SbColor>());
-        // Last, and after every Append/All above — see applyHighlightElementColors().
-        applyHighlightElementColors(
-            nodes.group,
-            ownerGroup,
-            highlightColorMap(resolvedElements, nodes.colors)
-        );
+        // The two are mutually exclusive, not merely ordered: a primary All is an
+        // unconditional select-all, and every shape node's Color handler short-circuits on
+        // that before it ever reads the per-element map, discarding the alpha we resolved.
+        // applyHighlightElementColors() already no-ops on an empty map, so falling back to
+        // the primary colour only when there is nothing to key per element costs nothing.
+        const std::map<std::string, Base::Color> elementColors
+            = highlightColorMap(resolvedElements, nodes.colors);
+        if (elementColors.empty()) {
+            applyHighlightColor(nodes.group, ownerGroup, nodes.colors.face.asValue<SbColor>());
+        }
+        else {
+            applyHighlightElementColors(nodes.group, ownerGroup, elementColors);
+        }
     }
 }
 
