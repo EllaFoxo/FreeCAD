@@ -141,33 +141,45 @@ TEST_F(GeometryHighlighterTest, clearEmptiesEveryRole)
     EXPECT_TRUE(model.effective(HighlightRole::Hovered).empty());
 }
 
-#include <Base/ServiceProvider.h>
 #include <Gui/StyleParameters.h>
 #include <Gui/StyleParameters/ParameterManager.h>
 
-// The six colours the highlighter resolves. A face is see-through so the surface under
-// it still reads; an edge and a vertex stay solid so the outline stays crisp.
+// Guards the compiled-in defaults in StyleParameters.h, not the authored theme. A bare
+// ParameterManager with no source added has nothing to resolve these six names against,
+// so resolve(ParameterDefinition<T>) falls back to each definition's own defaultValue —
+// deliberately: going through the live Gui::Application-owned manager would depend on Qt's
+// "qss:" search-path scheme, which only real GUI startup registers (StartupProcess::
+// setStyleSheetPaths()), so FreeCAD Base.yaml is unreadable from any test fixture and the
+// result would be identical, just order-dependent on some other suite having already built
+// a Gui::Application in this process — and only one suite in this binary safely can:
+// Gui::Application::Application() registers static PyCXX method tables on construction,
+// and a second construction in the same process throws. What this test actually pins is
+// that a face defaults to translucent while an edge and a vertex default to solid.
+//
+// FreeCAD Base.yaml's own values are covered only structurally, by ShippedThemeTest's
+// EveryParameterReferenceResolves, which extracts "@name.member" substrings and checks
+// each resolves to something — it does not evaluate the surrounding expression, so it
+// would not catch a malformed opacity(...) call or a face token losing its alpha.
 TEST_F(GeometryHighlighterTest, theSixHighlightColourTokensResolve)
 {
-    auto* parameters = Base::provideService<Gui::StyleParameters::ParameterManager>();
-    ASSERT_NE(parameters, nullptr);
+    const Gui::StyleParameters::ParameterManager parameters;
 
-    const Base::Color referenceFace = parameters->resolve(
+    const Base::Color referenceFace = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightReferenceFaceColor
     );
-    const Base::Color referenceEdge = parameters->resolve(
+    const Base::Color referenceEdge = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightReferenceEdgeColor
     );
-    const Base::Color referencePoint = parameters->resolve(
+    const Base::Color referencePoint = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightReferencePointColor
     );
-    const Base::Color hoveredFace = parameters->resolve(
+    const Base::Color hoveredFace = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightHoveredFaceColor
     );
-    const Base::Color hoveredEdge = parameters->resolve(
+    const Base::Color hoveredEdge = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightHoveredEdgeColor
     );
-    const Base::Color hoveredPoint = parameters->resolve(
+    const Base::Color hoveredPoint = parameters.resolve(
         Gui::StyleParameters::GeometryHighlightHoveredPointColor
     );
 
