@@ -488,3 +488,74 @@ TEST_F(GeometrySelectionTest, clearingReferencesClearsTheHighlight)
 
     EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Reference).empty());
 }
+
+TEST_F(GeometrySelectionTest, setHoveredReferencesHighlightsWhatTheModelDoesNotHold)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+
+    selection.setHoveredReferences({{.object = _objectB, .subName = "Face9"}});
+
+    const auto hovered = selection.highlighter()->model().effective(Gui::HighlightRole::Hovered);
+    ASSERT_EQ(hovered.size(), 1U);
+    EXPECT_EQ(hovered.front().object, _objectB);
+    EXPECT_EQ(hovered.front().subName, "Face9");
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferencesSurvivesAReferencesChange)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setHoveredReferences({{.object = _objectB, .subName = "Face9"}});
+
+    // The dropdown is open over a widget whose model changes underneath it. A
+    // free-standing hover is not index-bound, so nothing can invalidate it.
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+
+    const auto hovered = selection.highlighter()->model().effective(Gui::HighlightRole::Hovered);
+    ASSERT_EQ(hovered.size(), 1U);
+    EXPECT_EQ(hovered.front().object, _objectB);
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferencesWithAnEmptyListClearsTheHover)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setHoveredReferences({{.object = _objectB, .subName = "Face9"}});
+    ASSERT_EQ(selection.highlighter()->model().effective(Gui::HighlightRole::Hovered).size(), 1U);
+
+    selection.setHoveredReferences({});
+
+    EXPECT_TRUE(selection.highlighter()->model().effective(Gui::HighlightRole::Hovered).empty());
+}
+
+TEST_F(GeometrySelectionTest, setHoveredReferenceReplacesAFreeStandingHover)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+    selection.setHoveredReferences({{.object = _objectB, .subName = "Face9"}});
+
+    // The two hover sources share one role; the later one wins outright rather
+    // than the two accumulating.
+    selection.setHoveredReference(0);
+
+    const auto hovered = selection.highlighter()->model().effective(Gui::HighlightRole::Hovered);
+    ASSERT_EQ(hovered.size(), 1U);
+    EXPECT_EQ(hovered.front().object, _objectA);
+}
+
+TEST_F(GeometrySelectionTest, aFreeStandingHoverIsNotReResolvedAsAnIndex)
+{
+    GeometrySelection selection(GeometryQuantity::AllowMultiple);
+    selection.setReferences(
+        {{.object = _objectA, .subName = "Face1"}, {.object = _objectB, .subName = "Face2"}}
+    );
+    selection.setHoveredReference(1);
+    selection.setHoveredReferences({{.object = _objectB, .subName = "Face9"}});
+
+    // If the free-standing hover left _hoveredIndex at 1, this would re-publish
+    // reference 1 and silently replace Face9.
+    selection.setReferences({{.object = _objectA, .subName = "Face1"}});
+
+    const auto hovered = selection.highlighter()->model().effective(Gui::HighlightRole::Hovered);
+    ASSERT_EQ(hovered.size(), 1U);
+    EXPECT_EQ(hovered.front().subName, "Face9");
+}

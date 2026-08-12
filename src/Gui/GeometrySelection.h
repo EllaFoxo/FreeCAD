@@ -76,6 +76,11 @@ public:
     /// -1 or out of range.
     void setHoveredReference(int index);
 
+    /// Highlights @p references as hovered, whether or not the model holds them, so a
+    /// caller offering geometry the selection has not committed to — a dropdown row — can
+    /// preview it. An empty list clears the hover.
+    void setHoveredReferences(std::vector<GeometryReference> references);
+
     /// The 3D-view highlight this selection drives. Never null.
     GeometryHighlighter* highlighter() const
     {
@@ -183,8 +188,13 @@ private:
     /// Republishes the current references to the highlighter, re-resolving the
     /// hover against them. Called on every change to the reference model.
     void refreshHighlight();
-    /// The hovered position, or -1. Held so a reference change can re-resolve it.
+    /// Sends @p references to the Hovered role and records them as what is published.
+    void publishHover(std::vector<GeometryReference> references);
+    /// The hovered position, or -1 when the hover is free-standing or absent. Held so a
+    /// reference change can re-resolve an index-bound hover.
     int _hoveredIndex = -1;
+    /// What the Hovered role currently publishes, whichever entry point set it.
+    std::vector<GeometryReference> _hoveredReferences;
 };
 
 }  // namespace Gui

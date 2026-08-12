@@ -80,18 +80,41 @@ void GeometrySelection::setHoveredReference(int index)
     const bool valid = index >= 0 && index < static_cast<int>(_references.size());
     _hoveredIndex = valid ? index : -1;
     if (_hoveredIndex < 0) {
+        publishHover({});
+        return;
+    }
+    publishHover({_references[static_cast<std::size_t>(_hoveredIndex)]});
+}
+
+void GeometrySelection::setHoveredReferences(std::vector<GeometryReference> references)
+{
+    // Not index-bound: a later reference change must republish this untouched rather than
+    // resolve _hoveredIndex against the new model.
+    _hoveredIndex = -1;
+    publishHover(std::move(references));
+}
+
+void GeometrySelection::publishHover(std::vector<GeometryReference> references)
+{
+    _hoveredReferences = std::move(references);
+    if (_hoveredReferences.empty()) {
         _highlighter->clear(HighlightRole::Hovered);
         return;
     }
-    const GeometryReference& hovered = _references[static_cast<std::size_t>(_hoveredIndex)];
-    _highlighter->setHighlighted(HighlightRole::Hovered, {hovered});
+    _highlighter->setHighlighted(HighlightRole::Hovered, _hoveredReferences);
 }
 
 void GeometrySelection::refreshHighlight()
 {
     _highlighter->setHighlighted(HighlightRole::Reference, _references);
-    // Re-resolve the hover against the new model; a removal can invalidate it.
-    setHoveredReference(_hoveredIndex);
+    if (_hoveredIndex >= 0) {
+        // Re-resolve the hover against the new model; a removal can invalidate it.
+        setHoveredReference(_hoveredIndex);
+        return;
+    }
+    // A free-standing hover names geometry the model never held, so nothing about a
+    // model change can invalidate it — republish it as it stands.
+    publishHover(std::move(_hoveredReferences));
 }
 
 void GeometrySelection::updateReferences(std::vector<GeometryReference> references)
