@@ -141,25 +141,23 @@ TEST_F(GeometryHighlighterTest, clearEmptiesEveryRole)
     EXPECT_TRUE(model.effective(HighlightRole::Hovered).empty());
 }
 
+#include <memory>
+#include <string>
+
+#include <QDir>
+#include <QString>
+#include <QStringList>
+
 #include <Gui/StyleParameters.h>
 #include <Gui/StyleParameters/ParameterManager.h>
 
 // Guards the compiled-in defaults in StyleParameters.h, not the authored theme. A bare
 // ParameterManager with no source added has nothing to resolve these six names against,
-// so resolve(ParameterDefinition<T>) falls back to each definition's own defaultValue —
-// deliberately: going through the live Gui::Application-owned manager would depend on Qt's
-// "qss:" search-path scheme, which only real GUI startup registers (StartupProcess::
-// setStyleSheetPaths()), so FreeCAD Base.yaml is unreadable from any test fixture and the
-// result would be identical, just order-dependent on some other suite having already built
-// a Gui::Application in this process — and only one suite in this binary safely can:
-// Gui::Application::Application() registers static PyCXX method tables on construction,
-// and a second construction in the same process throws. What this test actually pins is
-// that a face defaults to translucent while an edge and a vertex default to solid.
+// so resolve(ParameterDefinition<T>) falls back to each definition's own defaultValue. What
+// this test actually pins is that a face defaults to translucent while an edge and a vertex
+// default to solid.
 //
-// FreeCAD Base.yaml's own values are covered only structurally, by ShippedThemeTest's
-// EveryParameterReferenceResolves, which extracts "@name.member" substrings and checks
-// each resolves to something — it does not evaluate the surrounding expression, so it
-// would not catch a malformed opacity(...) call or a face token losing its alpha.
+// The shipped theme's own values are exercised below, by ShippedGeometryHighlightTest.
 TEST_F(GeometryHighlighterTest, theSixHighlightColourTokensResolve)
 {
     const Gui::StyleParameters::ParameterManager parameters;
@@ -190,3 +188,107 @@ TEST_F(GeometryHighlighterTest, theSixHighlightColourTokensResolve)
     EXPECT_FLOAT_EQ(hoveredEdge.a, 1.0F);
     EXPECT_FLOAT_EQ(hoveredPoint.a, 1.0F);
 }
+
+namespace
+{
+/// The application's own source stack, in the application's own priority order: built-in
+/// parameters, then the design system, then the named theme on top — which pulls in
+/// "FreeCAD Base.yaml" itself through its own _inherits key. Modelled on
+/// ShippedThemeTest::loadShippedTheme() in tests/src/Gui/StyleParameters/ShippedThemeTest.cpp.
+std::unique_ptr<Gui::StyleParameters::ParameterManager> loadShippedTheme(const std::string& themeName)
+{
+    auto manager = std::make_unique<Gui::StyleParameters::ParameterManager>();
+
+    manager->addSource(
+        new Gui::StyleParameters::BuiltInParameterSource({.name = "Built-in Parameters"})
+    );
+    manager->addSource(new Gui::StyleParameters::YamlParameterSource(
+        "qss:parameters/Design System.yaml",
+        {.name = "Design System Parameters"}
+    ));
+    manager->addSource(new Gui::StyleParameters::YamlParameterSource(
+        "qss:parameters/" + themeName + ".yaml",
+        {.name = "Theme Parameters"}
+    ));
+
+    return manager;
+}
+}  // namespace
+
+// A test fixture *can* read the shipped theme YAML with no Gui::Application at all: the
+// "qss:" search path StartupProcess::setStyleSheetPaths() installs during real GUI startup is
+// just a Qt search path, and installing the identical one here is all it takes — exactly what
+// ShippedThemeTest::SetUp() does in tests/src/Gui/StyleParameters/ShippedThemeTest.cpp, and
+// what this fixture does too.
+//
+// Without this, nothing evaluates what "FreeCAD Base.yaml" actually assigns the six
+// GeometryHighlight*Color tokens. ShippedThemeTest's EveryParameterReferenceResolves only
+// extracts "@name.member" substrings and checks each resolves to something — it does not
+// evaluate the surrounding expression, so misspelling e.g. opacity(@Blue.500, 30%) into a bare
+// @Blue.500 would ship an opaque face highlight with that test still green.
+class ShippedGeometryHighlightTest: public ::testing::TestWithParam<std::string>
+{
+protected:
+    void SetUp() override
+    {
+        tests::initApplication();
+
+        previousSearchPaths = QDir::searchPaths(QStringLiteral("qss"));
+        QDir::setSearchPaths(
+            QStringLiteral("qss"),
+            {QString::fromStdString(App::Application::getResourceDir() + "Gui/Stylesheets/")}
+        );
+    }
+
+    void TearDown() override
+    {
+        QDir::setSearchPaths(QStringLiteral("qss"), previousSearchPaths);
+    }
+
+private:
+    QStringList previousSearchPaths;
+};
+
+// Pins the alpha shape the highlighter depends on: a face reads translucent so the geometry
+// under it stays visible, while an edge and a point read fully opaque.
+TEST_P(ShippedGeometryHighlightTest, TheSixTokensResolveWithTheExpectedAlpha)  // NOLINT
+{
+    const auto manager = loadShippedTheme(GetParam());
+
+    const Base::Color referenceFace = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightReferenceFaceColor
+    );
+    const Base::Color referenceEdge = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightReferenceEdgeColor
+    );
+    const Base::Color referencePoint = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightReferencePointColor
+    );
+    const Base::Color hoveredFace = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredFaceColor
+    );
+    const Base::Color hoveredEdge = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredEdgeColor
+    );
+    const Base::Color hoveredPoint = manager->resolve(
+        Gui::StyleParameters::GeometryHighlightHoveredPointColor
+    );
+
+    EXPECT_LT(referenceFace.a, 1.0F);
+    EXPECT_LT(hoveredFace.a, 1.0F);
+    EXPECT_FLOAT_EQ(referenceEdge.a, 1.0F);
+    EXPECT_FLOAT_EQ(referencePoint.a, 1.0F);
+    EXPECT_FLOAT_EQ(hoveredEdge.a, 1.0F);
+    EXPECT_FLOAT_EQ(hoveredPoint.a, 1.0F);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Themes,
+    ShippedGeometryHighlightTest,
+    ::testing::Values(std::string("FreeCAD Light"), std::string("FreeCAD Dark")),
+    [](const ::testing::TestParamInfo<std::string>& info) {
+        std::string name = info.param;
+        std::erase(name, ' ');
+        return name;
+    }
+);
