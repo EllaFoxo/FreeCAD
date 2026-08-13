@@ -128,20 +128,6 @@ void applyToOwnerGroup(SoGroup* roleGroup, SoGroup* ownerGroup, SoSelectionEleme
     path.unrefNoDelete();
 }
 
-/// Gives every node this owner replays a primary selection context in the role's
-/// colour.
-///
-/// The secondary contexts alone decide which subelements draw, but a shape node
-/// that finds no primary context draws them in the object's own material: an
-/// on-top replay of a grey face over the same grey face reads as nothing having
-/// been highlighted at all. checkGroupOnTop() pairs the two actions the same way.
-void applyHighlightColor(SoGroup* roleGroup, SoGroup* ownerGroup, const SbColor& color)
-{
-    SoSelectionElementAction action(SoSelectionElementAction::All);
-    action.setColor(color);
-    applyToOwnerGroup(roleGroup, ownerGroup, action);
-}
-
 /// The colour @p colors gives an element named @p elementName, chosen by its kind.
 Base::Color colorForElement(const HighlightRoleColors& colors, const std::string& elementName)
 {
@@ -741,22 +727,15 @@ void View3DInventorSelection::addHighlightElements(
     // every object this reference touches, and a broadcast action would let this
     // object's colours bleed onto — or be overwritten by — a sibling object's
     // annotations under the same owner.
-    if (ownerGroup) {
-        // The two are mutually exclusive, not merely ordered: a primary All is an
-        // unconditional select-all, and every shape node's Color handler short-circuits on
-        // that before it ever reads the per-element map, discarding the alpha we resolved.
-        // applyHighlightElementColors() already no-ops on an empty map, so falling back to
-        // the primary colour only when there is nothing to key per element costs nothing.
-        const std::map<std::string, Base::Color> elementColors
-            = highlightColorMap(resolvedElements, nodes.colors);
-        if (elementColors.empty()) {
-            applyHighlightColor(nodes.group, ownerGroup, nodes.colors.face.asValue<SbColor>());
-        }
-        else {
-            for (SoFCPathAnnotation* annotation : annotations) {
-                applyHighlightElementColors(nodes.group, ownerGroup, annotation, elementColors);
-            }
-        }
+    //
+    // ownerGroup is non-null here only because some element resolved, and every
+    // resolved element (including a whole-object "" expanding to its three bare
+    // prefixes) pushes into resolvedElements first, so elementColors is never empty
+    // at this point.
+    const std::map<std::string, Base::Color> elementColors
+        = highlightColorMap(resolvedElements, nodes.colors);
+    for (SoFCPathAnnotation* annotation : annotations) {
+        applyHighlightElementColors(nodes.group, ownerGroup, annotation, elementColors);
     }
 }
 
