@@ -41,6 +41,7 @@
 #include "Command.h"
 #include "GeometrySelectorWidget.h"
 #include "Inventor/Draggers/SoTransformDragger.h"
+#include "MetaTypes.h"  // Base::Placement as QVariant payload for the origin history data
 #include "QuantitySpinBox.h"
 #include "ViewProviderDragger.h"
 #include "TaskView/TaskView.h"
@@ -211,6 +212,12 @@ void TaskTransform::buildTransformOriginSelector()
     }
     selector->setOptions(std::move(options));
     selector->setAllowCustom(subObjectPlacementProvider != nullptr);
+    // A remembered pick carries no snap point of its own — referencePlacementFromSelection()
+    // partly derives the origin from where on the element the user clicked — so the placement
+    // resolved by the live pick is stashed on the entry and restored verbatim on reselection.
+    selector->setHistoryDataProvider([this] {
+        return QVariant::fromValue(customTransformOrigin.value_or(Base::Placement {}));
+    });
 
     connect(
         selector,
@@ -775,6 +782,13 @@ void TaskTransform::onTransformOriginModeChanged([[maybe_unused]] int index)
 {
     const auto* option = ui->transformOriginSelector->currentOption();
     placementMode = option ? option->userData.value<PlacementMode>() : PlacementMode::Custom;
+
+    // Reselecting a remembered pick performs no pick of its own, so onTransformOriginPick never
+    // runs for it; restore the placement resolved when that entry was originally captured.
+    if (const QVariant historyData = ui->transformOriginSelector->currentHistoryData();
+        historyData.isValid()) {
+        customTransformOrigin = historyData.value<Base::Placement>();
+    }
     updateTransformOrigin();
 }
 
