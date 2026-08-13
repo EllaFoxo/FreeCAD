@@ -177,12 +177,17 @@ std::map<std::string, Base::Color> highlightColorMap(
 }
 
 /// Writes a per-element colour, alpha included, into the secondary context of every node
-/// this owner replays. Must run after the Append/All actions that narrow the render: the
-/// shape nodes' Color handlers create a select-all context when none exists yet, and a
-/// select-all context renders the whole object rather than the picked element.
+/// @p node replays. Scoped to that one annotation rather than the whole owner group: an
+/// owner group holds every object's annotations under this reference, and broadcasting the
+/// action across it (as applyToOwnerGroup() does) would let a later object's call overwrite
+/// an earlier object's colours through the shared secondary context Coin keys by node path.
+/// Must run after the Append/All actions that narrow the render: the shape nodes' Color
+/// handlers create a select-all context when none exists yet, and a select-all context
+/// renders the whole object rather than the picked element.
 void applyHighlightElementColors(
     SoGroup* roleGroup,
     SoGroup* ownerGroup,
+    SoFCPathAnnotation* node,
     const std::map<std::string, Base::Color>& byElement
 )
 {
@@ -191,7 +196,16 @@ void applyHighlightElementColors(
     }
     SoSelectionElementAction action(SoSelectionElementAction::Color, true);
     action.setColors(byElement);
-    applyToOwnerGroup(roleGroup, ownerGroup, action);
+
+    SoPath* path = node->getPath();
+    SoTempPath tmpPath(3 + (path ? path->getLength() : 0));
+    tmpPath.ref();
+    tmpPath.append(roleGroup);
+    tmpPath.append(ownerGroup);
+    tmpPath.append(node);
+    tmpPath.append(path);
+    action.apply(&tmpPath);
+    tmpPath.unrefNoDelete();
 }
 }  // namespace
 
@@ -722,7 +736,11 @@ void View3DInventorSelection::addHighlightElements(
     }
 
     // After the annotations exist, and again on every rebuild: the colour is written
-    // into contexts the nodes below hold, and each teardown drops them.
+    // into contexts the nodes below hold, and each teardown drops them. Applied per
+    // annotation rather than once for the whole owner group: ownerGroup is shared by
+    // every object this reference touches, and a broadcast action would let this
+    // object's colours bleed onto — or be overwritten by — a sibling object's
+    // annotations under the same owner.
     if (ownerGroup) {
         // The two are mutually exclusive, not merely ordered: a primary All is an
         // unconditional select-all, and every shape node's Color handler short-circuits on
@@ -735,7 +753,9 @@ void View3DInventorSelection::addHighlightElements(
             applyHighlightColor(nodes.group, ownerGroup, nodes.colors.face.asValue<SbColor>());
         }
         else {
-            applyHighlightElementColors(nodes.group, ownerGroup, elementColors);
+            for (SoFCPathAnnotation* annotation : annotations) {
+                applyHighlightElementColors(nodes.group, ownerGroup, annotation, elementColors);
+            }
         }
     }
 }
