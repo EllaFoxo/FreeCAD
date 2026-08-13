@@ -609,9 +609,15 @@ void GeometrySelectorWidget::paintAsComboBox(QStylePainter& painter) const
 void GeometrySelectorWidget::changeEvent(QEvent* event)
 {
     QWidget::changeEvent(event);
-    // Re-resolve token-driven metrics when the theme or style swaps out.
+    // Re-resolve token-driven metrics when the theme or style swaps out. rebuildRows() (which
+    // calls applyStyleMetrics() itself) is needed rather than applyStyleMetrics() alone: it
+    // re-derives the widget's own container metrics, but the rows already on screen bake their
+    // icon-to-text spacing and item padding into their own QHBoxLayout at construction time —
+    // a plain int handed to their constructor, not a live binding to the token — so without a
+    // full rebuild they keep showing whatever the metrics were the last time a reference or
+    // selection change last (re)built them.
     if (event->type() == QEvent::StyleChange || event->type() == QEvent::FontChange) {
-        applyStyleMetrics();
+        rebuildRows();
     }
 }
 

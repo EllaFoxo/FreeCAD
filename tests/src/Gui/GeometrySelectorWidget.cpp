@@ -1344,6 +1344,48 @@ private Q_SLOTS:
         widget.render(&referenceListPixmap);
     }
 
+    // A reference row bakes its icon-to-text spacing into its QHBoxLayout once, at the time
+    // rebuildRows() constructs it — a plain int handed to the row's constructor, not a live
+    // binding to the token. changeEvent(StyleChange) re-resolves the *widget's* own container
+    // metrics (applyStyleMetrics()) but must also rebuild the already-displayed rows, or a
+    // theme/token change leaves them showing stale spacing — pinned to whatever it was the last
+    // time a reference/selection change triggered a rebuild — while a freshly-opened dropdown
+    // popup (built from scratch on every open) always reflects the current token.
+    void test_rowSpacingRefreshesOnThemeChange()  // NOLINT
+    {
+        ensureStyledApplication();
+
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+
+        auto* rowBefore = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QVERIFY(rowBefore != nullptr);
+        QCOMPARE(rowBefore->layout()->spacing(), 6);  // the fixture's starting IconSpacing
+
+        // Simulate a live theme edit: a new IconSpacing value, reloaded exactly as a real theme
+        // reload would (new source outranks the fixture; freeCADStyle() is rebuilt fresh so its
+        // token cache cannot still be holding the old value — deleting and letting the accessor
+        // lazily recreate it is the same pattern GeometrySelectorPopup's DropdownStyleFixture
+        // uses between tests).
+        Gui::Application::Instance->styleParameterManager()->addSource(
+            new Gui::StyleParameters::InMemoryParameterSource(
+                {{.name = "GeometrySelectorItemIconSpacing", .value = "20px"}},
+                {.name = "Theme Change Simulation"}
+            )
+        );
+        Gui::Application::Instance->styleParameterManager()->reload();
+        delete Gui::Application::Instance->freeCADStyle();
+
+        QEvent styleChangeEvent(QEvent::StyleChange);
+        QCoreApplication::sendEvent(&widget, &styleChangeEvent);
+        QCoreApplication::processEvents();
+
+        auto* rowAfter = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QVERIFY(rowAfter != nullptr);
+        QCOMPARE(rowAfter->layout()->spacing(), 20);
+    }
+
 private:
     // Real Application::Instance + FreeCADStyle, required to resolve the List/Select tokens the
     // geometry tests above exercise. Constructed lazily, only from those tests, and only once:
