@@ -332,6 +332,17 @@ public:
     /// Empty when the element has no boundary or the provider does not model one.
     virtual std::vector<std::string> getBoundaryElements(const char* subName) const;
 
+    /// @p elementName, translated into the namespace the scene graph's shape nodes
+    /// recognize for per-element colouring — the plain Face/Edge/Vertex kind prefixes
+    /// they filter selection colours on. Identity by default. A provider whose element
+    /// names live in a different namespace (e.g. a prefix marking geometry that has no
+    /// direct counterpart in the rendered shape) overrides this so a highlight colour
+    /// keyed by @p elementName still reaches the node that draws it.
+    virtual std::string mapElementNameForColor(const std::string& elementName) const
+    {
+        return elementName;
+    }
+
     /** partial rendering setup
      *
      * @param subelements: a list of dot separated string refer to the sub element

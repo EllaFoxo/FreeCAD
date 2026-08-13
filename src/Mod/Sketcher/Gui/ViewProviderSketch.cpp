@@ -4176,6 +4176,15 @@ std::vector<std::string> ViewProviderSketch::getBoundaryElements(const char* sub
         SketchObject::internalPrefix()
     );
 }
+
+std::string ViewProviderSketch::mapElementNameForColor(const std::string& elementName) const
+{
+    // getDetailPath() resolves the internal namespace only outside edit mode, so an
+    // "Internal..." name reaching here during edit mode was not resolved through it and
+    // names something else entirely — leave it alone, matching getBoundaryElements() above.
+    const char* realName = isInEditMode() ? nullptr : internalElementName(elementName.c_str());
+    return realName ? std::string(realName) : elementName;
+}
 // clang-format off
 
 void ViewProviderSketch::attach(App::DocumentObject* pcFeat)

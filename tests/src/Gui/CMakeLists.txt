@@ -26,6 +26,7 @@ add_executable(Gui_tests_run
         GeometrySelectionTest.cpp
         GeometryHighlighterTest.cpp
         TemporaryVisibilityTest.cpp
+        ViewProviderTest.cpp
         ThumbnailCamera.cpp
 )
 
