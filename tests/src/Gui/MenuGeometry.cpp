@@ -528,6 +528,30 @@ private Q_SLOTS:
         );
     }
 
+    // The two check types ship identical, so nothing else in this file can tell them apart at the
+    // box. A theme must still be able to: an exclusive group wants a round well where a checkbox
+    // wants a square one. Stating a token for the Exclusive variant alone has to reach exactly
+    // the exclusive row and leave the other on the shared value.
+    void test_anExclusiveRowResolvesItsOwnIconIndicatorTokens()  // NOLINT
+    {
+        const auto guard = overrideToken("MenuIconIndicatorExclusiveCheckedBackground", "#ff8000");
+
+        // The style must be built after the override: FreeCADStyle caches resolved box geometry
+        // and box styles per instance, and only clearTokenCache() drops them — which fires from
+        // eventFilter() on ThemeReloadEvent, an event a bare instance like this never receives.
+        ProbeStyle freecadStyle;
+        QMenu menu;
+
+        QCOMPARE(
+            iconIndicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::Exclusive, true),
+            QColor(QStringLiteral("#ff8000"))
+        );
+        QCOMPARE(
+            iconIndicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::NonExclusive, true),
+            QColor(QStringLiteral("#00ff7f"))
+        );
+    }
+
     // The column is as wide as the widest occupant any row can have, so a narrower occupant has
     // to be centred in it rather than pinned to the leading edge — otherwise a 14px indicator in
     // a 16px column sits 1px off the icons above and below it.

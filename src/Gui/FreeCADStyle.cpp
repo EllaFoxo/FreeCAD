@@ -5022,6 +5022,9 @@ StyleContext FreeCADStyle::contextOf(
             if (menuOption->checked) {
                 context.state |= StyleState::Checked;
             }
+            if (menuOption->checkType == QStyleOptionMenuItem::Exclusive) {
+                context.variant.set(VariantSlot::CheckType, CheckType::Exclusive);
+            }
         }
     }
     else if (

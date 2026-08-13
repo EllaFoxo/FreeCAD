@@ -105,6 +105,9 @@ const std::map<VariantSlot, std::map<uint8_t, std::string_view>> variantSlotName
     {VariantSlot::FrameType, {
         {static_cast<uint8_t>(FrameType::Flat), "Flat"},
     }},
+    {VariantSlot::CheckType, {
+        {static_cast<uint8_t>(CheckType::Exclusive), "Exclusive"},
+    }},
     {VariantSlot::TransparencyMode, {
         {static_cast<uint8_t>(TransparencyMode::Transparent), "Transparent"},
     }},
@@ -202,6 +205,7 @@ constexpr std::array<std::string_view, size_t(VariantSlot::COUNT)> variantSlotDi
     "Position",         // VariantSlot::Position
     "RowType",          // VariantSlot::RowType
     "FrameType",        // VariantSlot::FrameType
+    "CheckType",        // VariantSlot::CheckType
     "TransparencyMode", // VariantSlot::TransparencyMode
 };
 // clang-format on
@@ -701,7 +705,7 @@ void populateBuiltinDescriptors(ParameterDescriptorRegistry& registry)
     // List's values instead, which leaves menus independently tunable.
     registry.registerDescriptor({
         .name     = "Menu",
-        .variants = {"State"},
+        .variants = {"CheckType", "State"},
         .inherits = {},
     }, StyleComponent::Menu);
     // clang-format on

@@ -203,6 +203,23 @@ enum class FrameType : uint8_t
 };
 
 /**
+ * @brief Whether a checkable menu item belongs to an exclusive group.
+ *
+ * Mirrors QStyleOptionMenuItem::checkType. No theme states a value for it, so an exclusive item
+ * looks exactly like a non-exclusive one; the slot exists so a theme can give the two different
+ * shapes — a round well for a group, a square one for a checkbox.
+ *
+ * Add new check types before COUNT.
+ */
+enum class CheckType : uint8_t
+{
+    Default,
+    Exclusive,
+    // Add new check types before COUNT
+    COUNT
+};
+
+/**
  * @brief Selects the treatment a component uses when it must not paint an opaque surface.
  *
  * Transparent is reached two ways, which mean different things and must not be
@@ -243,6 +260,7 @@ enum class VariantSlot : uint8_t
     Position,
     RowType,           // Alternate row parity for item-view components
     FrameType,         // Flat frame treatment for framed containers
+    CheckType,         // Exclusive (radio) vs non-exclusive check state on a menu item
     TransparencyMode,  // Transparent background for status bar / menu bar corner toolbars
     // Add new variant dimensions before COUNT
     COUNT
