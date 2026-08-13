@@ -33,9 +33,11 @@ constexpr int indicatorSize = 14;
 constexpr int arrowWidth = 10;
 constexpr int shortcutSpacing = 20;
 constexpr int separatorHeight = 9;
-// 6px a side, so the box's total 12px is distinct from every other constant here and from every
-// sum of them — a wrong column therefore fails loudly instead of coincidentally matching.
-constexpr int iconIndicatorPadding = 6;
+// 13px a side (26px total): distinct from every other constant above and from the fixture's own
+// MenuItemPadding (6px horizontal, 3px vertical) — that collision had teeth, since the box's
+// geometry sits inside the item's, so a bug that resolved the item's box instead of the
+// indicator's would still have passed the horizontal assertions below at the old value.
+constexpr int iconIndicatorPadding = 13;
 constexpr int iconIndicatorPaddingTotal = iconIndicatorPadding * 2;
 
 // menuItemLayout, menuItemDrawnLabel and menuArrowColor are protected on FreeCADStyle;
@@ -82,8 +84,9 @@ public:
                     {.name = "MenuItemHoveredTextColor", .value = "#ffff00"},
                     {.name = "MenuItemCheckedBackground", .value = "#0000ff"},
 
-                    {.name = "MenuIconIndicatorPadding", .value = "padding(6px)"},
+                    {.name = "MenuIconIndicatorPadding", .value = "padding(13px)"},
                     {.name = "MenuIconIndicatorBorderRadius", .value = "2px"},
+                    {.name = "MenuIconIndicatorBorderThickness", .value = "1px"},
                     {.name = "MenuIconIndicatorCheckedBackground", .value = "#00ff7f"},
 
                     {.name = "MenuShortcutSpacing", .value = "20px"},
@@ -938,6 +941,38 @@ private Q_SLOTS:
         // order reverses, without any per-part special casing.
         QVERIFY(layout->indicator.left() > layout->text.left());
         QVERIFY(layout->text.left() > layout->arrow.left());
+    }
+
+    // test_rightToLeftMirrorsTheWholeWalk exercises the glyph path only (no icon), so it never
+    // touches the layout.iconIndicator mirroring line in menuItemLayout(). A checkable row with
+    // an icon puts the state box on the leading (right) side too, and the box has to stay
+    // wrapped around the icon after mirroring rather than being left on the wrong side of it.
+    void test_rightToLeftMirrorsTheIconIndicator()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        option.maxIconWidth = 20;
+        option.icon = solidIcon();
+        option.direction = Qt::RightToLeft;
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+        QVERIFY(!layout->iconIndicator.isNull());
+
+        // The box stays wrapped around the icon after mirroring, not left behind on the icon's
+        // pre-mirror side.
+        QVERIFY(layout->iconIndicator.contains(layout->icon));
+
+        // The leading column — icon and its box — sits on the right, same as the glyph-only
+        // case above.
+        QVERIFY(layout->iconIndicator.left() > layout->text.left());
     }
 
     // The hovered background is the one state the fixture can see without a font: paint a real

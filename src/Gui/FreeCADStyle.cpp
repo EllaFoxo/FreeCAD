@@ -3190,31 +3190,28 @@ void FreeCADStyle::drawMenuItemIcon(
     const MenuItemLayout& layout
 ) const
 {
-    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+    StyleContext iconContext = contextOf(widget, option, StyleComponentElement::Item);
 
-    if (layout.iconIndicator.isNull()) {
-        const QPixmap pixmap
-            = renderStyledIcon(painter, option->icon, layout.icon.size(), option, itemContext);
-        drawItemPixmap(painter, layout.icon, Qt::AlignCenter, pixmap);
-        return;
+    if (!layout.iconIndicator.isNull()) {
+        const StyleContext indicatorContext
+            = contextOf(widget, option, StyleComponentElement::IconIndicator);
+        paintBox(painter, layout.iconIndicator, indicatorContext);
+
+        // Elements do not chain, so the box's namespace cannot reach MenuItemDisabledTextColor.
+        // With no icon colour of its own the icon keeps following the item, which is what
+        // carries the disabled and hovered colours; a box that states one is asking to override
+        // exactly that. Checking IconColor alone here, rather than the IconColor -> TextColor ->
+        // palette fallback resolveIconColor() applies elsewhere, is probably fine for this
+        // element specifically: it paints no text of its own, so a theme stating
+        // MenuIconIndicatorCheckedTextColor without IconColor is silently ignored rather than
+        // picked up as a colour.
+        if (resolve<Base::Color>(indicatorContext, StyleProperty::IconColor).has_value()) {
+            iconContext = indicatorContext;
+        }
     }
 
-    const StyleContext indicatorContext
-        = contextOf(widget, option, StyleComponentElement::IconIndicator);
-    paintBox(painter, layout.iconIndicator, indicatorContext);
-
-    // Elements do not chain, so the box's namespace cannot reach MenuItemDisabledTextColor. With
-    // no icon colour of its own the icon keeps following the item, which is what carries the
-    // disabled and hovered colours; a box that states one is asking to override exactly that.
-    const bool indicatorStatesIconColor
-        = resolve<Base::Color>(indicatorContext, StyleProperty::IconColor).has_value();
-    const QPixmap pixmap = renderStyledIcon(
-        painter,
-        option->icon,
-        layout.icon.size(),
-        option,
-        indicatorStatesIconColor ? indicatorContext : itemContext
-    );
+    const QPixmap pixmap
+        = renderStyledIcon(painter, option->icon, layout.icon.size(), option, iconContext);
     drawItemPixmap(painter, layout.icon, Qt::AlignCenter, pixmap);
 }
 
@@ -3448,7 +3445,13 @@ QMargins FreeCADStyle::menuIconIndicatorPadding(
         return {};
     }
 
-    const StyleContext context = contextOf(widget, option, StyleComponentElement::IconIndicator);
+    // Deliberately menu-wide: this padding sets the leading column's width and the row's content
+    // height, both of which every row in the menu must agree on. State and CheckType are
+    // neutralised here so the answer cannot vary row to row — colour, radius and inner shadow
+    // stay fully state- and variant-sensitive through paintBox()'s own context.
+    StyleContext context = contextOf(widget, option, StyleComponentElement::IconIndicator);
+    context.state = StyleState::Normal;
+    context.variant.set(VariantSlot::CheckType, CheckType::Default);
     return resolveBoxGeometry(context).padding.toMargins();
 }
 

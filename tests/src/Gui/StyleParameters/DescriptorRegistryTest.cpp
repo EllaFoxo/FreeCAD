@@ -115,6 +115,7 @@ TEST(DescriptorRegistryTest, MenuSubElementsNameTheirOwnPrefixes)
     EXPECT_EQ(prefixFor(StyleComponentElement::Separator), "MenuSeparator");
     EXPECT_EQ(prefixFor(StyleComponentElement::Arrow), "MenuArrow");
     EXPECT_EQ(prefixFor(StyleComponentElement::Shortcut), "MenuShortcut");
+    EXPECT_EQ(prefixFor(StyleComponentElement::IconIndicator), "MenuIconIndicator");
 }
 
 TEST(DescriptorRegistryTest, HoveredOutranksSelectedInTheFallbackChain)
