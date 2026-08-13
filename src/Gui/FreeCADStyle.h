@@ -677,10 +677,13 @@ protected:
      *
      * @p indicator and @p icon are mutually exclusive — they share one leading column, so at
      * most one of them is ever set and a caller may paint both without checking for a clash.
+     * @p iconIndicator is the exception: it is set only together with @p icon, on a checkable
+     * row that has one, and is where that row's check state is drawn instead of a glyph.
      */
     struct MenuItemLayout
     {
         QRect indicator;
+        QRect iconIndicator;
         QRect icon;
         QRect text;
         QRect shortcut;
@@ -853,6 +856,16 @@ private:
         const QStyleOptionMenuItem* option,
         const QWidget* widget,
         const QRect& rect
+    ) const;
+
+    /**
+     * @brief Draws a menu item's icon, and the state box behind it when the row has one.
+     */
+    void drawMenuItemIcon(
+        QPainter* painter,
+        const QStyleOptionMenuItem* option,
+        const QWidget* widget,
+        const MenuItemLayout& layout
     ) const;
 
     void drawMenuItemText(
@@ -1123,6 +1136,14 @@ private:
     bool ownsMenuSurface(const QWidget* widget, const QStyleOption* option) const;
 
     int menuIconSize(const QWidget* widget, const QStyleOption* option) const;
+
+    /**
+     * @brief How far the state box behind a checkable item's icon stands off that icon.
+     *
+     * Null for a menu with no checkable items, which can never show the box — the leading
+     * column must not reserve room for it there.
+     */
+    QMargins menuIconIndicatorPadding(const QStyleOptionMenuItem* option, const QWidget* widget) const;
 
     /** @brief The label of a menu item, without the accelerator Qt appends after a tab. */
     static QString menuItemLabel(const QString& text);

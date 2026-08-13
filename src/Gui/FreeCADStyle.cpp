@@ -3183,6 +3183,41 @@ void FreeCADStyle::drawMenuItemIndicator(
     proxy()->drawPrimitive(primitive, &indicatorOption, painter, widget);
 }
 
+void FreeCADStyle::drawMenuItemIcon(
+    QPainter* painter,
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget,
+    const MenuItemLayout& layout
+) const
+{
+    const StyleContext itemContext = contextOf(widget, option, StyleComponentElement::Item);
+
+    if (layout.iconIndicator.isNull()) {
+        const QPixmap pixmap
+            = renderStyledIcon(painter, option->icon, layout.icon.size(), option, itemContext);
+        drawItemPixmap(painter, layout.icon, Qt::AlignCenter, pixmap);
+        return;
+    }
+
+    const StyleContext indicatorContext
+        = contextOf(widget, option, StyleComponentElement::IconIndicator);
+    paintBox(painter, layout.iconIndicator, indicatorContext);
+
+    // Elements do not chain, so the box's namespace cannot reach MenuItemDisabledTextColor. With
+    // no icon colour of its own the icon keeps following the item, which is what carries the
+    // disabled and hovered colours; a box that states one is asking to override exactly that.
+    const bool indicatorStatesIconColor
+        = resolve<Base::Color>(indicatorContext, StyleProperty::IconColor).has_value();
+    const QPixmap pixmap = renderStyledIcon(
+        painter,
+        option->icon,
+        layout.icon.size(),
+        option,
+        indicatorStatesIconColor ? indicatorContext : itemContext
+    );
+    drawItemPixmap(painter, layout.icon, Qt::AlignCenter, pixmap);
+}
+
 QString FreeCADStyle::menuItemDrawnLabel(
     const QFontMetrics& metrics,
     int textFlags,
@@ -3273,9 +3308,7 @@ void FreeCADStyle::drawMenuItem(
     }
 
     if (!layout->icon.isNull()) {
-        const QPixmap pixmap
-            = renderStyledIcon(painter, option->icon, layout->icon.size(), option, itemContext);
-        drawItemPixmap(painter, layout->icon, Qt::AlignCenter, pixmap);
+        drawMenuItemIcon(painter, option, widget, *layout);
     }
 
     drawMenuItemText(painter, option, widget, *layout);
@@ -3403,6 +3436,22 @@ int FreeCADStyle::menuIconSize(const QWidget* widget, const QStyleOption* option
     return resolve<int>(context, StyleProperty::IconSize).value_or(0);
 }
 
+QMargins FreeCADStyle::menuIconIndicatorPadding(
+    const QStyleOptionMenuItem* option,
+    const QWidget* widget
+) const
+{
+    // menuHasCheckableItems is menu-wide, so this answer is the same for every row: a menu with
+    // nothing to check can never show the box, and reserving its padding there would indent every
+    // label for a decoration that never arrives.
+    if (!option->menuHasCheckableItems) {
+        return {};
+    }
+
+    const StyleContext context = contextOf(widget, option, StyleComponentElement::IconIndicator);
+    return resolveBoxGeometry(context).padding.toMargins();
+}
+
 bool FreeCADStyle::ownsMenuItem(const QStyleOptionMenuItem* option, const QWidget* widget) const
 {
     if (option == nullptr) {
@@ -3443,10 +3492,12 @@ FreeCADStyle::MenuItemColumns FreeCADStyle::menuItemColumns(
 
     MenuItemColumns columns;
 
-    // The indicator and the icon share one leading slot: an item shows its icon when it has
-    // one and its check indicator otherwise, so reserving a column for each would indent
-    // every label past a slot that is empty on most rows. Both flags are menu-wide, so the
-    // column is as wide as the widest occupant any row can have and labels stay aligned.
+    // The icon and the check glyph share one leading slot: a row shows its icon when it has one
+    // and its check glyph otherwise, so reserving a column for each would indent every label past
+    // a slot that is empty on most rows. A checkable row with an icon keeps both by wearing its
+    // state as a box behind that icon, which is why the icon's share of the column includes that
+    // box's padding. Both flags below are menu-wide, so the column is as wide as the widest
+    // occupant any row can have and labels stay aligned.
     //
     // maxIconWidth is Qt's hardcoded PM_SmallIconSize + 4, so only its zero / non-zero answer
     // is used — "does this menu have icons". The column itself is MenuIconSize.
@@ -3454,7 +3505,11 @@ FreeCADStyle::MenuItemColumns FreeCADStyle::menuItemColumns(
     // checkable. That is Qt's constraint, not a choice.
     int leading = 0;
     if (option->maxIconWidth > 0) {
-        leading = std::max(leading, menuIconSize(widget, option));
+        const QMargins indicatorPadding = menuIconIndicatorPadding(option, widget);
+        leading = std::max(
+            leading,
+            menuIconSize(widget, option) + indicatorPadding.left() + indicatorPadding.right()
+        );
     }
     if (option->menuHasCheckableItems) {
         leading = std::max(leading, proxy()->pixelMetric(PM_IndicatorWidth, option, widget));
@@ -3522,7 +3577,11 @@ QSize FreeCADStyle::menuItemSizeFromContents(const QStyleOptionMenuItem* option,
 
     int contentHeight = metrics.height();
     if (option->maxIconWidth > 0) {
-        contentHeight = qMax(contentHeight, menuIconSize(widget, option));
+        const QMargins indicatorPadding = menuIconIndicatorPadding(option, widget);
+        contentHeight = qMax(
+            contentHeight,
+            menuIconSize(widget, option) + indicatorPadding.top() + indicatorPadding.bottom()
+        );
     }
     if (option->menuHasCheckableItems) {
         contentHeight = qMax(contentHeight, proxy()->pixelMetric(PM_IndicatorHeight, option, widget));
@@ -3569,20 +3628,27 @@ std::optional<FreeCADStyle::MenuItemLayout> FreeCADStyle::menuItemLayout(
     if (columns.leading > 0) {
         const QRect column = columnAt(left, columns.leading - geometry.iconSpacing);
 
-        // One slot, one occupant, and the checkable row's state takes it: the label already
-        // identifies the action, so when only one glyph fits, the one thing the row cannot
-        // say any other way is whether it is on. Deciding it here rather than in drawMenuItem
-        // keeps the painter from having to repeat the rule and drift from it.
-        if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
+        // The icon takes the slot whenever the row has one: it is how a command is found, while
+        // the check state is what gets read once it has been found. A checkable row keeps both by
+        // wearing its state as a box behind the icon. Only a checkable row with no icon still
+        // needs the glyph — there is nothing for a box to sit behind. Deciding it here rather
+        // than in drawMenuItem keeps the painter from repeating the rule and drifting from it.
+        if (!option->icon.isNull()) {
+            const int extent = menuIconSize(widget, option);
+            layout.icon = centredIn(column, {extent, extent});
+
+            if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
+                layout.iconIndicator = layout.icon.marginsAdded(
+                    menuIconIndicatorPadding(option, widget)
+                );
+            }
+        }
+        else if (option->checkType != QStyleOptionMenuItem::NotCheckable) {
             const QSize size(
                 proxy()->pixelMetric(PM_IndicatorWidth, option, widget),
                 proxy()->pixelMetric(PM_IndicatorHeight, option, widget)
             );
             layout.indicator = centredIn(column, size);
-        }
-        else if (!option->icon.isNull()) {
-            const int extent = menuIconSize(widget, option);
-            layout.icon = centredIn(column, {extent, extent});
         }
 
         left += columns.leading;
@@ -3608,6 +3674,7 @@ std::optional<FreeCADStyle::MenuItemLayout> FreeCADStyle::menuItemLayout(
 
     if (option->direction == Qt::RightToLeft) {
         layout.indicator = visualRect(option->direction, content, layout.indicator);
+        layout.iconIndicator = visualRect(option->direction, content, layout.iconIndicator);
         layout.icon = visualRect(option->direction, content, layout.icon);
         layout.text = visualRect(option->direction, content, layout.text);
         layout.shortcut = visualRect(option->direction, content, layout.shortcut);

@@ -82,19 +82,20 @@ enum class StyleComponent : uint8_t
  */
 enum class StyleComponentElement : uint8_t
 {
-    Root,         // Main component
-    Item,         // Item of the component (useful for lists, trees etc.)
-    Row,          // Row of the component (useful for lists, trees etc.)
-    Indicator,    // Checkbox for items
-    Tab,          // Individual tab of a TabBar
-    Base,         // Base strip of a TabBar (PE_FrameTabBarBase)
-    Menu,         // Dropdown menu strip of a MenuButtonPopup ToolButton
-    CloseButton,  // Tab close button (QAbstractButton child of QTabBar)
-    Branch,       // Connector lines in the indent column of a tree view
-    Title,        // Title of a framed container, drawn on its top edge
-    Separator,    // Separator rule, and the label of an addSection() header, inside a menu
-    Arrow,        // Submenu arrow of a menu item
-    Shortcut,     // Accelerator column of a menu item
+    Root,           // Main component
+    Item,           // Item of the component (useful for lists, trees etc.)
+    Row,            // Row of the component (useful for lists, trees etc.)
+    Indicator,      // Checkbox for items
+    IconIndicator,  // State box drawn behind a checkable menu item's icon
+    Tab,            // Individual tab of a TabBar
+    Base,           // Base strip of a TabBar (PE_FrameTabBarBase)
+    Menu,           // Dropdown menu strip of a MenuButtonPopup ToolButton
+    CloseButton,    // Tab close button (QAbstractButton child of QTabBar)
+    Branch,         // Connector lines in the indent column of a tree view
+    Title,          // Title of a framed container, drawn on its top edge
+    Separator,      // Separator rule, and the label of an addSection() header, inside a menu
+    Arrow,          // Submenu arrow of a menu item
+    Shortcut,       // Accelerator column of a menu item
     // Add new components before COUNT
     COUNT,
 };

@@ -33,6 +33,10 @@ constexpr int indicatorSize = 14;
 constexpr int arrowWidth = 10;
 constexpr int shortcutSpacing = 20;
 constexpr int separatorHeight = 9;
+// 6px a side, so the box's total 12px is distinct from every other constant here and from every
+// sum of them — a wrong column therefore fails loudly instead of coincidentally matching.
+constexpr int iconIndicatorPadding = 6;
+constexpr int iconIndicatorPaddingTotal = iconIndicatorPadding * 2;
 
 // menuItemLayout, menuItemDrawnLabel and menuArrowColor are protected on FreeCADStyle;
 // using-declarations republish them so the column walk, the label-eliding decision and the
@@ -77,6 +81,10 @@ public:
                     {.name = "MenuItemHoveredBackground", .value = "#ff0000"},
                     {.name = "MenuItemHoveredTextColor", .value = "#ffff00"},
                     {.name = "MenuItemCheckedBackground", .value = "#0000ff"},
+
+                    {.name = "MenuIconIndicatorPadding", .value = "padding(6px)"},
+                    {.name = "MenuIconIndicatorBorderRadius", .value = "2px"},
+                    {.name = "MenuIconIndicatorCheckedBackground", .value = "#00ff7f"},
 
                     {.name = "MenuShortcutSpacing", .value = "20px"},
                     {.name = "MenuShortcutTextColor", .value = "#808080"},
@@ -195,6 +203,43 @@ private:
         painter.end();
 
         return canvas.pixelColor(layout->indicator.center());
+    }
+
+    // Paints one checkable row that carries an icon over magenta and reports the colour just
+    // inside the state box behind that icon — clear of the icon itself and of the box's rounded
+    // corners, so it is the box's own fill and not something drawn on top of it.
+    // Returns an invalid colour when the row produced no box at all.
+    static QColor iconIndicatorFillOf(
+        ProbeStyle& probeStyle,
+        QMenu& menu,
+        QStyleOptionMenuItem::CheckType checkType,
+        bool checked
+    )
+    {
+        QStyle& style = probeStyle;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = checkType;
+        option.checked = checked;
+        option.maxIconWidth = 20;
+        option.icon = solidIcon();
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = probeStyle.menuItemLayout(&option, &menu);
+        if (!layout.has_value() || layout->iconIndicator.isNull()) {
+            return {};
+        }
+
+        QImage canvas(option.rect.size(), QImage::Format_ARGB32);
+        canvas.fill(Qt::magenta);
+
+        QPainter painter(&canvas);
+        style.drawControl(QStyle::CE_MenuItem, &option, &painter, &menu);
+        painter.end();
+
+        return canvas.pixelColor(layout->iconIndicator.left() + 1, layout->iconIndicator.center().y());
     }
 
 private Q_SLOTS:
@@ -377,15 +422,19 @@ private Q_SLOTS:
         both.maxIconWidth = 20;
 
         // Both flags are menu-wide, so this holds for every row of such a menu regardless of
-        // what the row itself carries.
-        QCOMPARE(widthOf(both) - base, std::max(iconSize, indicatorSize) + iconSpacing);
+        // what the row itself carries. The icon's contribution now includes the state box's
+        // padding, since on a checkable row the icon wears that box.
+        QCOMPARE(
+            widthOf(both) - base,
+            std::max(iconSize + iconIndicatorPaddingTotal, indicatorSize) + iconSpacing
+        );
     }
 
     // One slot, one occupant, decided in the layout so the painter cannot diverge from it. The
-    // checkable row's state takes the slot: the label already identifies the action, so the one
-    // thing the row cannot say any other way is whether it is on. A non-checkable row shows its
-    // icon instead.
-    void test_theLeadingColumnHoldsTheIndicatorOnCheckableRows()  // NOLINT
+    // icon takes the slot whenever the row has one — it is how the command is found — and a
+    // checkable row wears its state as a box behind that icon rather than trading the icon away.
+    // Only a checkable row with no icon falls back to the glyph.
+    void test_aCheckableRowWithAnIconKeepsBoth()  // NOLINT
     {
         ProbeStyle freecadStyle;
         QStyle& style = freecadStyle;
@@ -407,6 +456,8 @@ private Q_SLOTS:
         QVERIFY(iconLayout.has_value());
         QVERIFY(!iconLayout->icon.isNull());
         QVERIFY(iconLayout->indicator.isNull());
+        // A row that cannot be checked has no state to show, so it gets no box.
+        QVERIFY(iconLayout->iconIndicator.isNull());
 
         QStyleOptionMenuItem checkableWithoutIcon = plainItem(menu);
         checkableWithoutIcon.menuHasCheckableItems = true;
@@ -416,19 +467,65 @@ private Q_SLOTS:
         QVERIFY(indicatorLayout.has_value());
         QVERIFY(!indicatorLayout->indicator.isNull());
         QVERIFY(indicatorLayout->icon.isNull());
+        QVERIFY(indicatorLayout->iconIndicator.isNull());
 
-        // Sketcher's "Toggle grid" is exactly this shape: checkable and carrying an icon. The
-        // indicator wins, so hovering it still shows whether it is on — a row tint would be
-        // overpainted by the opaque hover fill, because each active state resolves separately
-        // and Hovered outranks Checked.
+        // Sketcher's "Toggle grid" is exactly this shape: checkable and carrying an icon. It
+        // keeps the icon and gets the box; the glyph stays away.
         QStyleOptionMenuItem checkableWithIcon = checkableWithoutIcon;
         checkableWithIcon.maxIconWidth = 20;
         checkableWithIcon.icon = solidIcon();
 
         const auto sharedLayout = layoutOf(checkableWithIcon);
         QVERIFY(sharedLayout.has_value());
-        QVERIFY(!sharedLayout->indicator.isNull());
-        QVERIFY(sharedLayout->icon.isNull());
+        QVERIFY(sharedLayout->indicator.isNull());
+        QVERIFY(!sharedLayout->icon.isNull());
+        QVERIFY(!sharedLayout->iconIndicator.isNull());
+    }
+
+    // The box is the icon rect grown by the box's own padding, so it is centred on the icon by
+    // construction rather than by a second calculation that could drift from the first. Asserting
+    // containment and the per-edge inset keeps this from re-implementing the layout.
+    void test_theIconIndicatorIsTheIconGrownByItsPadding()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QStyle& style = freecadStyle;
+        QMenu menu;
+
+        QStyleOptionMenuItem option = plainItem(menu);
+        option.menuHasCheckableItems = true;
+        option.checkType = QStyleOptionMenuItem::NonExclusive;
+        option.maxIconWidth = 20;
+        option.icon = solidIcon();
+        option.rect
+            = QRect(QPoint(), style.sizeFromContents(QStyle::CT_MenuItem, &option, QSize(), &menu));
+
+        const auto layout = freecadStyle.menuItemLayout(&option, &menu);
+        QVERIFY(layout.has_value());
+        QVERIFY(layout->iconIndicator.contains(layout->icon));
+        QCOMPARE(layout->icon.left() - layout->iconIndicator.left(), iconIndicatorPadding);
+        QCOMPARE(layout->iconIndicator.right() - layout->icon.right(), iconIndicatorPadding);
+        QCOMPARE(layout->icon.top() - layout->iconIndicator.top(), iconIndicatorPadding);
+        QCOMPARE(layout->iconIndicator.bottom() - layout->icon.bottom(), iconIndicatorPadding);
+
+        // The row was sized for the box, not just the icon, so the box cannot be clipped.
+        QVERIFY(option.rect.contains(layout->iconIndicator));
+    }
+
+    // The box says one thing and must say it only when it is true: unchecked has to paint
+    // nothing at all, not a transparent box, or every checkable row would wear a permanent well.
+    void test_theIconIndicatorPaintsOnlyWhenChecked()  // NOLINT
+    {
+        ProbeStyle freecadStyle;
+        QMenu menu;
+
+        QCOMPARE(
+            iconIndicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::NonExclusive, true),
+            QColor(QStringLiteral("#00ff7f"))
+        );
+        QCOMPARE(
+            iconIndicatorFillOf(freecadStyle, menu, QStyleOptionMenuItem::NonExclusive, false),
+            QColor(Qt::magenta)
+        );
     }
 
     // The column is as wide as the widest occupant any row can have, so a narrower occupant has
@@ -456,7 +553,10 @@ private Q_SLOTS:
         // Column starts at the content edge: border is not part of the item rect, so it is just
         // the item's own left padding.
         constexpr int itemPaddingLeft = 6;
-        QCOMPARE(layout->indicator.left(), itemPaddingLeft + ((iconSize - indicatorSize) / 2));
+        QCOMPARE(
+            layout->indicator.left(),
+            itemPaddingLeft + ((iconSize + iconIndicatorPaddingTotal - indicatorSize) / 2)
+        );
         QVERIFY(option.rect.contains(layout->indicator));
     }
 

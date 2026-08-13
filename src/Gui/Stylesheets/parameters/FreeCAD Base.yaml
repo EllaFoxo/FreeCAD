@@ -616,6 +616,31 @@ MenuItemMinWidth: 240px
 # resolve (contextOf() maps QStyleOptionMenuItem::checked to StyleState::Checked), so a theme
 # that wants the tint can state it.
 
+# ── Menu Icon Indicator ──────────────────────────────────────────────────────
+# The box drawn behind a checkable item's icon, so one row can say both what the command is and
+# whether it is on. A checkable item with no icon keeps the plain check glyph instead — there is
+# nothing for a box to sit behind.
+#
+# It takes no interactive states: hover, press and disabled belong to the row, which paints them
+# already. Should a theme ever want a hover treatment here it must use BorderColor or
+# BackgroundEffect and never Background — contextOf() puts both Hovered and Checked on a checked
+# row under the cursor and Hovered outranks Checked, so a hovered Background would silently
+# shadow the checked fill on exactly the row the pointer is on.
+#
+# MenuIconIndicatorPadding also widens the leading column, so stating it per state would misalign
+# every label as the pointer moves. Keep it stateless.
+#
+# Unchecked states no background, no border colour and no inner shadow, so drawBoxBackground()
+# returns without painting — an empty well behind every checkable icon would read as permanently
+# pressed.
+MenuIconIndicatorPadding: "padding(@Spacing.050)"
+MenuIconIndicatorBorderRadius: "@BaseRadius.small"
+MenuIconIndicatorBorderThickness: "@FormControlBorderThickness"
+
+MenuIconIndicatorCheckedBackground: "@ButtonLinkPressedBackground"
+MenuIconIndicatorCheckedBorderColor: "@ButtonLinkPressedBorderColor"
+MenuIconIndicatorCheckedInnerShadow: "@ButtonLinkPressedInnerShadow"
+
 # ── Menu Shortcut ────────────────────────────────────────────────────────────
 # Only the gap is ours: Qt measures the accelerator column itself and adds its width to
 # every row after sizing them, reported back as QStyleOptionMenuItem::reservedShortcutWidth.

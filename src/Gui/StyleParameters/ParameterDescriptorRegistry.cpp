@@ -57,18 +57,19 @@ auto lookup(const Map& map, const typename Map::key_type& key) -> const typename
 
 // clang-format off
 const std::map<StyleComponentElement, std::string_view> elementNames = {
-    {StyleComponentElement::Item,        "Item"},
-    {StyleComponentElement::Row,         "Row"},
-    {StyleComponentElement::Indicator,   "Indicator"},
-    {StyleComponentElement::Tab,         "Tab"},
-    {StyleComponentElement::Base,        "Base"},
-    {StyleComponentElement::Menu,        "Menu"},
-    {StyleComponentElement::CloseButton, "CloseButton"},
-    {StyleComponentElement::Branch,      "Branch"},
-    {StyleComponentElement::Title,       "Title"},
-    {StyleComponentElement::Separator,   "Separator"},
-    {StyleComponentElement::Arrow,       "Arrow"},
-    {StyleComponentElement::Shortcut,    "Shortcut"},
+    {StyleComponentElement::Item,          "Item"},
+    {StyleComponentElement::Row,           "Row"},
+    {StyleComponentElement::Indicator,     "Indicator"},
+    {StyleComponentElement::IconIndicator, "IconIndicator"},
+    {StyleComponentElement::Tab,           "Tab"},
+    {StyleComponentElement::Base,          "Base"},
+    {StyleComponentElement::Menu,          "Menu"},
+    {StyleComponentElement::CloseButton,   "CloseButton"},
+    {StyleComponentElement::Branch,        "Branch"},
+    {StyleComponentElement::Title,         "Title"},
+    {StyleComponentElement::Separator,     "Separator"},
+    {StyleComponentElement::Arrow,         "Arrow"},
+    {StyleComponentElement::Shortcut,      "Shortcut"},
 };
 // clang-format on
 
