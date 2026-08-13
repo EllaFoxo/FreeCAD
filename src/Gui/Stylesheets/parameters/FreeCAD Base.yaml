@@ -636,7 +636,8 @@ MenuItemMinWidth: 240px
 # returns without painting — an empty well behind every checkable icon would read as permanently
 # pressed.
 MenuIconIndicatorPadding: "padding(@Spacing.050)"
-MenuIconIndicatorBorderRadius: "@BaseRadius.small"
+MenuIconIndicatorMargin: "padding(-@Spacing.025)"
+MenuIconIndicatorBorderRadius: "@BaseRadius.medium"
 MenuIconIndicatorBorderThickness: "@FormControlBorderThickness"
 
 MenuIconIndicatorCheckedBackground: "@ButtonLinkPressedBackground"
