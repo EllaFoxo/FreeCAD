@@ -676,7 +676,11 @@ void View3DInventorSelection::addHighlightElements(
             continue;
         }
 
-        resolvedElements.push_back(element);
+        // Keyed in the shape nodes' own namespace: a name that only exists in the view
+        // provider's element space (e.g. a sketch's internal geometry) would otherwise
+        // fail every node's prefix filter below and be silently dropped from the colour
+        // map, even though it resolved to a real detail right above.
+        resolvedElements.push_back(vp.mapElementNameForColor(element));
 
         auto found = std::ranges::find_if(annotations, [&path](SoFCPathAnnotation* candidate) {
             return sameNodes(candidate->getPath(), path);
