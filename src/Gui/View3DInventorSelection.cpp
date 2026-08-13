@@ -570,7 +570,7 @@ void View3DInventorSelection::addHighlight(
     HighlightRole role,
     const void* owner,
     App::DocumentObject* object,
-    const char* subName
+    const std::vector<std::string>& subNames
 )
 {
     HighlightRoleNodes* nodes = highlightRole(role);
@@ -610,16 +610,24 @@ void View3DInventorSelection::addHighlight(
         return;
     }
 
-    auto boundaryElements = vp->getBoundaryElements(subName);
-    // A face drawn alone leaves its boundary invisible: edges live on a node of their
-    // own, separate from faces. Its boundary elements are drawn alongside it, under the
-    // same owner and role, so a highlighted face still reads as a face rather than a
-    // bare patch.
+    // Every subName's own elements are gathered into one list, rather than calling
+    // addHighlightElements() once per subName: its dedup by scene-graph path only
+    // spans the elements one call hands it, and a view provider that does not
+    // distinguish elements in the path it returns — most of them, since only a
+    // subname's SoDetail usually differs — would otherwise get one duplicate,
+    // alpha-compounding annotation per subName instead of one shared annotation.
     std::vector<std::string> elements;
-    elements.reserve(boundaryElements.size() + 1);
-    elements.emplace_back(subName ? subName : "");
-    for (std::string& boundaryElement : boundaryElements) {
-        elements.push_back(std::move(boundaryElement));
+    elements.reserve(subNames.size());
+    for (const std::string& subName : subNames) {
+        // A face drawn alone leaves its boundary invisible: edges live on a node of
+        // their own, separate from faces. Its boundary elements are drawn alongside
+        // it, under the same owner and role, so a highlighted face still reads as a
+        // face rather than a bare patch.
+        auto boundaryElements = vp->getBoundaryElements(subName.c_str());
+        elements.push_back(subName);
+        for (std::string& boundaryElement : boundaryElements) {
+            elements.push_back(std::move(boundaryElement));
+        }
     }
 
     addHighlightElements(*nodes, owner, *vp, elements);

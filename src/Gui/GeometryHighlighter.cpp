@@ -169,6 +169,32 @@ std::map<App::Document*, ReferencesByRole> groupByDocument(
     return byDocument;
 }
 
+/// One role's references, gathered by the object each names, in the order each
+/// object was first seen. addHighlight() is then called once per object with every
+/// one of its subNames together, rather than once per reference: its own dedup only
+/// spans what a single call hands it, and most view providers resolve every element
+/// of one object onto the same scene-graph path, so calling it per reference would
+/// hand it one duplicate annotation per reference instead of the intended one shared
+/// annotation per path.
+std::vector<std::pair<App::DocumentObject*, std::vector<std::string>>> groupReferencesByObject(
+    const std::vector<GeometryReference>& references
+)
+{
+    std::vector<std::pair<App::DocumentObject*, std::vector<std::string>>> byObject;
+    for (const GeometryReference& reference : references) {
+        auto found = std::ranges::find_if(byObject, [&reference](const auto& entry) {
+            return entry.first == reference.object;
+        });
+        if (found == byObject.end()) {
+            byObject.emplace_back(reference.object, std::vector<std::string> {reference.subName});
+        }
+        else {
+            found->second.push_back(reference.subName);
+        }
+    }
+    return byObject;
+}
+
 /// Every object a highlight is about to be drawn on, once each — visibility is a
 /// per-document view-provider concern, so it is decided per object and not per
 /// viewer. Everything reaching here is inherently transient: Hovered lasts only as
@@ -348,10 +374,9 @@ void GeometryHighlighter::refresh()
             }
             for (const RoleStyle& style : styles) {
                 selection->setHighlightStyle(style.role, style.colors, style.lineWidth);
-                for (const GeometryReference& reference :
-                     references.at(highlightRoleIndex(style.role))) {
-                    selection
-                        ->addHighlight(style.role, this, reference.object, reference.subName.c_str());
+                for (const auto& [object, subNames] :
+                     groupReferencesByObject(references.at(highlightRoleIndex(style.role)))) {
+                    selection->addHighlight(style.role, this, object, subNames);
                 }
             }
         }
