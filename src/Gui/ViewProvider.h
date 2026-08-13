@@ -338,6 +338,14 @@ public:
     /// names live in a different namespace (e.g. a prefix marking geometry that has no
     /// direct counterpart in the rendered shape) overrides this so a highlight colour
     /// keyed by @p elementName still reaches the node that draws it.
+    ///
+    /// A returned name that does not begin with "Face", "Edge" or "Vertex" is silently
+    /// invisible: no shape node's colour filter matches it, the colour is dropped with no
+    /// warning, and the highlight simply does not appear.
+    ///
+    /// Consulted only on the highlight path (View3DInventorSelection::addHighlightElements).
+    /// ViewProviderLink::applyColorsTo and the colour override in ApplicationPy.cpp still key
+    /// colours by the raw element name, so the same namespace mismatch is latent there too.
     virtual std::string mapElementNameForColor(const std::string& elementName) const
     {
         return elementName;
