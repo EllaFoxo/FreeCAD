@@ -583,7 +583,27 @@ void GeometrySelectorWidget::paintAsComboBox(QStylePainter& painter) const
     // The complex control paints the frame + arrow; the label (icon + text) is a separate control
     // element, exactly as QComboBox::paintEvent drives it. An empty label draws nothing.
     painter.drawComplexControl(QStyle::CC_ComboBox, combo);
-    painter.drawControl(QStyle::CE_ComboBoxLabel, combo);
+
+    // CE_ComboBoxLabel positions the icon/text from the style's own native edit-field inset
+    // (SC_ComboBoxEditField) — the Select component's own padding, wider than the row inset
+    // applyStyleMetrics() gives a reference row. Left uncorrected, the value would jump sideways
+    // when the current entry switches between a predefined option (painted here) and a picked
+    // reference (a ReferenceRow child widget). Shift the rect handed to CE_ComboBoxLabel by the
+    // same delta, on every edge, so both the icon and the text land exactly where a row's icon and
+    // text would.
+    const QRect nativeEditField
+        = style()->subControlRect(QStyle::CC_ComboBox, &combo, QStyle::SC_ComboBoxEditField, this);
+    const QMargins rowContentInset = layout()->contentsMargins() + m_itemPadding;
+    const QRect rowContentRect = rect().marginsRemoved(rowContentInset);
+
+    QStyleOptionComboBox labelOption = combo;
+    labelOption.rect = combo.rect.adjusted(
+        rowContentRect.left() - nativeEditField.left(),
+        rowContentRect.top() - nativeEditField.top(),
+        rowContentRect.right() - nativeEditField.right(),
+        rowContentRect.bottom() - nativeEditField.bottom()
+    );
+    painter.drawControl(QStyle::CE_ComboBoxLabel, labelOption);
 }
 
 void GeometrySelectorWidget::changeEvent(QEvent* event)
@@ -679,10 +699,15 @@ void GeometrySelectorWidget::applyStyleMetrics()
     QMargins containerPadding;  // default {0,0,0,0}: frame is flush until a theme sets ListPadding
     int rowSpacing = 0;         // default: rows abut
 
-    // Row metrics come from the List *item* tokens (ListItemPadding / ListItemIconSpacing); the
-    // line height and container padding come from the GeometrySelector *root* box geometry and the
-    // frame from its box style. One line follows the border-box model: frame + container padding +
-    // row content sum to the resolved line height, so padding never grows the control.
+    // Row metrics — item padding, icon spacing, inter-row gap and container padding — always come
+    // from the List chain (via GeometrySelector→List), regardless of which mode is active: a
+    // reference row must look identical in combo mode and free-pick mode, since only the chrome
+    // around it (a real combo frame + arrow vs. a plain line-edit frame) differs. The line height
+    // and frame thickness, by contrast, come from the *current* component's root box geometry —
+    // GeometrySelector in free-pick mode, Select in combo mode — because those drive the control's
+    // overall height, which in combo mode must match a sibling QComboBox, not a list. One line
+    // follows the border-box model: frame + container padding + row content sum to the resolved
+    // line height, so padding never grows the control.
     if (Application::Instance) {
         auto* fcStyle = Application::Instance->freeCADStyle();
 
@@ -698,53 +723,64 @@ void GeometrySelectorWidget::applyStyleMetrics()
             m_frameThickness = qRound(rootStyle.borderThickness->top());
         }
 
+        // Force the List chain for row/container metrics even when the "component" property is
+        // temporarily "Select" (combo mode): Select carries no Item-level tokens of its own, and
+        // its own root Padding is a button's, not a list's.
+        StyleParameters::StyleContext listContext = rootContext;
+        listContext.component = StyleParameters::StyleComponent::GeometrySelector;
+        const FreeCADStyle::BoxGeometryDefinition listGeometry = fcStyle->resolveBoxGeometry(
+            listContext
+        );
+        containerPadding = listGeometry.padding.toMargins();
+
         // contextOf only honours a non-Root element for recognised item-view widget types;
         // for this plain QWidget it leaves element=Root, so pin Item explicitly to reach the
         // ListItem* tokens (inherited via GeometrySelector→List) instead of the empty root.
-        StyleParameters::StyleContext itemContext = rootContext;
+        StyleParameters::StyleContext itemContext = listContext;
         itemContext.element = StyleParameters::StyleComponentElement::Item;
         const FreeCADStyle::BoxGeometryDefinition item = fcStyle->resolveBoxGeometry(itemContext);
         itemPadding = item.padding.toMargins();
         iconSpacing = item.iconSpacing;
-
-        containerPadding = rootGeometry.padding.toMargins();
         rowSpacing = item.spacing;
     }
 
     m_itemSpacing = iconSpacing;
     m_rowSpacing = rowSpacing;
     m_containerPadding = containerPadding;
-    m_comboRowHeight = 0;
+    m_itemPadding = itemPadding;
 
-    // Combo mode is a native combo box (Select component): inset content to the style's
-    // edit-field rect and let CC_ComboBox paint the frame + arrow, so padding and the dropdown
-    // arrow are exactly a QComboBox's. Rows carry no extra item padding, so a reference row aligns
-    // with where the combo label sits. Free-pick mode keeps the list-styled line edit with its
-    // ListItem padding and a flush frame.
+    // Combo mode still paints a native combo box (frame + dropdown arrow via CC_ComboBox), but the
+    // content it insets to is the same list-row band as free-pick mode: frame + ListPadding on
+    // every side, so the highlighted row is inset and rounded exactly like a list row. Only the
+    // right inset differs, reserving the arrow's own width — read from the style, never hardcoded —
+    // plus a gap, so the row never runs under or flush against the chevron.
     if (rendersAsComboBox() && Application::Instance) {
         const int comboHeight = m_lineHeight > 0 ? m_lineHeight
                                                  : qMax(IconSize, fontMetrics().height());
-        // The left/top/bottom insets are width-independent; only the right inset (the arrow
-        // reserve) scales with width, so read them off a generous nominal rect.
+        // The arrow's width does not depend on the rect passed in, but a generous nominal rect
+        // keeps this query well-defined even before the widget has a real, laid-out size.
         constexpr int nominalWidth = 400;
         QStyleOptionComboBox combo;
         combo.initFrom(this);
         combo.frame = true;
         combo.rect = QRect(0, 0, nominalWidth, comboHeight);
-        const QRect editField
-            = style()->subControlRect(QStyle::CC_ComboBox, &combo, QStyle::SC_ComboBoxEditField, this);
+        const int arrowWidth
+            = style()->subControlRect(QStyle::CC_ComboBox, &combo, QStyle::SC_ComboBoxArrow, this).width();
 
-        m_itemPadding = {0, 0, 0, 0};
-        m_comboRowHeight = editField.height();
+        // No dedicated "gap before the arrow" token exists yet; ListItemIconSpacing is the
+        // closest fit already resolved here — the same "gap between two adjacent parts of a row"
+        // unit used for the icon-to-label gap. A theme author wanting a different chevron gap
+        // would need a new token, e.g. GeometrySelectorArrowSpacing.
+        const int arrowGap = m_itemSpacing;
+
         layout()->setContentsMargins(
-            editField.left(),
-            editField.top(),
-            nominalWidth - editField.right() - 1,
-            comboHeight - editField.bottom() - 1
+            m_frameThickness + containerPadding.left(),
+            m_frameThickness + containerPadding.top(),
+            m_frameThickness + containerPadding.right() + arrowGap + arrowWidth,
+            m_frameThickness + containerPadding.bottom()
         );
     }
     else {
-        m_itemPadding = itemPadding;
         // Inset content by the frame border plus the container padding (ListPadding); each row
         // supplies its own item padding and ListItemSpacing the inter-row gap.
         layout()->setContentsMargins(
@@ -1255,7 +1291,14 @@ QWidget* GeometrySelectorWidget::makeReferenceList()
             references[index],
             m_itemPadding,
             m_itemSpacing,
-            /*showRemove=*/!isComboMode(),
+            // A predefined option never reaches makeReferenceList() (it renders through
+            // paintAsComboBox() instead — see visualState()), so every row built here already
+            // stands for a picked reference (custom or history), never a predefined option's own
+            // bundled references. Spelled out explicitly rather than inferred from isComboMode(),
+            // which was true for a predefined multi-reference option too and hid the button there
+            // regardless of mode: removing a picked reference is meaningful, removing a predefined
+            // option's geometry is not — there is nothing else for the control to fall back to.
+            /*showRemove=*/currentOption() == nullptr,
             [this] { activatePrimary(); },
             [this, index] { m_selection->removeReference(index); },
             [this, index] { m_selection->setHoveredReference(static_cast<int>(index)); },
@@ -1326,13 +1369,12 @@ QWidget* GeometrySelectorWidget::makeSelecting()
 
 int GeometrySelectorWidget::rowHeight() const
 {
-    // Combo mode: the row fills the style's combo edit-field band, so it aligns with the label.
-    if (m_comboRowHeight > 0) {
-        return m_comboRowHeight;
-    }
-    // Border-box: one line (m_lineHeight) is the frame, the container padding and the row content
-    // combined, so the content shrinks as ListPadding grows and every selector stays exactly one
-    // line height tall regardless of its padding.
+    // Border-box, in both modes: one line (m_lineHeight) is the frame, the container padding and
+    // the row content combined, so the content shrinks as ListPadding grows and every selector
+    // stays exactly one line height tall regardless of its padding. In combo mode m_lineHeight is
+    // the control's native combo height and m_frameThickness/m_containerPadding are the same
+    // frame + ListPadding the content margins use, so this yields exactly the row band left inside
+    // them — no separate combo-only branch needed.
     if (m_lineHeight > 0) {
         return m_lineHeight - (2 * m_frameThickness)
             - (m_containerPadding.top() + m_containerPadding.bottom());

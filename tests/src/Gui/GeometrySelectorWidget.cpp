@@ -4,8 +4,11 @@
 #include <QEvent>
 #include <QLayout>
 #include <QListView>
+#include <QPixmap>
 #include <QScopeGuard>
 #include <QSignalSpy>
+#include <QStyle>
+#include <QStyleOptionComboBox>
 #include <QTest>
 #include <QToolButton>
 #include <QVariant>
@@ -15,14 +18,19 @@
 #include <App/DocumentObject.h>
 #include <Base/Parameter.h>
 
+#include <Gui/Application.h>
 #include <Gui/GeometryHighlighter.h>
 #include <Gui/GeometrySelectorPopup.h>
 #include <Gui/GeometrySelectorWidget.h>
+#include <Gui/StyleParameters/ParameterManager.h>
 
 #include <src/App/InitApplication.h>
 
-// Gui::Application::Instance is NOT created in this test harness. The widget
-// must degrade gracefully — no icon, just the name text.
+// Gui::Application::Instance is NOT created in this test harness by default — most tests below
+// construct the widget headless, verifying it degrades to plain fallback constants (no icon, just
+// the name text). A handful of geometry tests, kept last, opt into a real styled
+// Gui::Application::Instance instead; see ensureStyledApplication() for why they are ordered this
+// way.
 
 class TestGeometrySelectorWidget: public QObject
 {
@@ -559,8 +567,10 @@ private Q_SLOTS:
         QVERIFY(!widget.isComboMode());
     }
 
-    // In combo mode a reference row is display-only: no remove (trash) button.
-    void test_comboModeRowsHaveNoRemoveButton()  // NOLINT
+    // In combo mode, a row that stands for a picked reference (here: a non-matching load, which
+    // lands on the Custom index) keeps its remove button, exactly like free-pick mode — there is
+    // real geometry there to remove.
+    void test_comboModePickedReferenceRowHasRemoveButton()  // NOLINT
     {
         Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
         widget.setAllowCustom(true);
@@ -570,9 +580,28 @@ private Q_SLOTS:
         // A non-matching load ⇒ Custom index ⇒ the references render as rows.
         widget.selection()->setReferences({{.object = m_object, .subName = "Face9"}});
         QCoreApplication::processEvents();
+        QVERIFY(widget.currentOption() == nullptr);  // sanity: not a predefined option
         auto* row = widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
         QVERIFY(row != nullptr);
-        QCOMPARE(row->findChildren<QToolButton*>().size(), 0);
+        QVERIFY(row->findChildren<QToolButton*>().size() >= 1);
+    }
+
+    // A predefined option — even one bundling several references — never reaches
+    // makeReferenceList(): it is painted natively as the combo's own label (VisualState::Option),
+    // so there are no reference rows, and so no remove button, to speak of. Removing a predefined
+    // option's geometry would mean emptying the control, not choosing a different option.
+    void test_comboModePredefinedOptionRendersNoReferenceRows()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::AllowMultiple);
+        widget.setOptions({Gui::GeometrySelectorOption::fromReferences(
+            {{.object = m_object, .subName = "Edge1"}, {.object = m_object, .subName = "Edge2"}}
+        )});
+        widget.setCurrentIndex(0);
+        QCoreApplication::processEvents();
+
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::Option);
+        QVERIFY(widget.currentOption() != nullptr);
+        QVERIFY(widget.findChild<QWidget*>(QStringLiteral("gsw_reference_row")) == nullptr);
     }
 
     // Free-pick mode keeps the per-row remove button.
@@ -1197,7 +1226,162 @@ private Q_SLOTS:
         );
     }
 
+    // The geometry tests below need a real FreeCADStyle to resolve List/Select tokens through —
+    // everything above this point deliberately runs headless. Kept last so nothing earlier in
+    // this file observes the styled Application::Instance the fixture leaves behind.
+
+    // A combo-mode reference row insets to the same frame + ListPadding band as a free-pick row —
+    // left, top and bottom match exactly. Only the right inset differs, reserving room for the
+    // dropdown arrow the free-pick frame does not have.
+    void test_comboModeRowInsetMatchesFreePickMode()  // NOLINT
+    {
+        ensureStyledApplication();
+
+        Gui::GeometrySelectorWidget freePick(Gui::GeometryQuantity::Single);
+        freePick.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+        const QMargins freePickMargins = freePick.layout()->contentsMargins();
+
+        Gui::GeometrySelectorWidget combo(Gui::GeometryQuantity::Single);
+        combo.setAllowCustom(true);
+        combo.setOptions(logicalOptions(1));
+        // A non-matching load ⇒ Custom index ⇒ ReferenceList, the state the fix targets.
+        combo.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+        QCOMPARE(combo.visualState(), Gui::GeometrySelectorWidget::VisualState::ReferenceList);
+        const QMargins comboMargins = combo.layout()->contentsMargins();
+
+        QCOMPARE(comboMargins.left(), freePickMargins.left());
+        QCOMPARE(comboMargins.top(), freePickMargins.top());
+        QCOMPARE(comboMargins.bottom(), freePickMargins.bottom());
+        // The arrow reserve makes the combo-mode right inset strictly bigger, never equal or
+        // smaller — otherwise the row would run back under the chevron.
+        QVERIFY(comboMargins.right() > freePickMargins.right());
+
+        // The row itself must carry the same ListItemPadding in both modes too — the outer inset
+        // alone is not the whole story; a row zeroed back to edge-to-edge internally would still
+        // pass the check above.
+        auto* freePickRow = freePick.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        auto* comboRow = combo.findChild<QWidget*>(QStringLiteral("gsw_reference_row"));
+        QVERIFY(freePickRow != nullptr);
+        QVERIFY(comboRow != nullptr);
+        QCOMPARE(comboRow->layout()->contentsMargins(), freePickRow->layout()->contentsMargins());
+    }
+
+    // The row's right edge stops with room to spare before the arrow the style paints — not
+    // merely short of running under it, but short by a visible, non-zero gap.
+    void test_comboModeRowLeavesGapBeforeArrow()  // NOLINT
+    {
+        ensureStyledApplication();
+
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setAllowCustom(true);
+        widget.setOptions(logicalOptions(1));
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        widget.resize(320, widget.height());
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::ReferenceList);
+
+        QStyleOptionComboBox comboOption;
+        comboOption.initFrom(&widget);
+        comboOption.rect = widget.rect();
+        const QRect arrowRect = widget.style()->subControlRect(
+            QStyle::CC_ComboBox,
+            &comboOption,
+            QStyle::SC_ComboBoxArrow,
+            &widget
+        );
+
+        const int rowRight = widget.width() - widget.layout()->contentsMargins().right();
+        QVERIFY(rowRight < arrowRect.left());
+    }
+
+    // Switching a Single-quantity widget between free-pick and combo mode must not change its
+    // resolved height: it follows the border-box model (frame + padding + row content sum to the
+    // line height), and a sibling QComboBox/QLineEdit is exactly this tall too.
+    void test_totalHeightUnchangedBetweenModes()  // NOLINT
+    {
+        ensureStyledApplication();
+
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        const int freePickHeight = widget.minimumHeight();
+        QCOMPARE(widget.maximumHeight(), freePickHeight);
+        QVERIFY(freePickHeight > 0);
+
+        widget.setOptions(logicalOptions(1));
+        widget.setCurrentIndex(0);
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::Option);
+
+        QCOMPARE(widget.minimumHeight(), freePickHeight);
+        QCOMPARE(widget.maximumHeight(), freePickHeight);
+    }
+
+    // paintAsComboBox() computes a delta-adjusted rect for CE_ComboBoxLabel so a predefined
+    // option's label lands at the same x-offset as a reference row (see the fix's comment).
+    // Verifying that offset pixel-for-pixel needs a real render; what a unit test can cheaply
+    // cover is that the arithmetic behind it — QRect::adjusted() with deltas that can be negative
+    // — never produces a degenerate rect or crashes, in both states paintAsComboBox() handles.
+    void test_paintAsComboBoxRendersWithoutCrashing()  // NOLINT
+    {
+        ensureStyledApplication();
+
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.resize(320, widget.height());
+
+        widget.setCurrentIndex(0);
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::Option);
+        QPixmap optionPixmap(widget.size());
+        widget.render(&optionPixmap);
+
+        widget.setAllowCustom(true);
+        widget.selection()->setReferences({{.object = m_object, .subName = "Edge1"}});
+        QCoreApplication::processEvents();
+        QCOMPARE(widget.visualState(), Gui::GeometrySelectorWidget::VisualState::ReferenceList);
+        QPixmap referenceListPixmap(widget.size());
+        widget.render(&referenceListPixmap);
+    }
+
 private:
+    // Real Application::Instance + FreeCADStyle, required to resolve the List/Select tokens the
+    // geometry tests above exercise. Constructed lazily, only from those tests, and only once:
+    // Gui::Application::Instance persists for the rest of the process once created, so building
+    // it any earlier would silently swap every other test in this file off the plain fallback
+    // constants they are written to exercise. GUIenabled is deliberately false: freeCADStyle() and
+    // styleParameterManager() are created unconditionally either way, but GUIenabled=true also
+    // wires signalNewDocument to Gui::Application::slotNewDocument, which builds a Coin scene
+    // graph for the next test's init()-created document — and this offscreen QTest binary never
+    // calls SoDB::init(), so that path aborts.
+    void ensureStyledApplication() const
+    {
+        if (Gui::Application::Instance != nullptr) {
+            return;
+        }
+        new Gui::Application(false);
+        Gui::Application::Instance->styleParameterManager()->addSource(
+            new Gui::StyleParameters::InMemoryParameterSource(
+                {
+                    {.name = "GeometrySelectorMinHeight", .value = "26px"},
+                    {.name = "GeometrySelectorBorderThickness", .value = "1px"},
+                    {.name = "SelectBorderThickness", .value = "1px"},
+                    {.name = "GeometrySelectorPadding", .value = "padding(2px)"},
+                    {.name = "GeometrySelectorItemPadding",
+                     .value = "padding(horizontal: 6px, vertical: 2px)"},
+                    {.name = "GeometrySelectorItemIconSpacing", .value = "6px"},
+                    {.name = "GeometrySelectorItemSpacing", .value = "2px"},
+                    // Deliberately different from GeometrySelectorPadding, so a fix that
+                    // accidentally reused the Select chain's own padding for the row inset would
+                    // fail test_comboModeRowInsetMatchesFreePickMode instead of passing by
+                    // coincidence.
+                    {.name = "SelectPadding", .value = "padding(horizontal: 8px, vertical: 4px)"},
+                },
+                {.name = "GeometrySelectorWidget Test Fixture"}
+            )
+        );
+    }
+
     // Predefined options that carry no geometry, the way TaskTransform's do: their meaning is in
     // userData, so none of them can ever match a picked reference set.
     std::vector<Gui::GeometrySelectorOption> logicalOptions(int count) const

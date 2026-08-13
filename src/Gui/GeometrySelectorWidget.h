@@ -256,19 +256,19 @@ private:
 
     GeometrySelection* m_selection;
     QVBoxLayout* m_contentLayout;
-    /// Per-row inset, resolved from the ListItemPadding token; the frame itself is flush.
+    /// Per-row inset, resolved from the ListItemPadding token (via GeometrySelector→List) — the
+    /// same in combo mode and free-pick mode, so a reference row looks identical in both.
     QMargins m_itemPadding {6, 4, 6, 4};
     /// Icon-to-label spacing within a row, resolved from the ListItemIconSpacing token.
     int m_itemSpacing = 6;
     /// Total height of one line of the control, frame included: a single-value selector and one
     /// row of a multi-value one are exactly this tall, matching sibling form fields. Resolved
-    /// from the GeometrySelector box geometry (GeometrySelectorMinHeight); 0 until resolved, when
-    /// the row falls back to its content height (headless harness with no FreeCADStyle).
+    /// from the current component's box geometry (GeometrySelectorMinHeight in free-pick mode; in
+    /// combo mode nothing overrides it, so the value from the last free-pick resolution — the
+    /// same one — carries over). 0 until resolved, when the row falls back to its content height
+    /// (headless harness with no FreeCADStyle).
     int m_lineHeight = 0;
-    /// Row content height in combo mode: the style's combo edit-field band, so a row aligns with
-    /// the combo label. 0 in free-pick mode, where the border-box row height is used instead.
-    int m_comboRowHeight = 0;
-    /// Frame border thickness resolved from the GeometrySelector box style; the outer layout
+    /// Frame border thickness resolved from the current component's box style; the outer layout
     /// insets content by it so one row plus the frame equals one line height.
     int m_frameThickness = 1;
     /// Vertical gap between reference rows, resolved from ListItemSpacing (Item/Spacing). 0
