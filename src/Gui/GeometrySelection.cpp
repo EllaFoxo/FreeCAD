@@ -193,7 +193,14 @@ void GeometrySelection::stopSelecting()
     // Paired with startSelecting(): put back the 3D selection the session displaced.
     // Restored only after detachSelection() (so these writes are not fed back into our
     // own onSelectionChanged()) and after the gate above is removed (so an item that
-    // predates this session's gate is not rejected by it on the way back in).
+    // predates this session's gate is not rejected by it on the way back in). Restored
+    // before the emit below, but not because the emit would otherwise undo it: every
+    // selectionModeExited observer in the tree (TaskExtrudeParameters/TaskHelixParameters's
+    // finishReferenceSelection, TaskPadParameters's showPreview/showPreviousFeature,
+    // TaskTransform's dragger pick-style toggles, GeometrySelectorWidget's history capture
+    // and row rebuild) only flips a ViewProvider's mode-switch index or touches
+    // widget-local state; none of them call into Gui::Selection(), so there is nothing here
+    // for the emit to undo either way.
     restorePriorSelection();
     Q_EMIT selectionModeExited();
     // Observers just rebuilt the scene graph in reverse; invalidate highlight paths and rebuild
