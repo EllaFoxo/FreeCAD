@@ -202,7 +202,7 @@ constexpr const char* tupleKindName(TupleKind kind)
  */
 struct GuiExport Tuple
 {
-    struct Element
+    struct GuiExport Element
     {
         std::optional<std::string> name;
         std::shared_ptr<const Value> value;
