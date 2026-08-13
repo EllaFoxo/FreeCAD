@@ -415,6 +415,17 @@ int GeometrySelectorWidget::historySize() const
     return static_cast<int>(m_history.size());
 }
 
+void GeometrySelectorWidget::setHistoryDataProvider(HistoryDataProvider provider)
+{
+    m_historyDataProvider = std::move(provider);
+}
+
+QVariant GeometrySelectorWidget::currentHistoryData() const
+{
+    const int offset = historyOffsetOf(m_currentIndex);
+    return offset >= 0 ? m_history[offset].userData : QVariant {};
+}
+
 void GeometrySelectorWidget::captureHistoryEntry()
 {
     if (!isComboMode() || m_historyLength <= 0 || m_selection->wasCancelled()) {
@@ -437,8 +448,13 @@ void GeometrySelectorWidget::captureHistoryEntry()
         return;
     }
 
+    GeometrySelectorOption entry = GeometrySelectorOption::fromReferences(picked);
+    if (m_historyDataProvider) {
+        entry.userData = m_historyDataProvider();
+    }
+
     std::erase_if(m_history, standsForPicked);
-    m_history.insert(m_history.begin(), GeometrySelectorOption::fromReferences(picked));
+    m_history.insert(m_history.begin(), std::move(entry));
     truncateHistory();
 
     // Set rather than applied: the references are already in place, and setCurrentIndex would

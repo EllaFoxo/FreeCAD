@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include <functional>
 #include <vector>
 
 #include <QIcon>
@@ -131,6 +132,16 @@ public:
     /// How many picks are currently remembered.
     int historySize() const;
 
+    /// Supplies the data a finished pick should be remembered with, so reselecting that history
+    /// entry can restore whatever the caller derived from the pick rather than only its
+    /// references. The widget never inspects the data; it only stores and hands it back.
+    using HistoryDataProvider = std::function<QVariant()>;
+    void setHistoryDataProvider(HistoryDataProvider provider);
+
+    /// The data remembered with the current history entry; an invalid QVariant when the current
+    /// index is not a history entry.
+    QVariant currentHistoryData() const;
+
     /// Previews the geometry at dropdown index @p index in the 3D view, or withdraws the
     /// preview when @p index names nothing — -1, the Custom entry, an option that carries no
     /// geometry, or an index out of range.
@@ -230,6 +241,9 @@ private:
     /// Cancellation itself is read directly from GeometrySelection::wasCancelled().
     std::vector<GeometryReference> m_referencesAtSessionStart;
     int m_historyLength;
+    /// Unset by default, in which case a captured entry carries no userData — unchanged
+    /// behaviour from before this existed.
+    HistoryDataProvider m_historyDataProvider;
     fastsignals::scoped_connection m_objectDeletedConnection;
 
     /// Primary activation for a click on the frame/rows/prompt: opens the options popup in

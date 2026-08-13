@@ -977,6 +977,117 @@ private Q_SLOTS:
         QCOMPARE(widget.currentIndex(), widget.historySize() + 1);
     }
 
+    // Setting a provider does not by itself change what gets captured; it only supplies the
+    // userData a capture stores alongside the entry.
+    void test_historyDataProviderIsInvokedOnCapture()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        int invocations = 0;
+        widget.setHistoryDataProvider([&invocations] {
+            ++invocations;
+            return QVariant(42);
+        });
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(invocations, 1);
+    }
+
+    // Reselecting a remembered pick hands back exactly what the provider returned when that pick
+    // was captured.
+    void test_currentHistoryDataReturnsWhatTheProviderCaptured()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        widget.setHistoryDataProvider([] { return QVariant(QStringLiteral("payload")); });
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.currentHistoryData().toString(), QStringLiteral("payload"));
+
+        widget.setCurrentIndex(0);  // move off the entry, onto the predefined option
+        QVERIFY(!widget.currentHistoryData().isValid());
+        widget.setCurrentIndex(1);  // back onto the remembered pick
+        QCOMPARE(widget.currentHistoryData().toString(), QStringLiteral("payload"));
+    }
+
+    // truncateHistory() moves whole GeometrySelectorOption entries, so the data captured with a
+    // surviving entry must move with it rather than being dropped separately.
+    void test_historyDataSurvivesLengthTruncation()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        widget.setHistoryLength(3);
+        int next = 0;
+        widget.setHistoryDataProvider([&next] { return QVariant(next++); });
+
+        pick(widget, "Edge1");  // data 0
+        pick(widget, "Edge2");  // data 1
+        pick(widget, "Edge3");  // data 2 — history is now [Edge3=2, Edge2=1, Edge1=0]
+
+        widget.setHistoryLength(2);  // drops the oldest entry, Edge1=0
+
+        QCOMPARE(widget.historySize(), 2);
+        widget.setCurrentIndex(1);  // Edge3
+        QCOMPARE(widget.currentHistoryData().toInt(), 2);
+        widget.setCurrentIndex(2);  // Edge2
+        QCOMPARE(widget.currentHistoryData().toInt(), 1);
+    }
+
+    // Neither a predefined option nor the Custom entry is a history slot, so both read as
+    // invalid even though a provider is installed and has captured real data elsewhere.
+    void test_currentHistoryDataIsInvalidOutsideTheHistoryGroup()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+        widget.setHistoryDataProvider([] { return QVariant(7); });
+
+        pick(widget, "Edge1");
+
+        widget.setCurrentIndex(0);  // the predefined option
+        QVERIFY(!widget.currentHistoryData().isValid());
+
+        widget.setCurrentIndex(widget.historySize() + 1);  // the Custom entry
+        QVERIFY(!widget.currentHistoryData().isValid());
+    }
+
+    // The new channel is additive: currentOption() and currentData() must still see nothing at a
+    // history index, even though a provider is installed and genuinely captured data there. That
+    // guard is what stops TaskTransform from misreading a remembered pick as PlacementMode(0).
+    void test_currentOptionAndDataStayEmptyAtAHistoryIndexEvenWithAProvider()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(2));
+        widget.setAllowCustom(true);
+        widget.setHistoryDataProvider([] { return QVariant(99); });
+
+        pick(widget, "Edge1");
+
+        QVERIFY(widget.currentOption() == nullptr);
+        QVERIFY(!widget.currentData().isValid());
+        QVERIFY(widget.currentHistoryData().isValid());  // sanity: the new channel does see it
+    }
+
+    // A widget that never installs a provider behaves exactly as it did before this existed:
+    // capture still happens, and the data channel simply comes back invalid.
+    void test_aWidgetWithNoProviderStillCapturesHistory()  // NOLINT
+    {
+        Gui::GeometrySelectorWidget widget(Gui::GeometryQuantity::Single);
+        widget.setOptions(logicalOptions(1));
+        widget.setAllowCustom(true);
+
+        pick(widget, "Edge1");
+
+        QCOMPARE(widget.historySize(), 1);
+        QCOMPARE(widget.currentIndex(), 1);
+        QVERIFY(!widget.currentHistoryData().isValid());
+    }
+
     // A predefined option that carries geometry offers it for preview.
     void test_hoveringAPredefinedOptionHighlightsItsReferences()  // NOLINT
     {
