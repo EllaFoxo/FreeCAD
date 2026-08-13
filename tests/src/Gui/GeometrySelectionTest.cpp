@@ -40,6 +40,11 @@ protected:
 
     void TearDown() override
     {
+        // Every test in this fixture shares one Gui::Selection() singleton with every
+        // other suite in this binary; leaving a selection behind would leak into
+        // whichever test runs next.
+        Gui::Selection().rmvSelectionGate();
+        Gui::Selection().clearSelection();
         if (App::GetApplication().getDocument(_docName.c_str())) {
             App::GetApplication().closeDocument(_docName.c_str());
         }
@@ -209,6 +214,31 @@ TEST_F(GeometrySelectionTest, cancelSelectingRestoresPreviousReference)
     ASSERT_EQ(selection.references().size(), 1U);
     EXPECT_EQ(selection.references().front().object, _objectA);
     EXPECT_FALSE(selection.isSelecting());
+}
+
+// Gui::Selection() cannot be driven with a real, pre-existing selection in this binary: any
+// path that resolves a real App::DocumentObject (addSelection(), the non-empty branch of
+// clearSelection(), setPreselect()/rmvPreselect() once something is preselected) routes through
+// SelectionSingleton::notify(), whose notifyDocumentObjectViewProvider() helper unconditionally
+// dereferences Gui::Application::Instance (Selection.cpp, no null check) — confirmed empirically
+// (addSelection() and setPreselect() both segfault here). Gui_tests_run may construct at most
+// one Gui::Application for its whole process lifetime (see StyleParametersApplicationTest), and
+// GeometrySelectionTest is not it, so Instance is always null in this suite. What follows proves
+// the unconditional-clear ordering runs and stays crash-free from an empty Gui::Selection(); it
+// cannot prove a *populated* viewport selection gets cleared — that is left to on-screen
+// verification.
+TEST_F(GeometrySelectionTest, startSelectingWithNoReferencesLeavesTheViewportSelectionEmpty)
+{
+    ASSERT_FALSE(Gui::Selection().hasSelection());
+
+    // No setReferences(): the control holds nothing. seedViewportSelection() now clears
+    // unconditionally rather than short-circuiting on the empty reference list.
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.startSelecting();
+
+    EXPECT_FALSE(Gui::Selection().hasSelection());
+
+    selection.stopSelecting();
 }
 
 TEST_F(GeometrySelectionTest, wasCancelledIsTrueWhileExitingACancelledSession)

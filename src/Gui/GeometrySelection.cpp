@@ -195,12 +195,15 @@ void GeometrySelection::stopSelecting()
 
 void GeometrySelection::seedViewportSelection()
 {
+    // Cleared unconditionally, even with nothing to seed: an empty reference set must
+    // still bring the viewport into line with the (now empty) control rather than leave
+    // it holding whatever was selected before the session began.
+    Gui::Selection().clearSelection();
     if (!Gui::Application::Instance || _references.empty()) {
         return;
     }
-    // Discard whatever the user had selected, then mark the current references as
-    // selected so they can be modified in place (picked to add, Ctrl-picked to drop).
-    Gui::Selection().clearSelection();
+    // Mark the current references as selected so they can be modified in place (picked
+    // to add, Ctrl-picked to drop).
     for (const GeometryReference& ref : _references) {
         App::Document* document = ref.object ? ref.object->getDocument() : nullptr;
         if (!document) {
