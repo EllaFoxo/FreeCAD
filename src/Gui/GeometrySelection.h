@@ -159,6 +159,17 @@ private:
     /// True only while cancelSelecting() is unwinding the session; backs wasCancelled().
     bool _cancelling = false;
 
+    /// The 3D selection captured at startSelecting(), before seedViewportSelection()
+    /// discards it; put back by stopSelecting() once the session has fully unwound.
+    std::vector<GeometryReference> _priorSelection;
+    /// Snapshots the current 3D selection, unresolved (so a nested object's anchor and
+    /// full subelement path come back exactly as they were added), for later replay by
+    /// restorePriorSelection().
+    std::vector<GeometryReference> capturePriorSelection() const;
+    /// Replaces the 3D selection with what capturePriorSelection() captured — including
+    /// replacing it with nothing, when that is what was captured.
+    void restorePriorSelection() const;
+
     /// Mirrors the current references into the 3D selection so they appear picked
     /// and can be toggled off with Ctrl (AllowMultiple only).
     void seedViewportSelection();

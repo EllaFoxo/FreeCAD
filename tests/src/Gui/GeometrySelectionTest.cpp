@@ -225,8 +225,8 @@ TEST_F(GeometrySelectionTest, cancelSelectingRestoresPreviousReference)
 // one Gui::Application for its whole process lifetime (see StyleParametersApplicationTest), and
 // GeometrySelectionTest is not it, so Instance is always null in this suite. What follows proves
 // the unconditional-clear ordering runs and stays crash-free from an empty Gui::Selection(); it
-// cannot prove a *populated* viewport selection gets cleared — that is left to on-screen
-// verification.
+// cannot prove a *populated* viewport selection gets cleared or restored — that is left to
+// on-screen verification.
 TEST_F(GeometrySelectionTest, startSelectingWithNoReferencesLeavesTheViewportSelectionEmpty)
 {
     ASSERT_FALSE(Gui::Selection().hasSelection());
@@ -239,6 +239,34 @@ TEST_F(GeometrySelectionTest, startSelectingWithNoReferencesLeavesTheViewportSel
     EXPECT_FALSE(Gui::Selection().hasSelection());
 
     selection.stopSelecting();
+}
+
+TEST_F(GeometrySelectionTest, stopSelectingRunsTheRestoreEvenWithNothingToRestore)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectB, .subName = "Edge1"}});
+    selection.startSelecting();
+
+    // capturePriorSelection() captured an empty Gui::Selection() above. restorePriorSelection()
+    // must still run its unconditional clearSelection() on the way out rather than skip the
+    // restore because there was "nothing to restore" — and must not crash doing so. A
+    // deliberate mutation confirmed this test bites: swapping _priorSelection for
+    // _referencesBeforeSelecting (a plausible copy-paste of the wrong member) makes
+    // restorePriorSelection() try to re-add a real object and segfault here.
+    selection.stopSelecting();
+
+    EXPECT_FALSE(Gui::Selection().hasSelection());
+}
+
+TEST_F(GeometrySelectionTest, cancelSelectingRunsTheRestoreEvenWithNothingToRestore)
+{
+    GeometrySelection selection(GeometryQuantity::Single);
+    selection.setReferences({{.object = _objectB, .subName = "Edge1"}});
+    selection.startSelecting();
+
+    selection.cancelSelecting();
+
+    EXPECT_FALSE(Gui::Selection().hasSelection());
 }
 
 TEST_F(GeometrySelectionTest, wasCancelledIsTrueWhileExitingACancelledSession)

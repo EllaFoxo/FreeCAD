@@ -153,6 +153,9 @@ void GeometrySelection::startSelecting()
         return;
     }
     _referencesBeforeSelecting = _references;
+    // Captured before seedViewportSelection() below discards it, so stopSelecting() can
+    // put it back once the session ends.
+    _priorSelection = capturePriorSelection();
     if (_gateFactory) {
         // Selection takes ownership and deletes on rmvSelectionGate.
         Gui::Selection().addSelectionGate(_gateFactory().release());
@@ -187,10 +190,52 @@ void GeometrySelection::stopSelecting()
     if (_gateFactory) {
         Gui::Selection().rmvSelectionGate();
     }
+    // Paired with startSelecting(): put back the 3D selection the session displaced.
+    // Restored only after detachSelection() (so these writes are not fed back into our
+    // own onSelectionChanged()) and after the gate above is removed (so an item that
+    // predates this session's gate is not rejected by it on the way back in).
+    restorePriorSelection();
     Q_EMIT selectionModeExited();
     // Observers just rebuilt the scene graph in reverse; invalidate highlight paths and rebuild
     // annotations.
     refreshHighlight();
+}
+
+std::vector<GeometryReference> GeometrySelection::capturePriorSelection() const
+{
+    std::vector<GeometryReference> prior;
+    // NoResolve: a nested object's selection is stored as (top-level anchor, full
+    // subelement path) rather than the resolved leaf, and that anchor+path pair is
+    // exactly what addSelection() below needs to reproduce it — resolving here would
+    // hand back the leaf object alone, which the 3D view cannot match back to a path.
+    for (const auto& selected : Gui::Selection().getCompleteSelection(Gui::ResolveMode::NoResolve)) {
+        if (!selected.pObject) {
+            continue;
+        }
+        prior.push_back(
+            {.object = selected.pObject,
+             .subName = selected.SubName ? selected.SubName : std::string()}
+        );
+    }
+    return prior;
+}
+
+void GeometrySelection::restorePriorSelection() const
+{
+    // Cleared unconditionally: an empty prior selection restoring as empty is the
+    // common case, not one to special-case away.
+    Gui::Selection().clearSelection();
+    for (const GeometryReference& reference : _priorSelection) {
+        App::Document* document = reference.object ? reference.object->getDocument() : nullptr;
+        if (!document) {
+            continue;
+        }
+        Gui::Selection().addSelection(
+            document->getName(),
+            reference.object->getNameInDocument(),
+            reference.subName.empty() ? nullptr : reference.subName.c_str()
+        );
+    }
 }
 
 void GeometrySelection::seedViewportSelection()
