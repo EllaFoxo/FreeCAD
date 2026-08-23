@@ -40,6 +40,10 @@
           "CMAKE_BUILD_TYPE": {
             "type": "STRING",
             "value": "Debug"
+          },
+          "BUILD_UI_GALLERY": {
+            "type": "BOOL",
+            "value": "ON"
           }
         }
       },

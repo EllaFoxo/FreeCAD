@@ -15,6 +15,12 @@ add_subdirectory(Stylesheets)
 add_subdirectory(PreferencePacks)
 add_subdirectory(PreferencePackTemplates)
 
+if(BUILD_UI_GALLERY)
+    add_subdirectory(UiGallery)
+    # Workbenches can use the BUILD_UI_GALLERY compile time guard to only register when this is active
+    target_compile_definitions(FreeCADGui PUBLIC BUILD_UI_GALLERY)
+endif ()
+
 if(BUILD_WITH_CONDA)
     add_definitions(-DFC_CONDA)
 endif(BUILD_WITH_CONDA)

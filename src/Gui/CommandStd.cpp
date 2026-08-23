@@ -1081,6 +1081,10 @@ void CreateStdCommands()
     // rcCmdMgr.addCommand(new StdCmdDownloadOnlineHelp());
     // rcCmdMgr.addCommand(new StdCmdDescription());
     rcCmdMgr.addCommand(new StdCmdAnnotationLabel());
+
+#ifdef BUILD_UI_GALLERY
+    rcCmdMgr.addCommand(new StdCmdUiGallery());
+#endif
 }
 
 }  // namespace Gui
