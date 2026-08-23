@@ -41,6 +41,10 @@
             "type": "STRING",
             "value": "Debug"
           },
+          "BUILD_DEBUG_MENU": {
+            "type": "BOOL",
+            "value": "ON"
+          },
           "BUILD_UI_GALLERY": {
             "type": "BOOL",
             "value": "ON"

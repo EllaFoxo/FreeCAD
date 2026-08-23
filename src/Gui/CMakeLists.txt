@@ -15,6 +15,10 @@ add_subdirectory(Stylesheets)
 add_subdirectory(PreferencePacks)
 add_subdirectory(PreferencePackTemplates)
 
+if(BUILD_DEBUG_MENU)
+    target_compile_definitions(FreeCADGui PUBLIC BUILD_DEBUG_MENU)
+endif()
+
 if(BUILD_UI_GALLERY)
     add_subdirectory(UiGallery)
     # Workbenches can use the BUILD_UI_GALLERY compile time guard to only register when this is active
@@ -463,6 +467,10 @@ set(Gui_RES_SRCS
     Language/translation.qrc
     ${FreeCAD_TR_QRC}
 )
+
+if(BUILD_UI_GALLERY)
+    list(APPEND Gui_RES_SRCS UiGallery/Resources/UiGallery.qrc)
+endif()
 
 qt_add_resources(Gui_QRC_SRCS
     ${Gui_RES_SRCS}

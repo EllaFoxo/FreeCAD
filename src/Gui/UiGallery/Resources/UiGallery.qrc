@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="applications-ui-gallery">icons/ui-gallery.svg</file>
+    </qresource>
+</RCC>

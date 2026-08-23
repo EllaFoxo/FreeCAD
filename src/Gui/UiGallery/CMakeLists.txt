@@ -44,21 +44,14 @@ SET(UiGallery_HPP_SRCS
         GalleryView.h
 )
 
-SET(UiGallery_RES_SRCS
-        Resources/UiGallery.qrc
-)
-
-qt_add_resources(UiGallery_QRC_SRCS
-        ${UiGallery_RES_SRCS}
-        OPTIONS ${FREECAD_RCC_OPTIONS}
+SET(UiGallery_UI_SRCS
+        GalleryView.ui
 )
 
 SET(UiGallery_SRCS
         ${UiGallery_CPP_SRCS}
         ${UiGallery_HPP_SRCS}
+        ${UiGallery_UI_SRCS}
 )
-
-SOURCE_GROUP("UiGallery" FILES ${UiGallery_SRCS})
-SOURCE_GROUP("UiGallery\\Resources" FILES ${UiGallery_RES_SRCS})
 
 target_sources(FreeCADGui PRIVATE ${UiGallery_SRCS})

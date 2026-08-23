@@ -5,7 +5,6 @@ macro(InitializeFreeCADBuildOptions)
 
     option(BUILD_FORCE_DIRECTORY "The build directory must be different to the source directory." OFF)
     option(BUILD_GUI "Build FreeCAD Gui. Otherwise you have only the command line and the Python import module." ON)
-    option(BUILD_UI_GALLERY "Build the UI Gallery developer tool. An in-application catalogue of FreeCAD's UI elements" OFF)
     option(FREECAD_USE_EXTERNAL_ZIPIOS "Use system installed zipios++ instead of the bundled." OFF)
     option(FREECAD_USE_EXTERNAL_SMESH "Use system installed smesh instead of the bundled." OFF)
     option(FREECAD_USE_EXTERNAL_KDL "Use system installed orocos-kdl instead of the bundled." OFF)
@@ -181,6 +180,13 @@ macro(InitializeFreeCADBuildOptions)
     option(BUILD_SURFACE "Build the FreeCAD surface module" ON)
     option(BUILD_VR "Build the FreeCAD Oculus Rift support (need Oculus SDK 4.x or higher)" OFF)
     option(ENABLE_DEVELOPER_TESTS "Build the FreeCAD unit tests suit" ON)
+
+    option(BUILD_DEBUG_MENU "Add a Debug menu item to the menu bar, for debug tooling." OFF)
+    option(BUILD_UI_GALLERY "Build the UI Gallery developer tool. An in-application catalogue of FreeCAD's UI elements" OFF)
+
+    if(BUILD_UI_GALLERY)
+        set(BUILD_DEBUG_MENU ON)
+    endif()
 
     if(MSVC OR APPLE)
         set(FREECAD_3DCONNEXION_SUPPORT "NavLib" CACHE STRING "Select version of the 3Dconnexion device integration")
