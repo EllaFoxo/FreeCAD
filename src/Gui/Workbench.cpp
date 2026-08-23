@@ -840,6 +840,15 @@ MenuItem* StdWorkbench::setupMenuBar() const
           << "Std_DevHandbook" << "Std_PythonHelp" << "Separator"
           << "Std_FreeCADWebsite" << "Std_FreeCADDonation" << "Std_About";
 
+#ifdef BUILD_DEBUG_MENU
+    // Debug
+    auto debug = new MenuItem(menuBar);
+    debug->setCommand("&Debug");
+# ifdef BUILD_UI_GALLERY
+    *debug << "Std_UiGallery";
+# endif
+#endif
+
     return menuBar;
 }
 

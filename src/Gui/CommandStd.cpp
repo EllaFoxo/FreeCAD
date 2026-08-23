@@ -53,6 +53,10 @@
 #include "WhatsThis.h"
 #include "Workbench.h"
 #include "WorkbenchManager.h"
+#ifdef BUILD_UI_GALLERY
+# include <QPointer>
+# include "UiGallery/GalleryView.h"
+#endif
 #include "App/GeoFeature.h"
 #include "App/Annotation.h"
 
@@ -238,6 +242,38 @@ StdCmdAbout::StdCmdAbout()
     sStatusTip = sToolTipText;
     eType = 0;
 }
+
+//===========================================================================
+// Std_UiGallery
+//===========================================================================
+#ifdef BUILD_UI_GALLERY
+DEF_STD_CMD(StdCmdUiGallery)
+
+StdCmdUiGallery::StdCmdUiGallery()
+    : Command("Std_UiGallery")
+{
+    sGroup = "Debug";
+    sMenuText = QT_TR_NOOP("&UI Gallery");
+    sToolTipText = QT_TR_NOOP("Opens the UI Gallery debug window");
+    sWhatsThis = "Std_UiGallery";
+    sStatusTip = sToolTipText;
+    sPixmap = "applications-ui-gallery";
+    eType = 0;
+}
+
+void StdCmdUiGallery::activated(int iMsg)
+{
+    Q_UNUSED(iMsg);
+    static QPointer<UiGallery::GalleryView> view = nullptr;
+    if (!view) {
+        view = new UiGallery::GalleryView(getMainWindow());
+        view->setAttribute(Qt::WA_DeleteOnClose);
+    }
+    view->show();
+    view->raise();
+    view->activateWindow();
+}
+#endif
 
 Action* StdCmdAbout::createAction()
 {
@@ -1118,15 +1154,14 @@ void CreateStdCommands()
     rcCmdMgr.addCommand(new StdCmdUnitsCalculator());
     rcCmdMgr.addCommand(new StdCmdUserEditMode());
     rcCmdMgr.addCommand(new StdCmdReloadStyleSheet());
+#ifdef BUILD_UI_GALLERY
+    rcCmdMgr.addCommand(new StdCmdUiGallery());
+#endif
     rcCmdMgr.addCommand(new StdCmdDevHandbook());
     rcCmdMgr.addCommand(new StdCmdHelpGroup());
     // rcCmdMgr.addCommand(new StdCmdDownloadOnlineHelp());
     // rcCmdMgr.addCommand(new StdCmdDescription());
     rcCmdMgr.addCommand(new StdCmdAnnotationLabel());
-
-#ifdef BUILD_UI_GALLERY
-    rcCmdMgr.addCommand(new StdCmdUiGallery());
-#endif
 }
 
 }  // namespace Gui
