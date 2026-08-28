@@ -1,5 +1,7 @@
 add_library(FreeCADGui SHARED)
 
+qt6_standard_project_setup(REQUIRES ${FREECAD_QT_VERSION})
+
 if ( EXISTS "${CMAKE_SOURCE_DIR}/src/3rdParty/GSL/include" )
     include_directories( ${CMAKE_SOURCE_DIR}/src/3rdParty/GSL/include )
 else()

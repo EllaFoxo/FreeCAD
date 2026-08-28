@@ -289,6 +289,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/pyyaml-6.0.3-py311h3778330_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/qhull-2020.2-h434a139_5.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/qt6-main-6.8.3-h75f3359_4.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/qt6-quick3d-6.8.3-h7955e40_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/qt6-wayland-6.8.3-hf501273_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/rapidjson-1.1.0.post20240409-h3f2d84a_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/readline-8.3-h853b02a_0.conda
@@ -718,6 +719,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/pyyaml-6.0.3-py311h164a683_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qhull-2020.2-h70be974_5.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qt6-main-6.8.3-he176c03_4.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qt6-quick3d-6.8.3-h8d977a7_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qt6-wayland-6.8.3-h6948401_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/rapidjson-1.1.0.post20240409-h5ad3122_2.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/readline-8.3-hb682ff5_0.conda
@@ -1177,6 +1179,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-64/pyyaml-6.0.3-py311he13f9b5_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/qhull-2020.2-h3c5361c_5.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/qt6-main-6.8.3-he2a6cc6_4.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-64/qt6-quick3d-6.8.3-hdefcbb4_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/rapidjson-1.1.0.post20240409-h92383a6_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/readline-8.3-h68b038d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-64/rhash-1.4.6-h6e16a3a_1.conda
@@ -1508,6 +1511,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/pyyaml-6.0.3-py311ha9b3269_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/qhull-2020.2-h420ef59_5.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/qt6-main-6.8.3-hc9525f7_4.conda
+      - conda: https://conda.anaconda.org/conda-forge/osx-arm64/qt6-quick3d-6.8.3-h99077ff_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/rapidjson-1.1.0.post20240409-ha1acc90_2.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/readline-8.3-h46df422_0.conda
       - conda: https://conda.anaconda.org/conda-forge/osx-arm64/rhash-1.4.6-h5505292_1.conda
@@ -1790,6 +1794,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/win-64/pyyaml-6.0.3-py311h3f79411_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/qhull-2020.2-hc790b64_5.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/qt6-main-6.8.3-h72a539a_1.conda
+      - conda: https://conda.anaconda.org/conda-forge/win-64/qt6-quick3d-6.8.3-hbb528cf_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/rapidjson-1.1.0.post20240409-he0c23c2_2.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ruamel.yaml-0.17.40-py311ha68e1ae_0.conda
       - conda: https://conda.anaconda.org/conda-forge/win-64/ruamel.yaml.clib-0.2.15-py311hf893f09_1.conda
@@ -5591,6 +5596,28 @@ packages:
   purls: []
   size: 51530505
   timestamp: 1750921297282
+- conda: https://conda.anaconda.org/conda-forge/linux-64/qt6-quick3d-6.8.3-h7955e40_0.conda
+  sha256: 92a2e28aa10de1d5ba5e362f705840b7dee524390d353b6c027b0a19e62d3d85
+  md5: 57a50d043764f132a292dcecc0ae3f7e
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - libegl >=1.7.0,<2.0a0
+  - libgcc >=13
+  - libgl >=1.7.0,<2.0a0
+  - libglx >=1.7.0,<2.0a0
+  - libopengl >=1.7.0,<2.0a0
+  - libstdcxx >=13
+  - libzlib >=1.3.1,<2.0a0
+  - qt6-main 6.8.3.*
+  - qt6-main >=6.8.3,<6.9.0a0
+  license: GPL-3.0-only
+  license_family: GPL
+  purls: []
+  run_exports:
+    weak:
+    - qt6-quick3d >=6.8.3,<6.9.0a0
+  size: 6747130
+  timestamp: 1743232252783
 - conda: https://conda.anaconda.org/conda-forge/linux-64/qt6-wayland-6.8.3-hf501273_0.conda
   sha256: 82d09a7bd753766f06b3c81696053a24637b9e33e4f32baf32ca071f51273760
   md5: 984c2eefffc5d3937883b10748d16a34
@@ -9995,6 +10022,27 @@ packages:
   purls: []
   size: 54270004
   timestamp: 1750920790705
+- conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qt6-quick3d-6.8.3-h8d977a7_0.conda
+  sha256: bc1586746fd18680ad9da6e7f91f08cc5e5b1aea6113a894d51611bcae17268e
+  md5: fa9fcafefeefa9b56ef5f0b617fa0a04
+  depends:
+  - libegl >=1.7.0,<2.0a0
+  - libgcc >=13
+  - libgl >=1.7.0,<2.0a0
+  - libglx >=1.7.0,<2.0a0
+  - libopengl >=1.7.0,<2.0a0
+  - libstdcxx >=13
+  - libzlib >=1.3.1,<2.0a0
+  - qt6-main 6.8.3.*
+  - qt6-main >=6.8.3,<6.9.0a0
+  license: GPL-3.0-only
+  license_family: GPL
+  purls: []
+  run_exports:
+    weak:
+    - qt6-quick3d >=6.8.3,<6.9.0a0
+  size: 6799591
+  timestamp: 1743240231091
 - conda: https://conda.anaconda.org/conda-forge/linux-aarch64/qt6-wayland-6.8.3-h6948401_0.conda
   sha256: 775a5615e3f763920f91366014a4111c58907694615c1d03752e0efcb5db2fdc
   md5: 55b2a18347cd8fc340ecd553c70a8eee
@@ -15595,6 +15643,23 @@ packages:
   purls: []
   size: 46882426
   timestamp: 1750918727045
+- conda: https://conda.anaconda.org/conda-forge/osx-64/qt6-quick3d-6.8.3-hdefcbb4_0.conda
+  sha256: 4a11c71bf679a82152682c0cc394ea8d83ad68fc84759ad892e516db60a28631
+  md5: a0cead92e90a793891b5a8a5c0946938
+  depends:
+  - __osx >=11.0
+  - libcxx >=18
+  - libzlib >=1.3.1,<2.0a0
+  - qt6-main 6.8.3.*
+  - qt6-main >=6.8.3,<6.9.0a0
+  license: GPL-3.0-only
+  license_family: GPL
+  purls: []
+  run_exports:
+    weak:
+    - qt6-quick3d >=6.8.3,<6.9.0a0
+  size: 6185358
+  timestamp: 1743232783091
 - conda: https://conda.anaconda.org/conda-forge/osx-64/rapidjson-1.1.0.post20240409-h92383a6_2.conda
   sha256: 978580bd85c5cabca47b0f2a6ad4f22340858aa51b0c86537716bd93ca505e9e
   md5: 34a2ae1d4771d5ba5b819075cf7c3d67
@@ -19095,6 +19160,23 @@ packages:
   purls: []
   size: 44679624
   timestamp: 1750919248082
+- conda: https://conda.anaconda.org/conda-forge/osx-arm64/qt6-quick3d-6.8.3-h99077ff_0.conda
+  sha256: c0167e5411b776baf014855ac23dc55d93206be089a8655a3abab0b33cc51c10
+  md5: e5caa1cdaf4ea6d48067b53554795c21
+  depends:
+  - __osx >=11.0
+  - libcxx >=18
+  - libzlib >=1.3.1,<2.0a0
+  - qt6-main 6.8.3.*
+  - qt6-main >=6.8.3,<6.9.0a0
+  license: GPL-3.0-only
+  license_family: GPL
+  purls: []
+  run_exports:
+    weak:
+    - qt6-quick3d >=6.8.3,<6.9.0a0
+  size: 6010219
+  timestamp: 1743240603518
 - conda: https://conda.anaconda.org/conda-forge/osx-arm64/rapidjson-1.1.0.post20240409-ha1acc90_2.conda
   sha256: bb5044f7871a1b87403e9ab8c0c314f932a1200841e397dadbd63d0fd5e4d401
   md5: cdf23da66ced1cd0a484c3a9564eaeaa
@@ -22038,6 +22120,24 @@ packages:
   purls: []
   size: 93819325
   timestamp: 1743394251854
+- conda: https://conda.anaconda.org/conda-forge/win-64/qt6-quick3d-6.8.3-hbb528cf_0.conda
+  sha256: 1697e33bd4b9e530b0cf364a45ee0f702a40435620f3d8a1515921924f16aae0
+  md5: ef27f1f39a77bb41962de66bbdaed1de
+  depends:
+  - libzlib >=1.3.1,<2.0a0
+  - qt6-main 6.8.3.*
+  - qt6-main >=6.8.3,<6.9.0a0
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  license: GPL-3.0-only
+  license_family: GPL
+  purls: []
+  run_exports:
+    weak:
+    - qt6-quick3d >=6.8.3,<6.9.0a0
+  size: 9706023
+  timestamp: 1743232434728
 - conda: https://conda.anaconda.org/conda-forge/win-64/rapidjson-1.1.0.post20240409-he0c23c2_2.conda
   sha256: cd36fcd850cdfdca316ce048714ed5a2911d5af6e3297a557a284fed77107fe9
   md5: 473596080645129ca9939cbac7c4a2cc
