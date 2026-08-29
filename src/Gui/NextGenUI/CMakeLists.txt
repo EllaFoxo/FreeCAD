@@ -59,8 +59,9 @@ qt6_add_qml_module(NextGenUI
 
 target_link_libraries(NextGenUI PRIVATE
         Qt6::Quick
-        Qt6::Quick3D
         Qt6::Qml
+        Qt6::QuickControls2
+        Qt6::Quick3D
         Qt6::Gui
         Qt6::Svg
 )
