@@ -177,6 +177,9 @@ macro(InitializeFreeCADBuildOptions)
     option(BUILD_SURFACE "Build the FreeCAD surface module" ON)
     option(ENABLE_DEVELOPER_TESTS "Build the FreeCAD unit tests suit" ON)
 
+    option(BUILD_DEBUG_MENU "Add a Debug menu item to the menu bar, for debug tooling." OFF)
+    option(BUILD_NEXT_GEN_UI "Build the next generation UI." OFF)
+
     if(MSVC OR APPLE)
         set(FREECAD_3DCONNEXION_SUPPORT "NavLib" CACHE STRING "Select version of the 3Dconnexion device integration")
         set_property(CACHE FREECAD_3DCONNEXION_SUPPORT PROPERTY STRINGS "None" "NavLib" "Legacy" "Both")

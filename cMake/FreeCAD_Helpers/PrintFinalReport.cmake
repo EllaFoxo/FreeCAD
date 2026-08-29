@@ -129,6 +129,8 @@ macro(PrintFinalReport)
     value(CMAKE_INSTALL_PREFIX)
     value(USE_CUDA)
     value(FREECAD_LIBPACK_USE)
+    value(BUILD_DEBUG_MENU)
+    value(BUILD_NEXT_GEN_UI)
 
     section_end()
 

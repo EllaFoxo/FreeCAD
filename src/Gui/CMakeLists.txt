@@ -17,6 +17,16 @@ add_subdirectory(Stylesheets)
 add_subdirectory(PreferencePacks)
 add_subdirectory(PreferencePackTemplates)
 
+if(BUILD_DEBUG_MENU)
+    target_compile_definitions(FreeCADGui PUBLIC BUILD_DEBUG_MENU)
+endif()
+
+if(BUILD_NEXT_GEN_UI)
+    add_subdirectory(NextGenUI)
+    # Workbenches can use the BUILD_NEXT_GEN_UI to deliver their own components
+    target_compile_definitions(FreeCADGui PUBLIC BUILD_NEXT_GEN_UI)
+endif ()
+
 if(BUILD_WITH_CONDA)
     add_definitions(-DFC_CONDA)
 endif(BUILD_WITH_CONDA)
