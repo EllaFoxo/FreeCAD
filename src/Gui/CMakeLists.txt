@@ -21,12 +21,6 @@ if(BUILD_DEBUG_MENU)
     target_compile_definitions(FreeCADGui PUBLIC BUILD_DEBUG_MENU)
 endif()
 
-if(BUILD_NEXT_GEN_UI)
-    add_subdirectory(NextGenUI)
-    # Workbenches can use the BUILD_NEXT_GEN_UI to deliver their own components
-    target_compile_definitions(FreeCADGui PUBLIC BUILD_NEXT_GEN_UI)
-endif ()
-
 if(BUILD_WITH_CONDA)
     add_definitions(-DFC_CONDA)
 endif(BUILD_WITH_CONDA)
@@ -150,7 +144,7 @@ if (WIN32)
     list(APPEND FreeCADGui_LIBS
         Qt6::GuiPrivate
     )
-endif()
+endif ()
 
 target_include_directories(
     FreeCADGui
@@ -1444,6 +1438,32 @@ if(MSVC)
         ${FreeCADGui_CPP_SRCS}
     )
 endif(MSVC)
+
+if (BUILD_NEXT_GEN_UI)
+    SET(FreeCADGui_SRCS
+            ${FreeCADGui_SRCS}
+    )
+
+    SET(FreeCADGui_CPP_SRCS
+            ${FreeCADGui_CPP_SRCS}
+    )
+
+    SET(FreeCADGui_QML_SRCS
+            qml/window/MainWindow.qml
+    )
+
+    qt6_add_qml_module(FreeCADGui
+            URI FreeCADGui
+            VERSION 1.0
+            OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml/FreeCADGui
+            NO_PLUGIN
+            QML_FILES
+            ${FreeCADGui_QML_SRCS}
+    )
+
+    # Workbenches can use the BUILD_NEXT_GEN_UI to deliver their own components
+    target_compile_definitions(FreeCADGui PUBLIC BUILD_NEXT_GEN_UI)
+endif ()
 
 if(FREECAD_USE_PCH)
     target_precompile_headers(FreeCADGui PRIVATE
