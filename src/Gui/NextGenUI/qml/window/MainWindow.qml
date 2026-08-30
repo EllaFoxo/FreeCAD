@@ -23,23 +23,18 @@
  ***************************************************************************/
 
 import QtQuick
-import QtQuick.Window
+import QtQuick.Controls
 
-Window {
+ApplicationWindow {
     id: window
 
     readonly property int cornerRadius: 10
 
     color: "transparent"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: Qt.Window | (Qt.platform.os === "linux" ? Qt.FramelessWindowHint : Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
     height: 820
     minimumHeight: 600
     title: "FreeCAD"
     visible: true
     width: 1320
-
-    Rectangle {
-        anchors.fill: parent
-        radius: window.cornerRadius
-    }
 }
