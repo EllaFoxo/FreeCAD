@@ -36,18 +36,6 @@ foreach(COMPONENT IN LISTS FREECAD_QT_COMPONENTS)
     set(Qt${COMPONENT}_VERSION ${Qt${FREECAD_QT_MAJOR_VERSION}${COMPONENT}_VERSION})
 endforeach()
 
-if(Qt${FREECAD_QT_MAJOR_VERSION}Core_VERSION VERSION_LESS 5.13.0)
-    message(FATAL_ERROR [[
-     ******************************************************************
-        Qt 5 versions below 5.13 are no longer supported as its `rcc`
-         resource compiler tool does not support modern compression
-                    formats and options. More generally,
-       Qt 5 support is deprecated: please update your builds to Qt 6.
-                  Support will be removed in August 2026.
-     ******************************************************************
-    ]])
-endif()
-
 set(CMAKE_AUTOMOC TRUE)
 set(CMAKE_AUTOUIC TRUE)
 set(QtCore_MOC_EXECUTABLE ${Qt${FREECAD_QT_MAJOR_VERSION}Core_MOC_EXECUTABLE})

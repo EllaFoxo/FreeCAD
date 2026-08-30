@@ -871,15 +871,6 @@ SET(qsintActionPanel_SRCS
     QSint/actionpanel/taskheader_p.h
 )
 SOURCE_GROUP("Widget\\QSintActionPanel" FILES ${qsintActionPanel_SRCS})
-set(qsint_MOC_HDRS
-    QSint/actionpanel/actionlabel.h
-    QSint/actionpanel/actiongroup.h
-    QSint/actionpanel/actionpanel.h
-    QSint/actionpanel/taskheader_p.h
-)
-
-qt_wrap_cpp(qsint_MOC_SRCS ${qsint_MOC_HDRS})
-SOURCE_GROUP("Widget\\QSintActionPanel\\Mocs" FILES ${qsint_MOC_SRCS})
 
 # The 3d view
 SET(View3D_CPP_SRCS
@@ -956,23 +947,9 @@ SOURCE_GROUP("Navigation" FILES ${Navigation_SRCS})
 FILE(GLOB_RECURSE Quarter_CPP_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} Quarter/*.cpp)
 FILE(GLOB_RECURSE Quarter_H_SRC RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} Quarter/*.h)
 
-SET(Quarter_MOC_HDR
-    Quarter/SignalThread.h
-    Quarter/InteractionMode.h
-    Quarter/SensorManager.h
-    Quarter/ContextMenu.h
-    Quarter/eventhandlers/FocusHandler.h
-    Quarter/eventhandlers/DragDropHandler.h
-    Quarter/eventhandlers/EventFilter.h
-    Quarter/QuarterWidget.h
-)
-
-qt_wrap_cpp(Quarter_MOC_SRCS ${Quarter_MOC_HDR})
-
 SET(Quarter_SRCS
     ${Quarter_CPP_SRC}
     ${Quarter_H_SRC}
-    ${Quarter_MOC_SRCS}
 )
 SOURCE_GROUP("Quarter" FILES ${Quarter_SRCS})
 
@@ -1411,7 +1388,6 @@ SET(FreeCADGui_SRCS
     ${FreeCADGui_connexion_HDRS}
     ${FreeCADGui_CPP_SRCS}
     ${FreeCADGui_Pyi_SRCS}
-    ${qsint_MOC_SRCS}
     ${Gui_QRC_SRCS}
     ${Gui_UIC_HDRS}
     ${Command_SRCS}
