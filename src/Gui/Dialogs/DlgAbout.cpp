@@ -69,9 +69,10 @@ AboutDialogFactory* AboutDialogFactory::factory = nullptr;
 
 AboutDialogFactory::~AboutDialogFactory() = default;
 
-QDialog* AboutDialogFactory::create(QWidget* parent) const
+void AboutDialogFactory::show(QWidget* parent) const
 {
-    return new AboutDialog(parent);
+    AboutDialog dlg(parent);
+    dlg.exec();
 }
 
 const AboutDialogFactory* AboutDialogFactory::defaultFactory()

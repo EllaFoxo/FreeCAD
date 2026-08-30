@@ -164,7 +164,6 @@ target_include_directories(
     ${QtQml_INCLUDE_DIRS}
     ${QtQuickControls2_INCLUDE_DIRS}
     ${QtQuick3D_INCLUDE_DIRS}
-    ${QtGui_INCLUDE_DIRS}
     ${YAML_CPP_INCLUDE_DIRS}
 )
 
@@ -178,12 +177,16 @@ list(APPEND FreeCADGui_LIBS
     ${QtSvgWidgets_LIBRARIES}
     ${QtNetwork_LIBRARIES}
     ${QtUiTools_LIBRARIES}
-    ${QtQuick_LIBRARIES}
-    ${QtQml_LIBRARIES}
-    ${QtQuickControls2_LIBRARIES}
-    ${QtQuick3D_LIBRARIES}
-    ${QtGui_LIBRARIES}
 )
+
+if (BUILD_NEXT_GEN_UI)
+    list(APPEND FreeCADGui_LIBS
+            ${QtQuick_LIBRARIES}
+            ${QtQml_LIBRARIES}
+            ${QtQuickControls2_LIBRARIES}
+            ${QtQuick3D_LIBRARIES}
+    )
+endif ()
 
 link_directories(${YAML_CPP_LIBRARY_DIR})
 
@@ -1440,26 +1443,14 @@ if(MSVC)
 endif(MSVC)
 
 if (BUILD_NEXT_GEN_UI)
-    SET(FreeCADGui_SRCS
-            ${FreeCADGui_SRCS}
+    list(APPEND FreeCADGui_SRCS
+            Dialogs/DlgAboutQml.cpp
+            Dialogs/DlgAboutQml.h
+            QmlModules.cpp
     )
 
-    SET(FreeCADGui_CPP_SRCS
-            ${FreeCADGui_CPP_SRCS}
-    )
-
-    SET(FreeCADGui_QML_SRCS
-            qml/window/MainWindow.qml
-    )
-
-    qt6_add_qml_module(FreeCADGui
-            URI FreeCADGui
-            VERSION 1.0
-            OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/qml/FreeCADGui
-            NO_PLUGIN
-            QML_FILES
-            ${FreeCADGui_QML_SRCS}
-    )
+    # FreeCADGui is not itself a QML module; it consumes one per qml/ directory.
+    add_subdirectory(qml)
 
     # Workbenches can use the BUILD_NEXT_GEN_UI to deliver their own components
     target_compile_definitions(FreeCADGui PUBLIC BUILD_NEXT_GEN_UI)

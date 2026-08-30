@@ -22,19 +22,48 @@
  *                                                                         *
  ***************************************************************************/
 
-import QtQuick
-import QtQuick.Controls
+#include <memory>
 
-ApplicationWindow {
-    id: window
+#include <QQmlComponent>
+#include <QQuickWindow>
+#include <QWindow>
 
-    readonly property int cornerRadius: 10
+#include <Base/Console.h>
+#include <Gui/Application.h>
 
-    color: "transparent"
-    flags: Qt.Window | (Qt.platform.os === "linux" ? Qt.FramelessWindowHint : Qt.ExpandedClientAreaHint | Qt.NoTitleBarBackgroundHint)
-    height: 820
-    minimumHeight: 600
-    title: "FreeCAD"
-    visible: true
-    width: 1320
+#include "DlgAboutQml.h"
+
+using namespace Gui::Dialog;
+
+void QmlAboutDialogFactory::show(QWidget* parent) const
+{
+    // Grab the engine from the Application's singleton instance
+    QQmlComponent component(Gui::Application::Instance->qmlEngine());
+    component.loadFromModule("FreeCADGui.Dialog", "About");
+
+    if (component.isError()) {
+        Base::Console().error(
+            "About dialog failed to load: %s\n",
+            component.errorString().trimmed().toUtf8().constData()
+        );
+        return;
+    }
+
+    std::unique_ptr<QObject> object(component.create());
+    auto* window = qobject_cast<QQuickWindow*>(object.get());
+    if (!window) {
+        Base::Console().error("About dialog root object is not a Window\n");
+        return;
+    }
+    object.release();
+
+    // Center the dialog's opening over the main window, and bind parent to the main window.
+    if (parent) {
+        if (auto* handle = parent->window()->windowHandle()) {
+            window->setTransientParent(handle);
+        }
+    }
+
+    QObject::connect(window, &QQuickWindow::closing, window, &QObject::deleteLater);
+    window->show();
 }

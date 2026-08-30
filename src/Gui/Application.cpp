@@ -34,6 +34,9 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QMessageLogContext>
+#ifdef BUILD_NEXT_GEN_UI
+# include <QQmlEngine>
+#endif
 #include <QRegularExpression>
 #include <QRegularExpressionMatch>
 #include <QScreen>
@@ -264,6 +267,10 @@ struct ApplicationP
     MacroManager* macroMngr;
     PreferencePackManager* prefPackManager;
     StyleParameters::ParameterManager* styleParameterManager;
+#ifdef BUILD_NEXT_GEN_UI
+    /// Shared by every QML component. See Application::qmlEngine().
+    std::unique_ptr<QQmlEngine> qmlEngine;
+#endif
 
     /// List of all registered views
     std::list<Gui::BaseView*> passive;
@@ -2244,6 +2251,16 @@ Gui::StyleParameters::ParameterManager* Application::styleParameterManager()
 {
     return d->styleParameterManager;
 }
+
+#ifdef BUILD_NEXT_GEN_UI
+QQmlEngine* Application::qmlEngine()
+{
+    if (!d->qmlEngine) {
+        d->qmlEngine = std::make_unique<QQmlEngine>();
+    }
+    return d->qmlEngine.get();
+}
+#endif
 
 
 //**************************************************************************

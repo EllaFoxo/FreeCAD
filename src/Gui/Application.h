@@ -32,6 +32,7 @@
 #include "StyleParameters/ParameterManager.h"
 
 class QCloseEvent;
+class QQmlEngine;
 class SoNode;
 class NavlibInterface;
 
@@ -269,6 +270,9 @@ public:
 
     Gui::PreferencePackManager* prefPackManager();
     Gui::StyleParameters::ParameterManager* styleParameterManager();
+#ifdef BUILD_NEXT_GEN_UI
+    QQmlEngine* qmlEngine();
+#endif
 
     /** @name Init, Destruct an Access methods */
     //@{

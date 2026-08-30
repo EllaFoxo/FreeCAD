@@ -7,9 +7,11 @@ if(BUILD_GUI)
     list (APPEND FREECAD_QT_COMPONENTS GuiTools)
     list (APPEND FREECAD_QT_COMPONENTS SvgWidgets)
     list (APPEND FREECAD_QT_COMPONENTS OpenGLWidgets)
-    list (APPEND FREECAD_QT_COMPONENTS Quick Qml QuickControls2 Quick3D Gui)
-
     list (APPEND FREECAD_QT_COMPONENTS OpenGL PrintSupport Svg UiTools Widgets LinguistTools)
+
+    if (BUILD_NEXT_GEN_UI)
+        list (APPEND FREECAD_QT_COMPONENTS Quick Qml QuickControls2 Quick3D)
+    endif ()
 
     if(BUILD_DESIGNER_PLUGIN)
         list (APPEND FREECAD_QT_COMPONENTS Designer)

@@ -22,8 +22,6 @@
  *                                                                          *
  ***************************************************************************/
 
-#include <boost/smart_ptr/scoped_ptr.hpp>
-
 #include <QApplication>
 #include <QMessageBox>
 #include <QRegularExpression>
@@ -268,8 +266,7 @@ void StdCmdAbout::activated(int iMsg)
 {
     Q_UNUSED(iMsg);
     const Gui::Dialog::AboutDialogFactory* f = Gui::Dialog::AboutDialogFactory::defaultFactory();
-    boost::scoped_ptr<QDialog> dlg(f->create(getMainWindow()));
-    dlg->exec();
+    f->show(getMainWindow());
 }
 
 void StdCmdAbout::languageChange()

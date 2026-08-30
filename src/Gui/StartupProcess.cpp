@@ -48,6 +48,9 @@
 #include "Application.h"
 #include "AutoSaver.h"
 #include "Dialogs/DlgCheckableMessageBox.h"
+#ifdef BUILD_NEXT_GEN_UI
+# include "Dialogs/DlgAboutQml.h"
+#endif
 #include "FileDialog.h"
 #include "GuiApplication.h"
 #include "MainWindow.h"
@@ -223,6 +226,7 @@ void StartupPostProcess::execute()
     checkOpenGL();
     loadOpenInventor();
     setBranding();
+    registerQmlDialogs();
     showMainWindow();
     activateWorkbench();
     checkParameters();
@@ -435,6 +439,14 @@ void StartupPostProcess::setImportImageFormats()
 
     std::string filter = str.str();
     App::GetApplication().addImportType(filter.c_str(), "FreeCADGui");
+}
+
+void StartupPostProcess::registerQmlDialogs()
+{
+#ifdef BUILD_NEXT_GEN_UI
+    // Replace QtWidgets dialogs with their QtQuick QML counterparts.
+    Dialog::AboutDialogFactory::setDefaultFactory(new Dialog::QmlAboutDialogFactory);
+#endif
 }
 
 void StartupPostProcess::showMainWindow()

@@ -42,7 +42,7 @@ public:
     AboutDialogFactory() = default;
     virtual ~AboutDialogFactory();
 
-    virtual QDialog* create(QWidget* parent) const;
+    virtual void show(QWidget* parent) const;
 
     static const AboutDialogFactory* defaultFactory();
     static void setDefaultFactory(AboutDialogFactory* factory);
